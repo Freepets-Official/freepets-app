@@ -1,0 +1,47 @@
+# ── 의존성 ──────────────────────────────────────────
+# npm install 로 언제든 복원되므로 커밋하지 않는다 (552MB)
+node_modules/
+node_modules.nosync
+
+# ── Expo / 빌드 산출물 ──────────────────────────────
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+*.tsbuildinfo
+
+# 네이티브 폴더는 prebuild 로 생성된다
+/ios
+/android
+.kotlin/
+
+# ── 비밀 정보 (절대 커밋 금지) ──────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.jks
+*.mobileprovision
+
+# ── 로그 ────────────────────────────────────────────
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# ── 에디터 / OS ─────────────────────────────────────
+.DS_Store
+.vscode/
+.idea/
+
+# ── Claude Code 개인 설정 ───────────────────────────
+# 각자 다른 권한 설정을 쓰므로 공유하지 않는다
+.claude/settings.local*.json
+
+# ── macOS 중복 파일 ─────────────────────────────────
+* 2.*
+*.orig.*
