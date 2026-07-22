@@ -1,3 +1,5 @@
+import type { Report } from '@/store/app-store';
+
 import type { Facility, Pet, PetSatisfaction, Review, ReviewTag } from '@/data/types';
 
 /**
@@ -269,6 +271,27 @@ export const REVIEWS: Review[] = [
   ...makeReviews(6, 4, [3, 3, 2], [
     { nick: '시장구경', pet: '메주', text: '동반 가능 여부가 점포마다 달라요. 입구에서 확인하는 게 좋습니다.', tags: [] },
   ]),
+];
+
+/**
+ * 다른 방문자가 방금 보낸 현장 거부 제보.
+ * 내가 아직 아무 제보도 하지 않은 상태에서도 "누군가의 거부가 나를 구한다"는
+ * 플라이휠이 화면에 보여야 해서 하나를 씨드로 둔다. 실제로는 서버가 내려준다.
+ */
+export const INITIAL_REPORTS: Report[] = [
+  {
+    reportId: 1,
+    facilityId: 10, // 테라로사 커피공장 — 원문이 모호해 '추정'이던 곳이 실제로 틀렸던 사례
+    type: 'DENIED',
+    content: '현장 거부 · 실내 불가',
+    weight: 2,
+    hasEvidence: false,
+    reason: 'INDOOR',
+    mine: false,
+    realtime: true,
+    status: 'APPLIED',
+    createdAt: new Date(Date.now() - 23 * 60 * 1000).toISOString(),
+  },
 ];
 
 export function reviewsOf(facilityId: number): Review[] {

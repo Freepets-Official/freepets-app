@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { judgeGroup } from '@/data/judge';
-import { FACILITIES, INITIAL_PETS, INITIAL_SATISFACTIONS, REVIEWS } from '@/data/mock';
+import { FACILITIES, INITIAL_PETS, INITIAL_REPORTS, INITIAL_SATISFACTIONS, REVIEWS } from '@/data/mock';
 import type {
   Confidence,
   ConfidenceSource,
@@ -38,6 +38,18 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 export type ReportType = 'ENTERED' | 'DENIED' | 'CONDITION_CHANGED';
 
+/** 문 앞에서 거부당한 이유 — 원터치 제보라 서술 대신 코드로 받는다 */
+export type DenialReason = 'WEIGHT' | 'BREED' | 'INDOOR' | 'POLICY_CHANGED' | 'CROWDED' | 'OTHER';
+
+export const DENIAL_REASON_LABEL: Record<DenialReason, string> = {
+  WEIGHT: '체중 초과',
+  BREED: '견종 제한',
+  INDOOR: '실내 불가',
+  POLICY_CHANGED: '정책이 바뀜',
+  CROWDED: '혼잡·자리 없음',
+  OTHER: '그 밖의 이유',
+};
+
 export interface Report {
   reportId: number;
   facilityId: number;
@@ -46,9 +58,21 @@ export interface Report {
   /** 증거 사진·AI 검증 여부를 반영한 신뢰도 가중치 (docs/04 4-1) */
   weight: number;
   hasEvidence: boolean;
+  /** 거부 제보일 때의 사유 코드 */
+  reason: DenialReason | null;
+  /** 내가 보낸 제보인지 — 남의 거부는 경고로, 내 거부는 접수 상태로 보여준다 */
+  mine: boolean;
+  /**
+   * 현장에서 거부당한 즉시 보낸 제보인지.
+   * 사후 정정 제보와 달리 검토를 기다리지 않고 신뢰도에 바로 반영된다.
+   */
+  realtime: boolean;
   status: 'PENDING' | 'APPLIED' | 'REJECTED';
   createdAt: string;
 }
+
+/** 실시간 거부 경고를 노출하는 기간 — 이보다 오래된 제보는 신뢰도에만 남는다 */
+const DENIAL_ALERT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export type ReviewReportReason = 'FALSE_INFO' | 'SPAM' | 'ABUSE' | 'PRIVACY' | 'IRRELEVANT';
 
@@ -94,6 +118,12 @@ interface AppStore {
     weight: number,
     hasEvidence: boolean,
   ) => void;
+  /** 문 앞에서 거부당한 즉시 보내는 원터치 제보 — 신뢰도를 바로 하향시킨다 */
+  reportDenial: (facilityId: number, reason: DenialReason) => void;
+  /** 최근 24시간 내 남이 보낸 현장 거부 제보 — 그 시설로 향하는 사용자에게 경고로 쓴다 */
+  recentDenialOf: (facilityId: number) => Report | undefined;
+  /** 내가 이 시설에 보낸 현장 거부 제보 */
+  myDenialOf: (facilityId: number) => Report | undefined;
 
   /** 신고된 리뷰 id — 등급 산정에서만 제외되고 화면에는 계속 표시된다 */
   reportedReviewIds: Set<number>;
@@ -126,16 +156,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [pets, setPets] = useState<Pet[]>(INITIAL_PETS);
   const [checks, setChecks] = useState<PetCheck[]>([]);
   const [reviews, setReviews] = useState<Review[]>(REVIEWS);
-  const [reports, setReports] = useState<Report[]>([]);
+  const [reports, setReports] = useState<Report[]>(INITIAL_REPORTS);
   const [reportedReviewIds, setReportedReviewIds] = useState<Set<number>>(new Set());
   const [satisfactions, setSatisfactions] = useState<PetSatisfaction[]>(INITIAL_SATISFACTIONS);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [userConfirmedIds, setUserConfirmedIds] = useState<Set<number>>(new Set());
-  const [downgradedIds, setDowngradedIds] = useState<Set<number>>(new Set());
+  // 씨드 거부 제보도 신뢰도에 반영돼 있어야 앱을 켜자마자 하향된 상태로 보인다
+  const [downgradedIds, setDowngradedIds] = useState<Set<number>>(
+    () => new Set(INITIAL_REPORTS.filter((r) => r.realtime).map((r) => r.facilityId)),
+  );
   const nextPetId = useRef(INITIAL_PETS.length + 1);
   const nextCheckId = useRef(1);
   const nextReviewId = useRef(900000);
-  const nextReportId = useRef(1);
+  const nextReportId = useRef(INITIAL_REPORTS.length + 1);
 
   const addPet = useCallback((input: Omit<Pet, 'petId'>) => {
     setPets((prev) => [...prev, { ...input, petId: nextPetId.current++ }]);
@@ -225,6 +258,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           content,
           weight,
           hasEvidence,
+          reason: null,
+          mine: true,
+          realtime: false,
           status: 'PENDING',
           createdAt: new Date().toISOString(),
         },
@@ -232,6 +268,25 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ]);
     },
     [],
+  );
+
+  const recentDenialOf = useCallback(
+    (facilityId: number) =>
+      reports.find(
+        (r) =>
+          r.facilityId === facilityId &&
+          r.type === 'DENIED' &&
+          r.realtime &&
+          !r.mine &&
+          Date.now() - new Date(r.createdAt).getTime() < DENIAL_ALERT_WINDOW_MS,
+      ),
+    [reports],
+  );
+
+  const myDenialOf = useCallback(
+    (facilityId: number) =>
+      reports.find((r) => r.facilityId === facilityId && r.type === 'DENIED' && r.realtime && r.mine),
+    [reports],
   );
 
   const reportReview = useCallback((reviewId: number, _reason: ReviewReportReason) => {
@@ -292,15 +347,43 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // downgradeFacility 를 쓰므로 그 아래에 둔다
+  const reportDenial = useCallback(
+    (facilityId: number, reason: DenialReason) => {
+      setReports((prev) => [
+        {
+          reportId: nextReportId.current++,
+          facilityId,
+          type: 'DENIED',
+          content: `현장 거부 · ${DENIAL_REASON_LABEL[reason]}`,
+          // 현장에서 바로 보낸 제보는 시점이 붙어 있어 사후 기억보다 정확하다 → 사진 없이도 가중치 2
+          weight: 2,
+          hasEvidence: false,
+          reason,
+          mine: true,
+          realtime: true,
+          // 검토를 기다리지 않고 신뢰도에 즉시 반영되므로 접수 시점부터 APPLIED
+          status: 'APPLIED',
+          createdAt: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+      downgradeFacility(facilityId);
+    },
+    [downgradeFacility],
+  );
+
   const confidenceOf = useCallback(
     (f: Facility): { confidence: Confidence; source: ConfidenceSource; confirmedAt: string | null } => {
       // 사용자가 직접 확인 → 확정으로 상향
       if (userConfirmedIds.has(f.facilityId)) {
         return { confidence: 'CONFIRMED', source: 'USER_CALL', confirmedAt: new Date().toISOString() };
       }
-      // 현장 거부 제보 반영 → 미확인으로 하향 (정보를 믿지 말라는 신호)
+      // 현장 거부 제보 반영 → 미확인으로 하향 (정보를 믿지 말라는 신호).
+      // 근거를 CROWD가 아니라 DENIAL_REPORT로 두는 이유: '제보 다수 일치'와 '거부 한 건'은
+      // 사용자에게 정반대 의미다. confirmedAt은 그대로 둔다 — 마지막으로 확인된 시점은 여전히 과거다.
       if (downgradedIds.has(f.facilityId)) {
-        return { confidence: 'UNVERIFIED', source: 'CROWD', confirmedAt: f.confirmedAt };
+        return { confidence: 'UNVERIFIED', source: 'DENIAL_REPORT', confirmedAt: f.confirmedAt };
       }
       return { confidence: f.confidence, source: f.confidenceSource, confirmedAt: f.confirmedAt };
     },
@@ -321,6 +404,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       myReviewFor,
       reports,
       addReport,
+      reportDenial,
+      recentDenialOf,
+      myDenialOf,
       reportedReviewIds,
       reportReview,
       satisfactions,
@@ -348,6 +434,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       myReviewFor,
       reports,
       addReport,
+      reportDenial,
+      recentDenialOf,
+      myDenialOf,
       reportedReviewIds,
       reportReview,
       satisfactions,

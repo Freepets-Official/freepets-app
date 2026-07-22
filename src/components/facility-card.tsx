@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PetAllowedBadge } from '@/components/badge';
 import { ConfidenceBadge } from '@/components/confidence-badge';
+import { DenialAlert } from '@/components/denial-alert';
 import { PawBadge } from '@/components/paw-badge';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import { formatDistance } from '@/data/mock';
@@ -54,6 +55,10 @@ export function FacilityCard({ facility }: { facility: Facility }) {
       <Text style={[styles.address, { color: p.muted }]} numberOfLines={1}>
         {facility.address}
       </Text>
+
+      {/* 목록에서부터 경고가 보여야 헛걸음이 시작되기 전에 멈출 수 있다 */}
+      <DenialAlert facilityId={facility.facilityId} compact />
+
 
       <View style={[styles.bottomRow, { borderTopColor: p.line }]}>
         <View style={styles.distance}>

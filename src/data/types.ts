@@ -16,7 +16,7 @@ export type Requirement =
 export type Confidence = 'CONFIRMED' | 'LIKELY' | 'ESTIMATED' | 'UNVERIFIED';
 
 /** 신뢰도의 근거 */
-export type ConfidenceSource = 'OWNER' | 'CROWD' | 'PARSED' | 'USER_CALL' | 'NONE';
+export type ConfidenceSource = 'OWNER' | 'CROWD' | 'PARSED' | 'USER_CALL' | 'DENIAL_REPORT' | 'NONE';
 
 export const CONFIDENCE_LABEL: Record<Confidence, string> = {
   CONFIRMED: '확정',
@@ -30,6 +30,7 @@ export const CONFIDENCE_SOURCE_LABEL: Record<ConfidenceSource, string> = {
   CROWD: '방문자 제보 다수 일치',
   PARSED: '관광공사 원문 기반',
   USER_CALL: '내가 전화로 확인',
+  DENIAL_REPORT: '현장 거부 제보 접수',
   NONE: '정보 없음',
 };
 
@@ -67,6 +68,16 @@ export function freshnessText(confirmedAt: string | null): string | null {
   if (days < 30) return `${days}일 전 확인`;
   const months = Math.floor(days / 30);
   return `${months}개월 전 확인`;
+}
+
+/** 방금 일어난 일을 분 단위로 (예: "23분 전"). 현장 거부 경고처럼 신선도가 곧 신뢰도인 곳에 쓴다 */
+export function sinceText(iso: string): string {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return '방금 전';
+  if (mins < 60) return `${mins}분 전`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
 }
 
 /** 리뷰 태그 — 시설 특징 집계용 */
