@@ -303,6 +303,34 @@ export default function FacilityDetailScreen() {
             </Animated.View>
           )}
 
+          {/* 동반 출입증 — 문 앞에서 직원에게 보여줄 화면. 불가 판정이면 보여줄 이유가 없다 */}
+          {check.overall !== 'DENIED' && (
+            <Animated.View entering={FadeInDown.duration(320).delay(140)}>
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: '/passport/[id]',
+                    params: { id: String(facility.facilityId) },
+                  })
+                }
+                style={({ pressed }) => [
+                  styles.passButton,
+                  { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : p.card },
+                ]}>
+                <View style={[styles.passIcon, { backgroundColor: p.accentSoft }]}>
+                  <Ionicons name="qr-code" size={19} color={p.accent} />
+                </View>
+                <View style={styles.passText}>
+                  <Text style={[styles.passTitle, { color: p.ink }]}>동반 출입증 보기</Text>
+                  <Text style={[styles.passBody, { color: p.muted }]}>
+                    문 앞에서 직원에게 보여주면 조건 대조가 끝나요
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={p.accent} />
+              </Pressable>
+            </Animated.View>
+          )}
+
           {check.overall === 'DENIED' && alternatives.length > 0 && (
             <Animated.View entering={FadeInDown.duration(320).delay(180)} style={styles.altWrap}>
               <SectionTitle title="대신 여기는 어때요?" caption="같은 카테고리 · 동반 가능" />
@@ -360,6 +388,24 @@ const styles = StyleSheet.create({
   },
   name: { fontSize: 28, fontWeight: '900', letterSpacing: -1, marginBottom: 4 },
   pawRow: { marginBottom: 8 },
+  passButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderWidth: 1.5,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+  },
+  passIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  passText: { flex: 1, gap: 2 },
+  passTitle: { fontSize: 15, fontWeight: '800', letterSpacing: -0.3 },
+  passBody: { fontSize: 12, lineHeight: 17 },
   reportLink: {
     flexDirection: 'row',
     alignItems: 'center',
