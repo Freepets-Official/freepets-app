@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
 import { type ComponentProps, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
@@ -13,7 +14,9 @@ const RADII = [1, 3, 5, 10];
 
 export default function SettingsScreen() {
   const p = usePalette();
-  const { settings, updateSettings } = useAppStore();
+  const router = useRouter();
+  const { settings, updateSettings, businessRegs } = useAppStore();
+  const regCount = Object.keys(businessRegs).length;
 
   return (
     <Screen eyebrow="설정" title="설정">
@@ -21,6 +24,18 @@ export default function SettingsScreen() {
       <Group title="계정">
         <Row icon="person-circle-outline" label="프로필 관리" onPress={() => {}} chevron />
         <Row icon="mail-outline" label="계정 정보" sub="sjwtlswodn@naver.com" onPress={() => {}} chevron last />
+      </Group>
+
+      {/* 사업자 (앱 특화) */}
+      <Group title="사업자" caption="프리펫스 전용">
+        <Row
+          icon="storefront-outline"
+          label="내 매장 조건 등록"
+          sub={regCount > 0 ? `${regCount}곳 확정 관리 중` : '사장님이 직접 확정하면 손님에게 확정 정보로 보여져요'}
+          onPress={() => router.push('/business')}
+          chevron
+          last
+        />
       </Group>
 
       {/* 탐색 반경 (앱 특화) */}

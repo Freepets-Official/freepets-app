@@ -9,6 +9,7 @@ import type {
   Pet,
   PetCheck,
   PetSatisfaction,
+  Requirement,
   Review,
   ReviewTag,
 } from '@/data/types';
@@ -48,6 +49,21 @@ export interface Report {
   hasEvidence: boolean;
   status: 'PENDING' | 'APPLIED' | 'REJECTED';
   createdAt: string;
+}
+
+/**
+ * 사업자 셀프 등록 (F5) — 사업자가 진위확인 후 자기 매장의 출입 조건을 직접 확정한다.
+ * 모호함이 발생 지점(사업자)에서 소멸하고, 그 시설의 신뢰도가 '확정'으로 올라간다.
+ */
+export interface BusinessReg {
+  facilityId: number;
+  /** 진위확인된 사업자등록번호 — 표시용 마스킹만 보관. 원본은 저장하지 않는다 */
+  bizNoMasked: string;
+  petAllowed: boolean;
+  maxWeight: number | null;
+  requirements: Requirement[];
+  conditionRaw: string;
+  confirmedAt: string;
 }
 
 export type ReviewReportReason = 'FALSE_INFO' | 'SPAM' | 'ABUSE' | 'PRIVACY' | 'IRRELEVANT';
@@ -117,6 +133,13 @@ interface AppStore {
   downgradeFacility: (facilityId: number) => void;
   /** override를 반영한 시설의 현재 신뢰도 */
   confidenceOf: (f: Facility) => { confidence: Confidence; source: ConfidenceSource; confirmedAt: string | null };
+
+  /** 사업자 셀프 등록 (F5) — 사업자가 확정한 시설의 출입 조건 override */
+  businessRegs: Record<number, BusinessReg>;
+  registerBusiness: (reg: BusinessReg) => void;
+  businessRegOf: (facilityId: number) => BusinessReg | null;
+  /** 사업자 확정 조건을 반영한 시설 — 판별·표시는 모두 이걸 기준으로 한다 */
+  effectiveFacility: (f: Facility) => Facility;
 }
 
 const MY_USER_ID = 1;
@@ -132,6 +155,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [userConfirmedIds, setUserConfirmedIds] = useState<Set<number>>(new Set());
   const [downgradedIds, setDowngradedIds] = useState<Set<number>>(new Set());
+  const [businessRegs, setBusinessRegs] = useState<Record<number, BusinessReg>>({});
   const nextPetId = useRef(INITIAL_PETS.length + 1);
   const nextCheckId = useRef(1);
   const nextReviewId = useRef(900000);
@@ -147,9 +171,21 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const runCheck = useCallback(
     (facilityId: number, petIds: number[]): PetCheck | null => {
-      const facility = FACILITIES.find((f) => f.facilityId === facilityId);
+      const base = FACILITIES.find((f) => f.facilityId === facilityId);
       const chosen = pets.filter((p) => petIds.includes(p.petId));
-      if (!facility || chosen.length === 0) return null;
+      if (!base || chosen.length === 0) return null;
+
+      // 사업자가 확정한 조건이 있으면 그 조건으로 판별한다 (F5)
+      const reg = businessRegs[facilityId];
+      const facility: Facility = reg
+        ? {
+            ...base,
+            petAllowed: reg.petAllowed,
+            maxWeight: reg.maxWeight,
+            requirements: reg.requirements,
+            petConditionRaw: reg.conditionRaw,
+          }
+        : base;
 
       const { verdicts, overall, checklist, tips } = judgeGroup(chosen, facility);
       const check: PetCheck = {
@@ -165,7 +201,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setChecks((prev) => [check, ...prev]);
       return check;
     },
-    [pets],
+    [pets, businessRegs],
   );
 
   const reviewsOf = useCallback(
@@ -292,8 +328,48 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const registerBusiness = useCallback((reg: BusinessReg) => {
+    setBusinessRegs((prev) => ({ ...prev, [reg.facilityId]: reg }));
+    // 사업자가 조건을 확정했으니, 그동안의 거부 하향은 해소한다
+    setDowngradedIds((prev) => {
+      if (!prev.has(reg.facilityId)) return prev;
+      const next = new Set(prev);
+      next.delete(reg.facilityId);
+      return next;
+    });
+  }, []);
+
+  const businessRegOf = useCallback(
+    (facilityId: number) => businessRegs[facilityId] ?? null,
+    [businessRegs],
+  );
+
+  const effectiveFacility = useCallback(
+    (f: Facility): Facility => {
+      const reg = businessRegs[f.facilityId];
+      if (!reg) return f;
+      // 사업자가 확정한 조건이 원본을 대체한다 — 판별도 표시도 이 값을 기준으로 한다
+      return {
+        ...f,
+        petAllowed: reg.petAllowed,
+        maxWeight: reg.maxWeight,
+        requirements: reg.requirements,
+        petConditionRaw: reg.conditionRaw,
+        confidence: 'CONFIRMED',
+        confidenceSource: 'OWNER',
+        confirmedAt: reg.confirmedAt,
+      };
+    },
+    [businessRegs],
+  );
+
   const confidenceOf = useCallback(
     (f: Facility): { confidence: Confidence; source: ConfidenceSource; confirmedAt: string | null } => {
+      // 사업자 확정이 최우선 — 발생 지점에서 확정된 정보다
+      const reg = businessRegs[f.facilityId];
+      if (reg) {
+        return { confidence: 'CONFIRMED', source: 'OWNER', confirmedAt: reg.confirmedAt };
+      }
       // 사용자가 직접 확인 → 확정으로 상향
       if (userConfirmedIds.has(f.facilityId)) {
         return { confidence: 'CONFIRMED', source: 'USER_CALL', confirmedAt: new Date().toISOString() };
@@ -304,7 +380,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       }
       return { confidence: f.confidence, source: f.confidenceSource, confirmedAt: f.confirmedAt };
     },
-    [userConfirmedIds, downgradedIds],
+    [businessRegs, userConfirmedIds, downgradedIds],
   );
 
   const value = useMemo(
@@ -334,6 +410,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       downgradedIds,
       downgradeFacility,
       confidenceOf,
+      businessRegs,
+      registerBusiness,
+      businessRegOf,
+      effectiveFacility,
     }),
     [
       pets,
@@ -361,6 +441,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       downgradedIds,
       downgradeFacility,
       confidenceOf,
+      businessRegs,
+      registerBusiness,
+      businessRegOf,
+      effectiveFacility,
     ],
   );
 
