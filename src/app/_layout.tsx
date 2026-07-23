@@ -35,6 +35,10 @@ export default function RootLayout() {
           }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
+            name="course"
+            options={{ title: '여행 코스', headerBackButtonDisplayMode: 'minimal' }}
+          />
+          <Stack.Screen
             name="facility/[id]"
             options={{ title: '', headerBackButtonDisplayMode: 'minimal' }}
           />

@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Chip } from '@/components/chip';
 import { FacilityCard } from '@/components/facility-card';
@@ -16,6 +17,7 @@ const CATEGORIES = Object.keys(CATEGORY_LABEL) as Category[];
 
 export default function ExploreScreen() {
   const p = usePalette();
+  const router = useRouter();
   const { settings } = useAppStore();
   const [keyword, setKeyword] = useState('');
   const [category, setCategory] = useState<Category | null>(null);
@@ -64,6 +66,25 @@ export default function ExploreScreen() {
         ))}
       </ScrollView>
 
+      {/* 여행 코스 판별 진입점 — 낱개 시설이 아니라 하루 동선 전체를 검증한다 */}
+      <Pressable
+        onPress={() => router.push('/course')}
+        style={({ pressed }) => [
+          styles.courseCta,
+          { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : p.card },
+        ]}>
+        <View style={[styles.courseIcon, { backgroundColor: p.accentSoft }]}>
+          <Ionicons name="map" size={20} color={p.accent} />
+        </View>
+        <View style={styles.courseText}>
+          <Text style={[styles.courseTitle, { color: p.ink }]}>여행 코스 판별</Text>
+          <Text style={[styles.courseBody, { color: p.muted }]}>
+            여러 곳을 코스로 묶어 하루 동선을 한 번에 확인해요
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={p.accent} />
+      </Pressable>
+
       <SectionTitle title="내 주변 시설" caption={`${facilities.length}곳 · 강릉역 기준`} />
 
       <View style={styles.list}>
@@ -96,6 +117,24 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15, padding: 0 },
   chips: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.xl },
   list: { gap: Spacing.md },
+  courseCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderWidth: 1.5,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+  },
+  courseIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  courseText: { flex: 1, gap: 2 },
+  courseTitle: { fontSize: 15, fontWeight: '800', letterSpacing: -0.3 },
+  courseBody: { fontSize: 12, lineHeight: 17 },
   empty: { alignItems: 'center', gap: Spacing.md, paddingVertical: 56 },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
 });
