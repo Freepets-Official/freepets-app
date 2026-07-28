@@ -25,9 +25,11 @@ export default function FacilityDetailScreen() {
   const p = usePalette();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { pets, runCheck, reviewsOf, canReview, confidenceOf } = useAppStore();
+  const { pets, runCheck, reviewsOf, canReview, confidenceOf, effectiveFacility } = useAppStore();
 
-  const facility = FACILITIES.find((f) => f.facilityId === Number(id));
+  const base = FACILITIES.find((f) => f.facilityId === Number(id));
+  // 사업자가 확정한 조건이 있으면 그 값으로 표시한다 (판별은 runCheck가 내부에서 같은 override를 적용) (F5)
+  const facility = base ? effectiveFacility(base) : undefined;
 
   // 기본은 등록된 모든 아이 선택 — 다 함께 갈 수 있는지 한 번에 확인
   const [selectedIds, setSelectedIds] = useState<number[]>(pets.map((p) => p.petId));
