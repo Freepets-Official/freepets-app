@@ -34,6 +34,13 @@ export default function SettingsScreen() {
           sub={regCount > 0 ? `${regCount}곳 확정 관리 중` : '사장님이 직접 확정하면 손님에게 확정 정보로 보여져요'}
           onPress={() => router.push('/business')}
           chevron
+        />
+        <Row
+          icon="restaurant-outline"
+          label="우리 식당, 반려동물 받기"
+          sub="2026년 3월 신규 · 음식점 동반 신고제 안내부터 등록까지"
+          onPress={() => router.push('/restaurant')}
+          chevron
           last
         />
       </Group>
