@@ -7,6 +7,8 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { PetAllowedBadge, ResultBadge } from '@/components/badge';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { ConfidencePanel } from '@/components/confidence-panel';
+import { DenialAlert } from '@/components/denial-alert';
+import { DenialReport } from '@/components/denial-report';
 import { FacilityCard } from '@/components/facility-card';
 import { PawBadge } from '@/components/paw-badge';
 import { ReviewSection } from '@/components/review-section';
@@ -143,6 +145,9 @@ export default function FacilityDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* 누군가 방금 여기서 거부당했다면 판별 결과보다 먼저 눈에 들어와야 한다 */}
+      <DenialAlert facilityId={facility.facilityId} />
 
       <View style={[styles.rawCard, { backgroundColor: p.surface, borderColor: p.line }]}>
         <View style={styles.rawHead}>
@@ -341,6 +346,9 @@ export default function FacilityDetailScreen() {
               </View>
             </Animated.View>
           )}
+
+          {/* 현장에서 막 거부당한 사람을 위한 원터치 경로 — 서술형 제보보다 위에 둔다 */}
+          <DenialReport facilityId={facility.facilityId} />
 
           <Pressable
             onPress={() =>

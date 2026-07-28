@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DenialReport } from '@/components/denial-report';
 import { PassportCard } from '@/components/passport-card';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { FACILITIES } from '@/data/mock';
@@ -116,6 +117,11 @@ export default function PassportScreen() {
           </View>
         )}
 
+        {/* 출입증을 보여줬는데도 거부당한 순간 — 가장 빠르게 손이 닿아야 하는 위치다 */}
+        <View style={styles.denial}>
+          <DenialReport facilityId={facilityId} />
+        </View>
+
         <Text style={[styles.footer, { color: p.muted }]}>
           출입증은 판별 시점의 정보로 만들어집니다. 시설이 조건을 바꿨을 수 있으니
           현장 안내문과 다르면 제보해 주세요.
@@ -142,6 +148,7 @@ const styles = StyleSheet.create({
   },
   guideText: { fontSize: 12.5, fontWeight: '600', lineHeight: 18, flexShrink: 1 },
   carousel: { alignItems: 'center' },
+  denial: { alignSelf: 'center', width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.xl },
   dots: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   dot: { height: 6, borderRadius: Radius.full },
   dotLabel: { fontSize: 11.5, fontWeight: '700', marginLeft: 8 },
