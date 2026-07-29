@@ -1,6 +1,6 @@
 import type { Report } from '@/store/app-store';
 
-import type { Facility, Pet, PetSatisfaction, Review, ReviewTag } from '@/data/types';
+import type { Facility, Pet, PetCheck, PetSatisfaction, Review, ReviewTag } from '@/data/types';
 
 /**
  * 데모용 목 데이터. 백엔드 연동 전까지 화면 검증에 사용한다.
@@ -291,6 +291,27 @@ export const INITIAL_REPORTS: Report[] = [
     realtime: true,
     status: 'APPLIED',
     createdAt: new Date(Date.now() - 23 * 60 * 1000).toISOString(),
+  },
+];
+
+/**
+ * 데모용 판별 이력 씨드 — "AI 판별받고 가려던 곳".
+ * 테라로사(시설 10)를 이미 판별해 둔 상태로 두면, 그 시설에 들어온 거부 제보(INITIAL_REPORTS)와
+ * 맞물려 홈에서 "가려던 곳에 거부가 떴어요" 알림이 바로 보인다. 실제로는 사용자의 실제 판별 이력.
+ */
+export const INITIAL_CHECKS: PetCheck[] = [
+  {
+    checkId: 1,
+    facilityId: 10, // 테라로사 커피공장 — 판별받고 가려던 곳
+    petIds: [1, 2],
+    verdicts: [
+      { petId: 1, result: 'CONDITIONAL', reason: '몽이(말티즈, 3.2kg)는 입장 조건을 충족해요. 다만 아래 조건을 지켜 주세요.', conditions: ['리드줄 필수 착용', '야외 공간만 이용 가능'] },
+      { petId: 2, result: 'CONDITIONAL', reason: '보리(골든리트리버, 27.5kg)는 입장 조건을 충족해요. 다만 아래 조건을 지켜 주세요.', conditions: ['리드줄 필수 착용', '야외 공간만 이용 가능'] },
+    ],
+    overall: 'CONDITIONAL',
+    checklist: ['리드줄 필수 지참', '휴대용 물그릇 준비'],
+    tips: [],
+    createdAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(), // 40분 전 판별
   },
 ];
 

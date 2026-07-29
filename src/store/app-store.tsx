@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { judgeGroup } from '@/data/judge';
-import { FACILITIES, INITIAL_PETS, INITIAL_REPORTS, INITIAL_SATISFACTIONS, REVIEWS } from '@/data/mock';
+import { FACILITIES, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, INITIAL_SATISFACTIONS, REVIEWS } from '@/data/mock';
 import type {
   Confidence,
   ConfidenceSource,
@@ -138,6 +138,8 @@ interface AppStore {
   reportDenial: (facilityId: number, reason: DenialReason) => void;
   /** 최근 24시간 내 남이 보낸 현장 거부 제보 — 그 시설로 향하는 사용자에게 경고로 쓴다 */
   recentDenialOf: (facilityId: number) => Report | undefined;
+  /** 내가 판별받은 시설 중 최근 24h 내 거부가 뜬 곳 — 홈 알림에 쓴다 */
+  plannedDenialAlerts: () => { facility: Facility; report: Report }[];
   /** 내가 이 시설에 보낸 현장 거부 제보 */
   myDenialOf: (facilityId: number) => Report | undefined;
 
@@ -177,7 +179,7 @@ const AppStoreContext = createContext<AppStore | null>(null);
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [pets, setPets] = useState<Pet[]>(INITIAL_PETS);
-  const [checks, setChecks] = useState<PetCheck[]>([]);
+  const [checks, setChecks] = useState<PetCheck[]>(INITIAL_CHECKS);
   const [reviews, setReviews] = useState<Review[]>(REVIEWS);
   const [reports, setReports] = useState<Report[]>(INITIAL_REPORTS);
   const [reportedReviewIds, setReportedReviewIds] = useState<Set<number>>(new Set());
@@ -190,7 +192,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   );
   const [businessRegs, setBusinessRegs] = useState<Record<number, BusinessReg>>({});
   const nextPetId = useRef(INITIAL_PETS.length + 1);
-  const nextCheckId = useRef(1);
+  const nextCheckId = useRef(INITIAL_CHECKS.length + 1);
   const nextReviewId = useRef(900000);
   const nextReportId = useRef(INITIAL_REPORTS.length + 1);
 
@@ -318,6 +320,23 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ),
     [reports],
   );
+
+  // 내가 판별받은(=가려던) 시설 중, 남의 현장 거부가 24h 내 들어온 곳.
+  // 위치(GPS)가 아니라 "판별 이력"으로 '가려던 곳'을 판단한다.
+  const plannedDenialAlerts = useCallback((): { facility: Facility; report: Report }[] => {
+    const seen = new Set<number>();
+    const out: { facility: Facility; report: Report }[] = [];
+    for (const c of checks) {
+      if (seen.has(c.facilityId)) continue;
+      const report = recentDenialOf(c.facilityId);
+      if (!report) continue;
+      const facility = FACILITIES.find((f) => f.facilityId === c.facilityId);
+      if (!facility) continue;
+      seen.add(c.facilityId);
+      out.push({ facility, report });
+    }
+    return out;
+  }, [checks, recentDenialOf]);
 
   const myDenialOf = useCallback(
     (facilityId: number) =>
@@ -482,6 +501,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       addReport,
       reportDenial,
       recentDenialOf,
+      plannedDenialAlerts,
       myDenialOf,
       reportedReviewIds,
       reportReview,
@@ -516,6 +536,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       addReport,
       reportDenial,
       recentDenialOf,
+      plannedDenialAlerts,
       myDenialOf,
       reportedReviewIds,
       reportReview,
