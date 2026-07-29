@@ -1,6 +1,6 @@
 import type { Report } from '@/store/app-store';
 
-import type { Facility, Pet, PetSatisfaction, Review, ReviewTag } from '@/data/types';
+import type { Facility, Pet, PetCheck, PetSatisfaction, Review, ReviewTag } from '@/data/types';
 
 /**
  * 데모용 목 데이터. 백엔드 연동 전까지 화면 검증에 사용한다.
@@ -159,6 +159,52 @@ export const FACILITIES: Facility[] = [
     confidenceSource: 'PARSED',
     confirmedAt: '2026-06-12',
   },
+  // ── 취향 유사도 추천용: 아직 안 가본 동반 가능 시설(전 견종·목줄만) ──
+  {
+    facilityId: 12,
+    name: '송정해변 솔바람 산책로',
+    category: 'TOUR',
+    address: '강원 강릉시 송정동 해안로',
+    phone: null,
+    distanceM: 1500,
+    petAllowed: true,
+    petConditionRaw: '리드줄 착용 시 전 구간 동반 산책 가능. 넓은 백사장과 솔숲, 배변봉투함 비치.',
+    maxWeight: null,
+    requirements: ['LEASH'],
+    confidence: 'LIKELY',
+    confidenceSource: 'PARSED',
+    confirmedAt: '2026-07-22',
+  },
+  {
+    facilityId: 13,
+    name: '보헤미안 로스터스 강릉',
+    category: 'CAFE',
+    address: '강원 강릉시 사천면 해안로 1107',
+    phone: '033-641-6688',
+    distanceM: 2200,
+    petAllowed: true,
+    petConditionRaw: '전 견종 동반 가능. 리드줄 착용, 급수대·펫 메뉴 준비. 넓은 테라스.',
+    maxWeight: null,
+    requirements: ['LEASH'],
+    confidence: 'CONFIRMED',
+    confidenceSource: 'CROWD',
+    confirmedAt: '2026-07-25',
+  },
+  {
+    facilityId: 14,
+    name: '강릉 펫 글램핑',
+    category: 'STAY',
+    address: '강원 강릉시 성산면 대관령로',
+    phone: '033-647-3300',
+    distanceM: 4800,
+    petAllowed: true,
+    petConditionRaw: '전 객실 동반 가능. 리드줄 착용, 넓은 개별 마당·주차 편리.',
+    maxWeight: null,
+    requirements: ['LEASH'],
+    confidence: 'LIKELY',
+    confidenceSource: 'PARSED',
+    confirmedAt: '2026-07-18',
+  },
 ];
 
 export const INITIAL_PETS: Pet[] = [
@@ -271,6 +317,19 @@ export const REVIEWS: Review[] = [
   ...makeReviews(6, 4, [3, 3, 2], [
     { nick: '시장구경', pet: '메주', text: '동반 가능 여부가 점포마다 달라요. 입구에서 확인하는 게 좋습니다.', tags: [] },
   ]),
+  // 유사도 추천용 신규 시설의 리뷰(태그 프로필) — 취향 매칭에 쓰인다
+  ...makeReviews(12, 45, [5, 4, 5], [
+    { nick: '솔숲러', pet: '해피', text: '백사장이 넓어서 마음껏 뛰었어요. 목줄 풀 순 없지만 공간이 충분합니다.', tags: ['SPACIOUS', 'OFF_LEASH_OK', 'POOP_BAG'] },
+    { nick: '아침산책', pet: '보리', text: '이른 아침 조용해서 산책하기 딱 좋아요. 배변봉투함도 곳곳에 있습니다.', tags: ['QUIET', 'SPACIOUS', 'POOP_BAG'] },
+  ]),
+  ...makeReviews(13, 70, [5, 5, 5], [
+    { nick: '라떼몽이', pet: '몽이', text: '전 견종 환영이라 대형견도 눈치 안 봐요. 급수대랑 펫 메뉴까지 완벽.', tags: ['LARGE_DOG_OK', 'WATER_BOWL', 'PET_MENU', 'STAFF_LOVES_PETS'] },
+    { nick: '테라스족', pet: '초코', text: '테라스가 넓고 주차도 편해요. 직원분들이 아이를 반겨주셨어요.', tags: ['SPACIOUS', 'PARKING', 'STAFF_LOVES_PETS'] },
+  ]),
+  ...makeReviews(14, 32, [5, 4, 5], [
+    { nick: '글램핑러', pet: '뭉치', text: '개별 마당이 넓어서 밤에도 아이가 편하게 지냈어요. 주차 바로 앞.', tags: ['SPACIOUS', 'PARKING'] },
+    { nick: '가족여행', pet: '까미', text: '전 객실 동반이라 눈치 안 보여요. 급수대도 있고 좋았습니다.', tags: ['WATER_BOWL', 'SPACIOUS'] },
+  ]),
 ];
 
 /**
@@ -291,6 +350,27 @@ export const INITIAL_REPORTS: Report[] = [
     realtime: true,
     status: 'APPLIED',
     createdAt: new Date(Date.now() - 23 * 60 * 1000).toISOString(),
+  },
+];
+
+/**
+ * 데모용 판별 이력 씨드 — "AI 판별받고 가려던 곳".
+ * 테라로사(시설 10)를 이미 판별해 둔 상태로 두면, 그 시설에 들어온 거부 제보(INITIAL_REPORTS)와
+ * 맞물려 홈에서 "가려던 곳에 거부가 떴어요" 알림이 바로 보인다. 실제로는 사용자의 실제 판별 이력.
+ */
+export const INITIAL_CHECKS: PetCheck[] = [
+  {
+    checkId: 1,
+    facilityId: 10, // 테라로사 커피공장 — 판별받고 가려던 곳
+    petIds: [1, 2],
+    verdicts: [
+      { petId: 1, result: 'CONDITIONAL', reason: '몽이(말티즈, 3.2kg)는 입장 조건을 충족해요. 다만 아래 조건을 지켜 주세요.', conditions: ['리드줄 필수 착용', '야외 공간만 이용 가능'] },
+      { petId: 2, result: 'CONDITIONAL', reason: '보리(골든리트리버, 27.5kg)는 입장 조건을 충족해요. 다만 아래 조건을 지켜 주세요.', conditions: ['리드줄 필수 착용', '야외 공간만 이용 가능'] },
+    ],
+    overall: 'CONDITIONAL',
+    checklist: ['리드줄 필수 지참', '휴대용 물그릇 준비'],
+    tips: [],
+    createdAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(), // 40분 전 판별
   },
 ];
 

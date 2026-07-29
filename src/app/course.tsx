@@ -10,6 +10,7 @@ import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme'
 import {
   PRESET_COURSES,
   recommendCourse,
+  recommendSimilarCourse,
   validateCourse,
   type Course,
   type StopResult,
@@ -41,6 +42,12 @@ export default function CourseScreen() {
   const recommended = useMemo(
     () => recommendCourse(selectedPetIds, satisfactions),
     [selectedPetIds, satisfactions],
+  );
+
+  // 취향이 비슷한 아직 안 가본 곳 — 좋아한 곳 그 자체와 별개로 제안
+  const recommendedSimilar = useMemo(
+    () => recommendSimilarCourse(chosenPets, satisfactions),
+    [chosenPets, satisfactions],
   );
 
   const result = useMemo(
@@ -157,6 +164,13 @@ export default function CourseScreen() {
                   course={recommended}
                   highlight
                   onPress={() => loadCourse(recommended)}
+                />
+              )}
+              {recommendedSimilar && (
+                <CoursePickCard
+                  course={recommendedSimilar}
+                  highlight
+                  onPress={() => loadCourse(recommendedSimilar)}
                 />
               )}
               {PRESET_COURSES.map((c) => (

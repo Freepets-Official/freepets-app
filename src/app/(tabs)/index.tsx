@@ -8,9 +8,9 @@ import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import { FACILITIES } from '@/data/mock';
-import { CATEGORY_LABEL, satisfactionMood, type Pet } from '@/data/types';
+import { CATEGORY_LABEL, satisfactionMood, sinceText, type Pet } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
-import { useAppStore } from '@/store/app-store';
+import { DENIAL_REASON_LABEL, useAppStore } from '@/store/app-store';
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -22,10 +22,42 @@ function formatDate(iso: string): string {
 export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { pets, checks } = useAppStore();
+  const { pets, checks, plannedDenialAlerts } = useAppStore();
+  const alerts = plannedDenialAlerts();
 
   return (
     <Screen eyebrow="우리 아이들" title="반려동물 여권" subtitle="아이마다 좋아한 장소를 한눈에 확인하세요.">
+      {/* 가려던 곳(판별받은 시설)에 거부가 뜨면 홈에서 먼저 알린다 */}
+      {alerts.length > 0 && (
+        <View style={styles.alertWrap}>
+          {alerts.map(({ facility, report }) => (
+            <Pressable
+              key={facility.facilityId}
+              onPress={() =>
+                router.push({ pathname: '/facility/[id]', params: { id: String(facility.facilityId) } })
+              }
+              style={({ pressed }) => [
+                styles.alertCard,
+                { backgroundColor: pressed ? p.dangerSoft : p.card, borderColor: p.danger },
+              ]}>
+              <View style={[styles.alertIcon, { backgroundColor: p.dangerSoft }]}>
+                <Ionicons name="notifications" size={18} color={p.danger} />
+              </View>
+              <View style={styles.alertText}>
+                <Text style={[styles.alertTitle, { color: p.danger }]}>
+                  가려던 곳에 거부가 떴어요
+                </Text>
+                <Text style={[styles.alertBody, { color: p.ink }]} numberOfLines={2}>
+                  {facility.name} · {report.createdAt ? sinceText(report.createdAt) : ''}
+                  {report.reason ? ` · ${DENIAL_REASON_LABEL[report.reason]}` : ''} — 방문 전 확인하세요
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={p.danger} />
+            </Pressable>
+          ))}
+        </View>
+      )}
+
       {pets.length === 0 ? (
         <View style={[styles.empty, { borderColor: p.line }]}>
           <Ionicons name="paw" size={30} color={p.accent} />
@@ -144,6 +176,25 @@ function PetPassport({ pet }: { pet: Pet }) {
 }
 
 const styles = StyleSheet.create({
+  alertWrap: { gap: Spacing.sm },
+  alertCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderWidth: 1.5,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+  },
+  alertIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alertText: { flex: 1, gap: 2 },
+  alertTitle: { fontSize: 14, fontWeight: '800', letterSpacing: -0.3 },
+  alertBody: { fontSize: 12.5, lineHeight: 18 },
   card: {
     borderRadius: Radius.xl,
     borderWidth: 2,
