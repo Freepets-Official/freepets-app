@@ -1,6 +1,6 @@
 import { judgeGroup, type GroupResult } from '@/data/judge';
-import { FACILITIES } from '@/data/mock';
-import type { CheckResult, Category, Facility, Pet, PetSatisfaction } from '@/data/types';
+import { FACILITIES, reviewsOf } from '@/data/mock';
+import type { Category, CheckResult, Facility, Pet, PetSatisfaction, ReviewTag } from '@/data/types';
 
 /**
  * 여행 코스 판별 (F3) — 백엔드 없이 목 로직으로 완결한다.
@@ -169,6 +169,88 @@ export function recommendCourse(
     id: 'recommended',
     name: '우리 아이 취향 코스',
     description: '데려갈 아이들이 좋아했던 곳들로 엮었어요',
+    source: 'RECOMMENDED',
+    stopIds: picked,
+  };
+}
+
+/** 한 시설의 리뷰 태그 집합 — 그 시설의 "성격"을 나타낸다 */
+function facilityTagSet(facilityId: number): Set<ReviewTag> {
+  const tags = new Set<ReviewTag>();
+  reviewsOf(facilityId).forEach((r) => r.tags.forEach((t) => tags.add(t)));
+  return tags;
+}
+
+/** 데려갈 아이들이 좋아한 곳들에서 뽑은 취향 프로필 (카테고리 + 태그) */
+interface TasteProfile {
+  categories: Set<Category>;
+  tags: Set<ReviewTag>;
+  likedIds: Set<number>;
+}
+
+function tasteProfile(petIds: number[], satisfactions: PetSatisfaction[]): TasteProfile {
+  const scoreByFacility = new Map<number, { sum: number; count: number }>();
+  satisfactions
+    .filter((s) => petIds.includes(s.petId))
+    .forEach((s) => {
+      const cur = scoreByFacility.get(s.facilityId) ?? { sum: 0, count: 0 };
+      cur.sum += s.score;
+      cur.count += 1;
+      scoreByFacility.set(s.facilityId, cur);
+    });
+  const categories = new Set<Category>();
+  const tags = new Set<ReviewTag>();
+  const likedIds = new Set<number>();
+  scoreByFacility.forEach(({ sum, count }, facilityId) => {
+    if (sum / count < 6.5) return; // 시큰둥했던 곳은 프로필에서 제외
+    likedIds.add(facilityId);
+    const f = facilityById(facilityId);
+    if (f) categories.add(f.category);
+    facilityTagSet(facilityId).forEach((t) => tags.add(t));
+  });
+  return { categories, tags, likedIds };
+}
+
+/**
+ * 취향 유사도 추천 — "좋아한 곳 그 자체"가 아니라 "취향이 비슷한 아직 안 가본 곳"으로 코스를 짠다.
+ *
+ * 아이가 좋아한 곳들의 카테고리·리뷰 태그로 취향 프로필을 만들고, 다른 시설을 그 프로필과의
+ * 유사도로 점수 매긴다. 데려갈 아이들이 못 가는 곳(불가)은 제외한다.
+ * 실제 서비스에선 서버가 전체 시설·리뷰로 계산한다(계약: docs/02 `courses/recommended`).
+ */
+export function recommendSimilarCourse(pets: Pet[], satisfactions: PetSatisfaction[]): Course | null {
+  if (pets.length === 0) return null;
+  const petIds = pets.map((p) => p.petId);
+  const profile = tasteProfile(petIds, satisfactions);
+  if (profile.categories.size === 0) return null;
+
+  const scored = FACILITIES.filter((f) => !profile.likedIds.has(f.facilityId)) // 안 가본 곳만
+    .filter((f) => judgeGroup(pets, f).overall !== 'DENIED') // 데려갈 아이가 갈 수 있는 곳만
+    .map((f) => {
+      const catMatch = profile.categories.has(f.category) ? 3 : 0;
+      const tagOverlap = [...facilityTagSet(f.facilityId)].filter((t) => profile.tags.has(t)).length;
+      return { f, score: catMatch + tagOverlap };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score || a.f.distanceM - b.f.distanceM);
+
+  // 카테고리 다양성 확보 (같은 카테고리는 최고 점수 한 곳만)
+  const seen = new Set<Category>();
+  const picked: number[] = [];
+  for (const { f } of scored) {
+    if (seen.has(f.category)) continue;
+    seen.add(f.category);
+    picked.push(f.facilityId);
+    if (picked.length >= 4) break;
+  }
+  picked.sort((a, b) => (facilityById(a)?.distanceM ?? 0) - (facilityById(b)?.distanceM ?? 0));
+
+  if (picked.length < 2) return null;
+
+  return {
+    id: 'recommended-similar',
+    name: '취향 비슷한 새 곳 탐험',
+    description: '가본 곳은 빼고, 우리 아이 취향과 비슷한 새 장소로 엮었어요',
     source: 'RECOMMENDED',
     stopIds: picked,
   };
