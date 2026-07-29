@@ -1,4 +1,4 @@
-export type Category = 'TOUR' | 'STAY' | 'CAFE' | 'LEISURE' | 'SHOPPING';
+export type Category = 'TOUR' | 'STAY' | 'CAFE' | 'LEISURE' | 'SHOPPING' | 'RESTAURANT';
 export type BreedSize = 'SMALL' | 'MEDIUM' | 'LARGE';
 export type CheckResult = 'ALLOWED' | 'CONDITIONAL' | 'DENIED';
 export type Requirement =
@@ -219,6 +219,7 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   CAFE: '카페',
   LEISURE: '레포츠',
   SHOPPING: '쇼핑',
+  RESTAURANT: '음식점',
 };
 
 export const BREED_SIZE_LABEL: Record<BreedSize, string> = {

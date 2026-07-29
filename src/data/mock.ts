@@ -159,6 +159,22 @@ export const FACILITIES: Facility[] = [
     confidenceSource: 'PARSED',
     confirmedAt: '2026-06-12',
   },
+  {
+    // F6 데모: 아직 반려동물을 안 받는 일반 음식점. 사업자가 온보딩하면 동반 가능으로 바뀐다.
+    facilityId: 11,
+    name: '초당순두부 본점',
+    category: 'RESTAURANT',
+    address: '강원 강릉시 초당순두부길 32',
+    phone: '033-652-9004',
+    distanceM: 2400,
+    petAllowed: false,
+    petConditionRaw: null,
+    maxWeight: null,
+    requirements: [],
+    confidence: 'UNVERIFIED',
+    confidenceSource: 'NONE',
+    confirmedAt: null,
+  },
   // ── 취향 유사도 추천용: 아직 안 가본 동반 가능 시설(전 견종·목줄만) ──
   {
     facilityId: 12,
