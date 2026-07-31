@@ -15,15 +15,33 @@ const RADII = [1, 3, 5, 10];
 export default function SettingsScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { settings, updateSettings, businessRegs } = useAppStore();
+  const { settings, updateSettings, businessRegs, session, availableProfiles, switchProfile, logout } =
+    useAppStore();
   const regCount = Object.keys(businessRegs).length;
+  const hasOwnerProfile = availableProfiles.includes('owner');
 
   return (
     <Screen eyebrow="설정" title="설정">
       {/* 계정 */}
       <Group title="계정">
+        {hasOwnerProfile && (
+          <Row
+            icon="swap-horizontal-outline"
+            label="프로필 전환"
+            sub="일반 ↔ 사업자 프로필 선택"
+            onPress={switchProfile}
+            chevron
+          />
+        )}
         <Row icon="person-circle-outline" label="프로필 관리" onPress={() => {}} chevron />
-        <Row icon="mail-outline" label="계정 정보" sub="sjwtlswodn@naver.com" onPress={() => {}} chevron last />
+        <Row
+          icon="mail-outline"
+          label="계정 정보"
+          sub={session.email ?? 'sjwtlswodn@naver.com'}
+          onPress={() => {}}
+          chevron
+          last
+        />
       </Group>
 
       {/* 사업자 (앱 특화) */}
@@ -134,7 +152,7 @@ export default function SettingsScreen() {
 
       {/* 계정 관리 */}
       <Group title="계정 관리">
-        <Row icon="log-out-outline" label="로그아웃" onPress={() => {}} tint />
+        <Row icon="log-out-outline" label="로그아웃" onPress={logout} tint />
         <Row icon="person-remove-outline" label="회원 탈퇴" onPress={() => {}} tint last />
       </Group>
 
