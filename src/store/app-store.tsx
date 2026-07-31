@@ -37,6 +37,21 @@ const DEFAULT_SETTINGS: AppSettings = {
   notifMarketing: false,
 };
 
+/**
+ * 로그인 프로필(페르소나) — 계정 하나 아래에 소비자·사업자 두 모드가 공존한다.
+ * 넷플릭스/티빙처럼 앱을 켜면 프로필을 고르고, 고른 프로필에 따라 화면 세트가 달라진다.
+ * - consumer: 일반 여행자 앱 (탭: 홈·탐색·반려동물·설정)
+ * - owner: 사업자 대시보드 (내 매장 관리·통계) — 매장을 등록해야 생긴다
+ */
+export type ProfileKind = 'consumer' | 'owner';
+
+export interface Session {
+  authed: boolean;
+  email: string | null;
+  /** 현재 활성 프로필. null이면 아직 안 골랐다는 뜻(프로필 선택 화면으로) */
+  activeProfile: ProfileKind | null;
+}
+
 export type ReportType = 'ENTERED' | 'DENIED' | 'CONDITION_CHANGED';
 
 /** 문 앞에서 거부당한 이유 — 원터치 제보라 서술 대신 코드로 받는다 */
@@ -176,6 +191,18 @@ interface AppStore {
   businessRegOf: (facilityId: number) => BusinessReg | null;
   /** 사업자 확정 조건을 반영한 시설 — 판별·표시는 모두 이걸 기준으로 한다 */
   effectiveFacility: (f: Facility) => Facility;
+
+  /** 로그인 세션 (계정 하나 + 활성 프로필) */
+  session: Session;
+  /** 이 계정이 가진 프로필들 — 소비자는 항상, 사업자는 매장을 등록했을 때 생긴다 */
+  availableProfiles: ProfileKind[];
+  /** 데모 로그인 — 프로필이 하나면 자동 진입, 둘이면 프로필 선택으로 */
+  login: (email: string) => void;
+  logout: () => void;
+  /** 프로필 선택(넷플릭스식) — 고른 프로필로 화면 세트가 바뀐다 */
+  selectProfile: (kind: ProfileKind) => void;
+  /** 다시 프로필 선택 화면으로 (다중 프로필일 때 전환용) */
+  switchProfile: () => void;
 }
 
 const MY_USER_ID = 1;
@@ -195,6 +222,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     () => new Set(INITIAL_REPORTS.filter((r) => r.realtime).map((r) => r.facilityId)),
   );
   const [businessRegs, setBusinessRegs] = useState<Record<number, BusinessReg>>({});
+  const [session, setSession] = useState<Session>({ authed: false, email: null, activeProfile: null });
   const nextPetId = useRef(INITIAL_PETS.length + 1);
   const nextCheckId = useRef(INITIAL_CHECKS.length + 1);
   const nextReviewId = useRef(900000);
@@ -499,6 +527,33 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [businessRegs, userConfirmedIds, downgradedIds],
   );
 
+  // 매장을 하나라도 등록하면 사업자 프로필이 계정에 생긴다 (A-하이브리드: 가입은 소비자 하나)
+  const availableProfiles = useMemo<ProfileKind[]>(
+    () => (Object.keys(businessRegs).length > 0 ? ['consumer', 'owner'] : ['consumer']),
+    [businessRegs],
+  );
+
+  const login = useCallback((email: string) => {
+    setSession({
+      authed: true,
+      email,
+      // 프로필이 하나뿐이면 바로 자동 로그인, 둘이면 선택 화면(activeProfile=null)으로 보낸다
+      activeProfile: Object.keys(businessRegs).length > 0 ? null : 'consumer',
+    });
+  }, [businessRegs]);
+
+  const logout = useCallback(() => {
+    setSession({ authed: false, email: null, activeProfile: null });
+  }, []);
+
+  const selectProfile = useCallback((kind: ProfileKind) => {
+    setSession((s) => ({ ...s, activeProfile: kind }));
+  }, []);
+
+  const switchProfile = useCallback(() => {
+    setSession((s) => ({ ...s, activeProfile: null }));
+  }, []);
+
   const value = useMemo(
     () => ({
       pets,
@@ -535,6 +590,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       registerBusiness,
       businessRegOf,
       effectiveFacility,
+      session,
+      availableProfiles,
+      login,
+      logout,
+      selectProfile,
+      switchProfile,
     }),
     [
       pets,
@@ -571,6 +632,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       registerBusiness,
       businessRegOf,
       effectiveFacility,
+      session,
+      availableProfiles,
+      login,
+      logout,
+      selectProfile,
+      switchProfile,
     ],
   );
 
