@@ -28,7 +28,7 @@ const maskBizNo = (d: string) => `${d.slice(0, 3)}-${d.slice(3, 5)}-*****`;
 export default function BusinessScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { registerBusiness, businessRegOf } = useAppStore();
+  const { registerBusiness, businessRegOf, selectProfile } = useAppStore();
 
   const [bizDigits, setBizDigits] = useState('');
   const [verified, setVerified] = useState(false);
@@ -132,12 +132,25 @@ export default function BusinessScreen() {
             </Text>
           </View>
 
+          <Text style={[styles.doneBody, { color: p.muted, marginTop: 2 }]}>
+            사업자 프로필이 생겼어요. 이제 대시보드에서 소개·혜택·통계를 관리할 수 있어요.
+          </Text>
+
+          <Pressable
+            onPress={() => {
+              // 등록 즉시 사업자 프로필로 전환해 대시보드로 진입 (docs/10 흐름)
+              selectProfile('owner');
+              router.replace('/owner-dashboard');
+            }}
+            style={({ pressed }) => [styles.doneBtn, { backgroundColor: pressed ? p.accentDark : p.accent }]}>
+            <Text style={[styles.doneBtnText, { color: p.onAccent }]}>내 매장 대시보드 열기</Text>
+          </Pressable>
           <Pressable
             onPress={() =>
               router.replace({ pathname: '/facility/[id]', params: { id: String(facility.facilityId) } })
             }
-            style={({ pressed }) => [styles.doneBtn, { backgroundColor: pressed ? p.accentDark : p.accent }]}>
-            <Text style={[styles.doneBtnText, { color: p.onAccent }]}>내 매장 화면 보기</Text>
+            style={styles.doneSecondary}>
+            <Text style={[styles.doneSecondaryText, { color: p.accent }]}>손님 화면에서 보기</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -511,4 +524,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   doneBtnText: { fontSize: 15.5, fontWeight: '800' },
+  doneSecondary: { alignItems: 'center', paddingVertical: 12, marginTop: 2 },
+  doneSecondaryText: { fontSize: 14, fontWeight: '800' },
 });

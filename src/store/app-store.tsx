@@ -107,6 +107,49 @@ export interface BusinessReg {
   confirmedAt: string;
 }
 
+/**
+ * 반려동물 편의시설 태그 (docs/10 facility_promotions.amenities).
+ * 사업자가 소개에서 고르고, 방문자 시설 상세 "사장님이 전하는 우리 매장"에 노출된다.
+ */
+export type Amenity =
+  | 'WATER_BOWL'
+  | 'POOP_BAG'
+  | 'PET_MENU'
+  | 'OUTDOOR_SEAT'
+  | 'OFF_LEASH_ZONE'
+  | 'PARKING'
+  | 'PET_SUPPLIES'
+  | 'BLANKET';
+
+export const AMENITY_LABEL: Record<Amenity, string> = {
+  WATER_BOWL: '급수대',
+  POOP_BAG: '배변봉투',
+  PET_MENU: '펫 메뉴',
+  OUTDOOR_SEAT: '야외 테라스',
+  OFF_LEASH_ZONE: '목줄 프리 공간',
+  PARKING: '주차 가능',
+  PET_SUPPLIES: '반려용품 비치',
+  BLANKET: '방석·담요',
+};
+
+/** 사업자 매장 소개·홍보 — 소유 인증된 시설에 1:1 (docs/10 facility_promotions) */
+export interface Promotion {
+  facilityId: number;
+  intro: string;
+  amenities: Amenity[];
+  /** 데모: 사진은 개수만 관리(실제 업로드는 백엔드). 0이면 사진 없음 */
+  photoCount: number;
+}
+
+/** 방문 혜택 안내 — MVP는 안내 텍스트만, 쿠폰 발급은 2차 (docs/10 facility_benefits) */
+export interface Benefit {
+  benefitId: number;
+  facilityId: number;
+  title: string;
+  detail: string;
+  active: boolean;
+}
+
 export type ReviewReportReason = 'FALSE_INFO' | 'SPAM' | 'ABUSE' | 'PRIVACY' | 'IRRELEVANT';
 
 export const REVIEW_REPORT_REASON_LABEL: Record<ReviewReportReason, string> = {
@@ -192,6 +235,16 @@ interface AppStore {
   /** 사업자 확정 조건을 반영한 시설 — 판별·표시는 모두 이걸 기준으로 한다 */
   effectiveFacility: (f: Facility) => Facility;
 
+  /** 매장 소개·홍보 (사업자 대시보드 ②) */
+  promotions: Record<number, Promotion>;
+  promotionOf: (facilityId: number) => Promotion | null;
+  setPromotion: (promotion: Promotion) => void;
+  /** 방문 혜택 안내 (사업자 대시보드 ③) */
+  benefitsOf: (facilityId: number) => Benefit[];
+  addBenefit: (facilityId: number, title: string, detail: string) => void;
+  toggleBenefit: (facilityId: number, benefitId: number) => void;
+  removeBenefit: (facilityId: number, benefitId: number) => void;
+
   /** 로그인 세션 (계정 하나 + 활성 프로필) */
   session: Session;
   /** 이 계정이 가진 프로필들 — 소비자는 항상, 사업자는 매장을 등록했을 때 생긴다 */
@@ -222,7 +275,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     () => new Set(INITIAL_REPORTS.filter((r) => r.realtime).map((r) => r.facilityId)),
   );
   const [businessRegs, setBusinessRegs] = useState<Record<number, BusinessReg>>({});
+  const [promotions, setPromotions] = useState<Record<number, Promotion>>({});
+  const [benefits, setBenefits] = useState<Record<number, Benefit[]>>({});
   const [session, setSession] = useState<Session>({ authed: false, email: null, activeProfile: null });
+  const nextBenefitId = useRef(1);
   const nextPetId = useRef(INITIAL_PETS.length + 1);
   const nextCheckId = useRef(INITIAL_CHECKS.length + 1);
   const nextReviewId = useRef(900000);
@@ -527,6 +583,46 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [businessRegs, userConfirmedIds, downgradedIds],
   );
 
+  const promotionOf = useCallback(
+    (facilityId: number) => promotions[facilityId] ?? null,
+    [promotions],
+  );
+
+  const setPromotion = useCallback((promotion: Promotion) => {
+    setPromotions((prev) => ({ ...prev, [promotion.facilityId]: promotion }));
+  }, []);
+
+  const benefitsOf = useCallback(
+    (facilityId: number) => benefits[facilityId] ?? [],
+    [benefits],
+  );
+
+  const addBenefit = useCallback((facilityId: number, title: string, detail: string) => {
+    setBenefits((prev) => ({
+      ...prev,
+      [facilityId]: [
+        ...(prev[facilityId] ?? []),
+        { benefitId: nextBenefitId.current++, facilityId, title, detail, active: true },
+      ],
+    }));
+  }, []);
+
+  const toggleBenefit = useCallback((facilityId: number, benefitId: number) => {
+    setBenefits((prev) => ({
+      ...prev,
+      [facilityId]: (prev[facilityId] ?? []).map((b) =>
+        b.benefitId === benefitId ? { ...b, active: !b.active } : b,
+      ),
+    }));
+  }, []);
+
+  const removeBenefit = useCallback((facilityId: number, benefitId: number) => {
+    setBenefits((prev) => ({
+      ...prev,
+      [facilityId]: (prev[facilityId] ?? []).filter((b) => b.benefitId !== benefitId),
+    }));
+  }, []);
+
   // 매장을 하나라도 등록하면 사업자 프로필이 계정에 생긴다 (A-하이브리드: 가입은 소비자 하나)
   const availableProfiles = useMemo<ProfileKind[]>(
     () => (Object.keys(businessRegs).length > 0 ? ['consumer', 'owner'] : ['consumer']),
@@ -590,6 +686,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       registerBusiness,
       businessRegOf,
       effectiveFacility,
+      promotions,
+      promotionOf,
+      setPromotion,
+      benefitsOf,
+      addBenefit,
+      toggleBenefit,
+      removeBenefit,
       session,
       availableProfiles,
       login,
@@ -632,6 +735,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       registerBusiness,
       businessRegOf,
       effectiveFacility,
+      promotions,
+      promotionOf,
+      setPromotion,
+      benefitsOf,
+      addBenefit,
+      toggleBenefit,
+      removeBenefit,
       session,
       availableProfiles,
       login,
