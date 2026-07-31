@@ -1,34 +1,55 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Chip } from '@/components/chip';
 import { PawBadge } from '@/components/paw-badge';
 import { Screen } from '@/components/screen';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
-import { FACILITIES, formatDistance } from '@/data/mock';
+import { FACILITIES, REGIONS, formatDistance } from '@/data/mock';
 import { CATEGORY_LABEL, PAW_MIN_REVIEWS, pawGradeOf, type Category } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
 const CATEGORIES = Object.keys(CATEGORY_LABEL) as Category[];
+const RADIUS_PRESETS = [1, 3, 10];
 
 export default function RankingScreen() {
   const p = usePalette();
   const router = useRouter();
   const { reviewsOf } = useAppStore();
   const [category, setCategory] = useState<Category | null>(null);
+  const [sido, setSido] = useState<string | null>(null);
+  const [sigungu, setSigungu] = useState<string | null>(null);
+  const [radiusKm, setRadiusKm] = useState<number | null>(null);
+  const [customMode, setCustomMode] = useState(false);
+  const [customRadius, setCustomRadius] = useState('');
+
+  const sigunguOptions = sido ? (REGIONS.find((r) => r.sido === sido)?.sigungus ?? []) : [];
 
   const ranked = useMemo(() => {
     return FACILITIES.map((f) => ({ facility: f, grade: pawGradeOf(reviewsOf(f.facilityId)) }))
       .filter((x) => x.grade.level !== null)
       .filter((x) => !category || x.facility.category === category)
+      .filter((x) => !sido || x.facility.sido === sido)
+      .filter((x) => !sigungu || x.facility.sigungu === sigungu)
+      .filter((x) => radiusKm == null || x.facility.distanceM <= radiusKm * 1000)
       .sort(
         (a, b) =>
           (b.grade.level ?? 0) - (a.grade.level ?? 0) || (b.grade.score ?? 0) - (a.grade.score ?? 0),
       );
-  }, [reviewsOf, category]);
+  }, [reviewsOf, category, sido, sigungu, radiusKm]);
+
+  const pickPreset = (km: number) => {
+    setCustomMode(false);
+    setRadiusKm(km);
+  };
+  const onCustomChange = (t: string) => {
+    setCustomRadius(t);
+    const n = Number(t);
+    setRadiusKm(t.trim() && !Number.isNaN(n) && n > 0 ? n : null);
+  };
 
   return (
     <Screen
@@ -46,6 +67,80 @@ export default function RankingScreen() {
         </Text>
       </View>
 
+      {/* 지역 — 시도 → 시군구 (관광공사 areaCode/sigunguCode) */}
+      <Text style={[styles.filterLabel, { color: p.muted }]}>지역</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+        <Chip
+          label="전국"
+          selected={sido === null}
+          onPress={() => {
+            setSido(null);
+            setSigungu(null);
+          }}
+        />
+        {REGIONS.map((r) => (
+          <Chip
+            key={r.sido}
+            label={r.sido}
+            selected={sido === r.sido}
+            onPress={() => {
+              setSido(sido === r.sido ? null : r.sido);
+              setSigungu(null);
+            }}
+          />
+        ))}
+      </ScrollView>
+      {sido && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <Chip label="전체" selected={sigungu === null} onPress={() => setSigungu(null)} />
+          {sigunguOptions.map((sg) => (
+            <Chip
+              key={sg}
+              label={sg}
+              selected={sigungu === sg}
+              onPress={() => setSigungu(sigungu === sg ? null : sg)}
+            />
+          ))}
+        </ScrollView>
+      )}
+
+      {/* 거리 — 프리셋 + 직접 입력 */}
+      <Text style={[styles.filterLabel, { color: p.muted }]}>거리</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+        <Chip
+          label="전체"
+          selected={radiusKm === null && !customMode}
+          onPress={() => {
+            setCustomMode(false);
+            setRadiusKm(null);
+          }}
+        />
+        {RADIUS_PRESETS.map((km) => (
+          <Chip
+            key={km}
+            label={`${km}km`}
+            selected={!customMode && radiusKm === km}
+            onPress={() => pickPreset(km)}
+          />
+        ))}
+        <Chip label="직접 입력" selected={customMode} onPress={() => setCustomMode(true)} />
+      </ScrollView>
+      {customMode && (
+        <View style={[styles.customRow, { backgroundColor: p.surface, borderColor: p.line }]}>
+          <TextInput
+            value={customRadius}
+            onChangeText={onCustomChange}
+            placeholder="반경 직접 입력"
+            placeholderTextColor={p.muted}
+            keyboardType="number-pad"
+            style={[styles.customInput, { color: p.ink }]}
+          />
+          <Text style={[styles.customUnit, { color: p.muted }]}>km 이내</Text>
+        </View>
+      )}
+
+      {/* 카테고리 */}
+      <Text style={[styles.filterLabel, { color: p.muted }]}>카테고리</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
         <Chip label="전체" selected={category === null} onPress={() => setCategory(null)} />
         {CATEGORIES.map((c) => (
@@ -57,6 +152,8 @@ export default function RankingScreen() {
           />
         ))}
       </ScrollView>
+
+      <Text style={[styles.count, { color: p.muted }]}>{ranked.length}곳</Text>
 
       <View style={styles.list}>
         {ranked.map(({ facility, grade }, i) => (
@@ -104,7 +201,19 @@ const styles = StyleSheet.create({
   legendTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendTitle: { fontSize: 13.5, fontWeight: '800' },
   legendBody: { fontSize: 12.5, lineHeight: 19 },
+  filterLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3, marginTop: 2 },
   chips: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.xl },
+  customRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 10,
+  },
+  customInput: { flex: 1, fontSize: 14.5, padding: 0 },
+  customUnit: { fontSize: 13, fontWeight: '700' },
+  count: { fontSize: 12.5, fontWeight: '700', marginTop: 2 },
   list: { gap: Spacing.md },
   card: {
     flexDirection: 'row',
