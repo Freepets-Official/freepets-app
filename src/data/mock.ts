@@ -365,7 +365,33 @@ export const INITIAL_REPORTS: Report[] = [
     mine: false,
     realtime: true,
     status: 'APPLIED',
-    createdAt: new Date(Date.now() - 23 * 60 * 1000).toISOString(),
+    createdAt: new Date(Date.now() - 23 * 60 * 1000).toISOString(), // 23분 전
+  },
+  {
+    reportId: 2,
+    facilityId: 10,
+    type: 'DENIED',
+    content: '현장 거부 · 혼잡·자리 없음',
+    weight: 2,
+    hasEvidence: false,
+    reason: 'CROWDED',
+    mine: false,
+    realtime: true,
+    status: 'APPLIED',
+    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5시간 전
+  },
+  {
+    reportId: 3,
+    facilityId: 10,
+    type: 'DENIED',
+    content: '현장 거부 · 정책이 바뀜',
+    weight: 2,
+    hasEvidence: false,
+    reason: 'POLICY_CHANGED',
+    mine: false,
+    realtime: true,
+    status: 'APPLIED',
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2일 전
   },
 ];
 

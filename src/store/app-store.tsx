@@ -73,7 +73,9 @@ export interface Report {
 }
 
 /** 실시간 거부 경고를 노출하는 기간 — 이보다 오래된 제보는 신뢰도에만 남는다 */
-const DENIAL_ALERT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const DENIAL_ALERT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 1주
+/** 한 시설에 최대 몇 건의 거부를 경고로 보여줄지 (최신순) */
+const MAX_DENIAL_ALERTS = 3;
 
 /**
  * 사업자 셀프 등록 (F5) — 사업자가 진위확인 후 자기 매장의 출입 조건을 직접 확정한다.
@@ -136,9 +138,11 @@ interface AppStore {
   ) => void;
   /** 문 앞에서 거부당한 즉시 보내는 원터치 제보 — 신뢰도를 바로 하향시킨다 */
   reportDenial: (facilityId: number, reason: DenialReason) => void;
-  /** 최근 24시간 내 남이 보낸 현장 거부 제보 — 그 시설로 향하는 사용자에게 경고로 쓴다 */
+  /** 최근 1주 내 남이 보낸 현장 거부 제보 — 최신순 최대 3건 (시설 상세 토글) */
+  recentDenialsOf: (facilityId: number) => Report[];
+  /** 그중 가장 최신 1건 — 홈 알림·목록 카드용 */
   recentDenialOf: (facilityId: number) => Report | undefined;
-  /** 내가 판별받은 시설 중 최근 24h 내 거부가 뜬 곳 — 홈 알림에 쓴다 */
+  /** 내가 판별받은 시설 중 최근 1주 내 거부가 뜬 곳 — 홈 알림에 쓴다 */
   plannedDenialAlerts: () => { facility: Facility; report: Report }[];
   /** 내가 이 시설에 보낸 현장 거부 제보 */
   myDenialOf: (facilityId: number) => Report | undefined;
@@ -308,20 +312,30 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const recentDenialOf = useCallback(
-    (facilityId: number) =>
-      reports.find(
-        (r) =>
-          r.facilityId === facilityId &&
-          r.type === 'DENIED' &&
-          r.realtime &&
-          !r.mine &&
-          Date.now() - new Date(r.createdAt).getTime() < DENIAL_ALERT_WINDOW_MS,
-      ),
+  // 최근 1주 내 남의 현장 거부를 최신순 최대 3건 (시설 상세에서 토글로 펼쳐 본다)
+  const recentDenialsOf = useCallback(
+    (facilityId: number): Report[] =>
+      reports
+        .filter(
+          (r) =>
+            r.facilityId === facilityId &&
+            r.type === 'DENIED' &&
+            r.realtime &&
+            !r.mine &&
+            Date.now() - new Date(r.createdAt).getTime() < DENIAL_ALERT_WINDOW_MS,
+        )
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, MAX_DENIAL_ALERTS),
     [reports],
   );
 
-  // 내가 판별받은(=가려던) 시설 중, 남의 현장 거부가 24h 내 들어온 곳.
+  // 가장 최신 1건 (홈 알림·목록 카드용) — 목록의 첫 번째
+  const recentDenialOf = useCallback(
+    (facilityId: number): Report | undefined => recentDenialsOf(facilityId)[0],
+    [recentDenialsOf],
+  );
+
+  // 내가 판별받은(=가려던) 시설 중, 남의 현장 거부가 1주 내 들어온 곳.
   // 위치(GPS)가 아니라 "판별 이력"으로 '가려던 곳'을 판단한다.
   const plannedDenialAlerts = useCallback((): { facility: Facility; report: Report }[] => {
     const seen = new Set<number>();
@@ -500,6 +514,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reports,
       addReport,
       reportDenial,
+      recentDenialsOf,
       recentDenialOf,
       plannedDenialAlerts,
       myDenialOf,
@@ -535,6 +550,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reports,
       addReport,
       reportDenial,
+      recentDenialsOf,
       recentDenialOf,
       plannedDenialAlerts,
       myDenialOf,
