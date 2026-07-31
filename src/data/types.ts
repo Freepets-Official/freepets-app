@@ -46,6 +46,9 @@ export interface Facility {
   petConditionRaw: string | null;
   maxWeight: number | null;
   requirements: Requirement[];
+  /** 행정구역 — 실제로는 관광공사 areaCode/sigunguCode. 목은 이름으로 둔다 */
+  sido: string;
+  sigungu: string;
   /** 출입 조건 정보의 신뢰도 */
   confidence: Confidence;
   confidenceSource: ConfidenceSource;

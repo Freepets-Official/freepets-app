@@ -12,6 +12,8 @@ export const FACILITIES: Facility[] = [
     name: '안목해변 솔숲 산책로',
     category: 'TOUR',
     address: '강원 강릉시 창해로14번길 20-1',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: '033-640-4535',
     distanceM: 820,
     petAllowed: true,
@@ -27,6 +29,8 @@ export const FACILITIES: Facility[] = [
     name: '카페 파도살롱',
     category: 'CAFE',
     address: '강원 강릉시 창해로 17',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: '033-651-2287',
     distanceM: 1200,
     petAllowed: true,
@@ -43,6 +47,8 @@ export const FACILITIES: Facility[] = [
     name: '오죽헌',
     category: 'TOUR',
     address: '강원 강릉시 율곡로3139번길 24',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: '033-660-3301',
     distanceM: 4300,
     petAllowed: false,
@@ -58,6 +64,8 @@ export const FACILITIES: Facility[] = [
     name: '스테이 솔바람 펜션',
     category: 'STAY',
     address: '강원 강릉시 사천면 진리해변길 111',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: '033-644-8090',
     distanceM: 6100,
     petAllowed: true,
@@ -74,6 +82,8 @@ export const FACILITIES: Facility[] = [
     name: '경포호 반려견 놀이터',
     category: 'LEISURE',
     address: '강원 강릉시 운정길 125',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: null,
     distanceM: 3500,
     petAllowed: true,
@@ -89,6 +99,8 @@ export const FACILITIES: Facility[] = [
     name: '강릉중앙시장',
     category: 'SHOPPING',
     address: '강원 강릉시 금성로 21',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: '033-648-2285',
     distanceM: 2800,
     petAllowed: null,
@@ -104,6 +116,8 @@ export const FACILITIES: Facility[] = [
     name: '헤이도그 애견호텔&카페',
     category: 'CAFE',
     address: '강원 강릉시 경강로 2100',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: '033-645-7712',
     distanceM: 1900,
     petAllowed: true,
@@ -119,6 +133,8 @@ export const FACILITIES: Facility[] = [
     name: '정동진 레일바이크',
     category: 'LEISURE',
     address: '강원 강릉시 강동면 정동역길 17',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: '033-655-7786',
     distanceM: 15200,
     petAllowed: true,
@@ -134,6 +150,8 @@ export const FACILITIES: Facility[] = [
     name: '씨마크 호텔',
     category: 'STAY',
     address: '강원 강릉시 해안로406번길 2',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: '033-650-7000',
     distanceM: 5000,
     petAllowed: false,
@@ -149,6 +167,8 @@ export const FACILITIES: Facility[] = [
     name: '테라로사 커피공장',
     category: 'CAFE',
     address: '강원 강릉시 구정면 현천길 25',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: '033-648-2760',
     distanceM: 7800,
     petAllowed: true,
@@ -165,6 +185,8 @@ export const FACILITIES: Facility[] = [
     name: '초당순두부 본점',
     category: 'RESTAURANT',
     address: '강원 강릉시 초당순두부길 32',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: '033-652-9004',
     distanceM: 2400,
     petAllowed: false,
@@ -181,6 +203,8 @@ export const FACILITIES: Facility[] = [
     name: '송정해변 솔바람 산책로',
     category: 'TOUR',
     address: '강원 강릉시 송정동 해안로',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: null,
     distanceM: 1500,
     petAllowed: true,
@@ -196,6 +220,8 @@ export const FACILITIES: Facility[] = [
     name: '보헤미안 로스터스 강릉',
     category: 'CAFE',
     address: '강원 강릉시 사천면 해안로 1107',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: '033-641-6688',
     distanceM: 2200,
     petAllowed: true,
@@ -211,6 +237,8 @@ export const FACILITIES: Facility[] = [
     name: '강릉 펫 글램핑',
     category: 'STAY',
     address: '강원 강릉시 성산면 대관령로',
+    sido: '강원특별자치도',
+    sigungu: '강릉시',
     phone: '033-647-3300',
     distanceM: 4800,
     petAllowed: true,
@@ -266,6 +294,17 @@ export const INITIAL_SATISFACTIONS: PetSatisfaction[] = [
 export function formatDistance(m: number): string {
   return m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
 }
+
+/**
+ * 지역 선택용 — 실제로는 관광공사 areaCode2/ldongCode2로 전국 코드를 동기화한다.
+ * 목은 강원(시/군) + 서울(구 단위 예시)로 "서울=구, 지방=시/군"의 단위 차이를 보여준다.
+ * 지금 목 시설은 모두 강원 강릉시라, 다른 지역을 고르면 결과가 비어 있는 게 정상이다.
+ */
+export const REGIONS: { sido: string; sigungus: string[] }[] = [
+  { sido: '강원특별자치도', sigungus: ['강릉시', '속초시', '춘천시', '양양군'] },
+  { sido: '서울특별시', sigungus: ['강남구', '마포구', '종로구'] },
+  { sido: '경기도', sigungus: ['성남시', '가평군'] },
+];
 
 /**
  * 데모용 리뷰. 실제로는 GET /api/v1/facilities/{id}/reviews 로 받아온다.
