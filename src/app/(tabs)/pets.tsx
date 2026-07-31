@@ -25,6 +25,7 @@ export default function PetsScreen() {
   const [weight, setWeight] = useState('');
   const [breedSize, setBreedSize] = useState<BreedSize>('SMALL');
   const [vaccinated, setVaccinated] = useState(false);
+  const [vaccinationDate, setVaccinationDate] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,6 +46,11 @@ export default function PetsScreen() {
     if (!name.trim()) return setError('이름을 입력해 주세요');
     if (!species.trim()) return setError('견종을 입력해 주세요');
     if (!weight.trim() || Number.isNaN(w) || w <= 0) return setError('체중을 숫자로 입력해 주세요 (kg)');
+    // 접종 완료면 날짜를 받는다. 형식이 있으면 검증, 비워두면 날짜 미기재로 저장
+    const dateInput = vaccinationDate.trim();
+    if (vaccinated && dateInput && !/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+      return setError('접종 날짜를 YYYY-MM-DD 형식으로 입력해 주세요 (예: 2026-03-15)');
+    }
 
     addPet({
       name: name.trim(),
@@ -52,7 +58,7 @@ export default function PetsScreen() {
       weight: w,
       breedSize,
       vaccinated,
-      vaccinationDate: vaccinated ? new Date().toISOString().slice(0, 10) : null,
+      vaccinationDate: vaccinated && dateInput ? dateInput : null,
       photoUri,
     });
     setName('');
@@ -60,6 +66,7 @@ export default function PetsScreen() {
     setWeight('');
     setBreedSize('SMALL');
     setVaccinated(false);
+    setVaccinationDate('');
     setPhotoUri(null);
     setError(null);
     setFormOpen(false);
@@ -160,11 +167,25 @@ export default function PetsScreen() {
             <Text style={[styles.label, { color: p.ink }]}>종합 예방접종 완료</Text>
             <Switch
               value={vaccinated}
-              onValueChange={setVaccinated}
+              onValueChange={(v) => {
+                setVaccinated(v);
+                if (!v) setVaccinationDate('');
+              }}
               trackColor={{ true: p.accent }}
               thumbColor="#FFFFFF"
             />
           </View>
+
+          {vaccinated && (
+            <TextInput
+              value={vaccinationDate}
+              onChangeText={setVaccinationDate}
+              placeholder="접종일 (예: 2026-03-15)"
+              placeholderTextColor={p.muted}
+              keyboardType="numbers-and-punctuation"
+              style={[styles.input, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
+            />
+          )}
 
           {error && <Text style={[styles.error, { color: p.danger }]}>{error}</Text>}
 
