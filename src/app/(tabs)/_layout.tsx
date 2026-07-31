@@ -34,9 +34,12 @@ export default function TabLayout() {
             ),
           }}
         />
+        {/* 랭킹은 탐색 탭에 토글로 흡수됨 — 탭바에서만 숨긴다(라우트는 유지).
+            탭을 다시 분리하려면 href: null 한 줄만 지우면 된다. */}
         <Tabs.Screen
           name="ranking"
           options={{
+            href: null,
             title: '랭킹',
             tabBarIcon: ({ color, focused }) => (
               <Ionicons name={focused ? 'trophy' : 'trophy-outline'} size={22} color={color} />
