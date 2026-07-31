@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 
 import { Chip } from '@/components/chip';
 import { FacilityCard } from '@/components/facility-card';
+import { LocationBanner } from '@/components/location-banner';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
 import { Radius, Spacing } from '@/constants/theme';
@@ -84,6 +85,9 @@ export default function ExploreScreen() {
         </View>
         <Ionicons name="chevron-forward" size={18} color={p.accent} />
       </Pressable>
+
+      {/* 위치 권한 요청 (UX만 — 실거리 정렬은 API 연동 후) */}
+      <LocationBanner />
 
       <SectionTitle title="내 주변 시설" caption={`${facilities.length}곳 · 강릉역 기준`} />
 
