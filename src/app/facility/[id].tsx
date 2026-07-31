@@ -10,6 +10,7 @@ import { ConfidencePanel } from '@/components/confidence-panel';
 import { DenialAlert } from '@/components/denial-alert';
 import { DenialReport } from '@/components/denial-report';
 import { FacilityCard } from '@/components/facility-card';
+import { OwnerPromotionSection } from '@/components/owner-promotion-section';
 import { PawBadge } from '@/components/paw-badge';
 import { ReviewSection } from '@/components/review-section';
 import { SatisfactionSection } from '@/components/satisfaction-section';
@@ -367,6 +368,8 @@ export default function FacilityDetailScreen() {
           </Pressable>
         </>
       )}
+
+      <OwnerPromotionSection facilityId={facility.facilityId} />
 
       <SatisfactionSection facilityId={facility.facilityId} />
 

@@ -26,6 +26,10 @@ export default function OwnerDashboard() {
   const owned = Object.values(businessRegs)
     .map((reg) => FACILITIES.find((f) => f.facilityId === reg.facilityId))
     .filter((f): f is NonNullable<typeof f> => !!f);
+  // 관리 메뉴는 대표(첫) 매장 기준으로 연다 — 데모는 보통 한 곳
+  const primaryId = owned[0]?.facilityId;
+  const go = (path: '/owner/promotion' | '/owner/benefits' | '/owner/stats') =>
+    primaryId != null && router.push({ pathname: path, params: { facilityId: String(primaryId) } });
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]} edges={['top']}>
@@ -128,19 +132,19 @@ export default function OwnerDashboard() {
                 icon="image-outline"
                 label="매장 소개·홍보"
                 sub="대표 사진·소개글·편의시설 태그"
-                tag="준비 중"
+                onPress={() => go('/owner/promotion')}
               />
               <MenuRow
                 icon="pricetag-outline"
                 label="방문 혜택 안내"
                 sub="출입증 제시 시 혜택 등"
-                tag="준비 중"
+                onPress={() => go('/owner/benefits')}
               />
               <MenuRow
                 icon="stats-chart-outline"
                 label="리뷰·통계"
                 sub="등급 추이·항목 평균·관심도"
-                tag="준비 중"
+                onPress={() => go('/owner/stats')}
                 last
               />
             </View>
