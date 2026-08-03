@@ -167,7 +167,10 @@ export const REVIEW_REPORT_REASON_LABEL: Record<ReviewReportReason, string> = {
 
 export interface NewReview {
   facilityId: number;
-  petId: number | null;
+  /** 함께 방문한 아이들 (여러 마리 가능) */
+  petIds: number[];
+  /** 우리 아이 품종·몸무게 공개 여부 (옵트인) */
+  showPetInfo: boolean;
   ratingSpace: number;
   ratingStaff: number;
   ratingAmenity: number;
@@ -365,13 +368,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const addReview = useCallback(
     (input: NewReview) => {
-      const pet = pets.find((p) => p.petId === input.petId);
+      const chosen = pets.filter((p) => input.petIds.includes(p.petId));
+      // 공개(opt-in)한 경우에만 품종·몸무게를 스냅샷으로 저장한다 (펫 삭제돼도 남게)
+      const petInfos = input.showPetInfo
+        ? chosen.map((p) => ({ kind: p.kind, species: p.species, weight: p.weight }))
+        : [];
       const review: Review = {
         reviewId: nextReviewId.current++,
         facilityId: input.facilityId,
         userId: MY_USER_ID,
         nickname: '나',
-        petName: pet?.name ?? null,
+        petName: chosen[0]?.name ?? null,
+        pets: petInfos,
         ratingSpace: input.ratingSpace,
         ratingStaff: input.ratingStaff,
         ratingAmenity: input.ratingAmenity,

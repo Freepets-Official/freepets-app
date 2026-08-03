@@ -1,13 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { StarInput } from '@/components/star-rating';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import { FACILITIES } from '@/data/mock';
-import { REVIEW_TAG_LABEL, type ReviewTag } from '@/data/types';
+import { PET_KIND_LABEL, REVIEW_TAG_LABEL, type ReviewTag } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -22,15 +22,20 @@ export default function ReviewWriteScreen() {
   const facilityId = Number(id);
   const facility = FACILITIES.find((f) => f.facilityId === facilityId);
   const lastCheck = checks.find((c) => c.facilityId === facilityId);
-  const lastCheckPetId = lastCheck?.petIds[0] ?? null;
+  // 판별했던 아이들을 기본 선택 — 없으면 첫 아이
+  const defaultPetIds = lastCheck?.petIds ?? (pets[0] ? [pets[0].petId] : []);
 
   const [space, setSpace] = useState(0);
   const [staff, setStaff] = useState(0);
   const [amenity, setAmenity] = useState(0);
   const [tags, setTags] = useState<ReviewTag[]>([]);
   const [content, setContent] = useState('');
-  const [petId, setPetId] = useState<number | null>(lastCheckPetId ?? pets[0]?.petId ?? null);
+  const [petIds, setPetIds] = useState<number[]>(defaultPetIds);
+  const [showPetInfo, setShowPetInfo] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const togglePetId = (petId: number) =>
+    setPetIds((prev) => (prev.includes(petId) ? prev.filter((x) => x !== petId) : [...prev, petId]));
 
   if (!facility) {
     return (
@@ -52,7 +57,8 @@ export default function ReviewWriteScreen() {
     }
     addReview({
       facilityId,
-      petId,
+      petIds,
+      showPetInfo,
       ratingSpace: space,
       ratingStaff: staff,
       ratingAmenity: amenity,
@@ -100,24 +106,45 @@ export default function ReviewWriteScreen() {
       {pets.length > 0 && (
         <View style={styles.block}>
           <Text style={[styles.blockLabel, { color: p.ink }]}>함께 방문한 반려동물</Text>
+          <Text style={[styles.blockHint, { color: p.muted }]}>여러 마리를 고를 수 있어요</Text>
           <View style={styles.tagWrap}>
-            {pets.map((pet) => (
-              <Pressable
-                key={pet.petId}
-                onPress={() => setPetId(pet.petId)}
-                style={[
-                  styles.tag,
-                  {
-                    backgroundColor: petId === pet.petId ? p.ink : p.surface,
-                    borderColor: petId === pet.petId ? p.ink : p.line,
-                  },
-                ]}>
-                <Text
-                  style={[styles.tagText, { color: petId === pet.petId ? p.bg : p.muted }]}>
-                  {pet.name}
-                </Text>
-              </Pressable>
-            ))}
+            {pets.map((pet) => {
+              const on = petIds.includes(pet.petId);
+              return (
+                <Pressable
+                  key={pet.petId}
+                  onPress={() => togglePetId(pet.petId)}
+                  style={[
+                    styles.tag,
+                    { backgroundColor: on ? p.ink : p.surface, borderColor: on ? p.ink : p.line },
+                  ]}>
+                  <Text style={[styles.tagText, { color: on ? p.bg : p.muted }]}>{pet.name}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* 품종·몸무게 공개 (옵트인) — 다음 방문자의 '우리 아이 기준' 판단에 큰 도움 */}
+          <View style={[styles.discloseRow, { backgroundColor: p.surface, borderColor: p.line }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.discloseLabel, { color: p.ink }]}>우리 아이 품종·몸무게 공개</Text>
+              <Text style={[styles.discloseSub, { color: p.muted }]}>
+                {showPetInfo
+                  ? petIds.length > 0
+                    ? pets
+                        .filter((pt) => petIds.includes(pt.petId))
+                        .map((pt) => `${PET_KIND_LABEL[pt.kind]}·${pt.species}${pt.weight > 0 ? ` ${pt.weight}kg` : ''}`)
+                        .join(', ')
+                    : '함께 방문한 아이를 골라주세요'
+                  : '공개하지 않으면 리뷰에 품종·몸무게가 표시되지 않아요'}
+              </Text>
+            </View>
+            <Switch
+              value={showPetInfo}
+              onValueChange={setShowPetInfo}
+              trackColor={{ true: p.accent }}
+              thumbColor="#FFFFFF"
+            />
           </View>
         </View>
       )}
@@ -191,6 +218,18 @@ const styles = StyleSheet.create({
   tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   tag: { borderWidth: 1, borderRadius: Radius.full, paddingHorizontal: 13, paddingVertical: 7 },
   tagText: { fontSize: 12.5, fontWeight: '700' },
+  discloseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  discloseLabel: { fontSize: 14, fontWeight: '800' },
+  discloseSub: { fontSize: 12, lineHeight: 17, marginTop: 2 },
   textarea: {
     borderWidth: 1,
     borderRadius: Radius.md,

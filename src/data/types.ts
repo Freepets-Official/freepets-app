@@ -141,12 +141,22 @@ export const REVIEW_TAG_LABEL: Record<ReviewTag, string> = {
   STAFF_LOVES_PETS: '직원이 반겨줌',
 };
 
+/** 리뷰에 공개된 반려동물 스냅샷 — 펫을 나중에 지워도 남도록 값 복사 (opt-in 공개) */
+export interface ReviewPetInfo {
+  kind: PetKind;
+  species: string;
+  /** kg. 0이면 미기재 */
+  weight: number;
+}
+
 export interface Review {
   reviewId: number;
   facilityId: number;
   userId: number;
   nickname: string;
   petName: string | null;
+  /** 공개한 반려동물들(품종·몸무게). 빈 배열이면 비공개 */
+  pets: ReviewPetInfo[];
   /** 공간 여유 / 직원 친절도 / 편의시설 — 각 1~5 */
   ratingSpace: number;
   ratingStaff: number;

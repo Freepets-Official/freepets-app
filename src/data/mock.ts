@@ -1,6 +1,6 @@
 import type { Report } from '@/store/app-store';
 
-import type { CalendarEvent, Facility, Pet, PetCheck, PetSatisfaction, Review, ReviewTag } from '@/data/types';
+import type { CalendarEvent, Facility, Pet, PetCheck, PetSatisfaction, Review, ReviewPetInfo, ReviewTag } from '@/data/types';
 
 /**
  * 데모용 목 데이터. 백엔드 연동 전까지 화면 검증에 사용한다.
@@ -325,6 +325,18 @@ export const REGIONS: { sido: string; sigungus: string[] }[] = [
  * 발자국 등급이 눈에 보이도록 시설별 리뷰 수·점수 분포를 다르게 구성했다.
  * 등급 임계값(최소 리뷰 10/25/50/90/150)에 맞춰 1~5발자국과 '수집 중' 상태가 모두 나오게 잡았다.
  */
+// 리뷰어의 반려동물 풀 — 시드에 품종·몸무게를 붙여 카드/상세에 노출되게 한다
+const REVIEW_PET_POOL: ReviewPetInfo[] = [
+  { kind: 'DOG', species: '말티즈', weight: 3.4 },
+  { kind: 'DOG', species: '골든리트리버', weight: 28 },
+  { kind: 'DOG', species: '푸들', weight: 5.2 },
+  { kind: 'DOG', species: '시바견', weight: 9.5 },
+  { kind: 'DOG', species: '비숑프리제', weight: 4.8 },
+  { kind: 'DOG', species: '웰시코기', weight: 11 },
+  { kind: 'CAT', species: '코리안숏헤어', weight: 4.2 },
+  { kind: 'DOG', species: '포메라니안', weight: 2.8 },
+];
+
 function makeReviews(
   facilityId: number,
   count: number,
@@ -337,12 +349,17 @@ function makeReviews(
     // 앞쪽 몇 건만 본문을 노출하고, 나머지는 점수만 있는 리뷰로 둔다
     const jitter = i % 3 === 0 ? 0 : i % 3 === 1 ? -1 : 0;
     const clamp = (n: number) => Math.max(1, Math.min(5, n));
+    // 리뷰어 반려동물 스냅샷 — 대부분 1마리, 일부는 2마리(카드 '…' 처리 데모)
+    const p1 = REVIEW_PET_POOL[(facilityId + i) % REVIEW_PET_POOL.length];
+    const pets: ReviewPetInfo[] =
+      i % 3 === 1 ? [p1, REVIEW_PET_POOL[(facilityId + i + 4) % REVIEW_PET_POOL.length]] : [p1];
     out.push({
       reviewId: facilityId * 1000 + i,
       facilityId,
       userId: 100 + i,
       nickname: i < samples.length ? s.nick : `방문자${i + 1}`,
       petName: i < samples.length ? s.pet : null,
+      pets,
       ratingSpace: clamp(base[0] + (i % 4 === 0 ? jitter : 0)),
       ratingStaff: clamp(base[1] + (i % 5 === 0 ? jitter : 0)),
       ratingAmenity: clamp(base[2] + (i % 3 === 0 ? jitter : 0)),
