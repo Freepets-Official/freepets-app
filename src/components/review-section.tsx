@@ -6,7 +6,13 @@ import { PawBadge } from '@/components/paw-badge';
 import { SectionTitle } from '@/components/section-title';
 import { StarsDisplay } from '@/components/star-rating';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
-import { REVIEW_TAG_LABEL, pawGradeOf, type Review, type ReviewTag } from '@/data/types';
+import {
+  PET_KIND_LABEL,
+  REVIEW_TAG_LABEL,
+  pawGradeOf,
+  type Review,
+  type ReviewTag,
+} from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import {
   REVIEW_REPORT_REASON_LABEL,
@@ -18,6 +24,11 @@ const REASONS = Object.keys(REVIEW_REPORT_REASON_LABEL) as ReviewReportReason[];
 
 function avg(rs: Review[], pick: (r: Review) => number): number {
   return rs.length ? rs.reduce((s, r) => s + pick(r), 0) / rs.length : 0;
+}
+
+/** 카드용 한 줄 요약 — "말티즈 3.4kg, 골든리트리버 28kg" (넘치면 …로 잘림) */
+function petSummary(r: Review): string {
+  return r.pets.map((pi) => `${pi.species}${pi.weight > 0 ? ` ${pi.weight}kg` : ''}`).join(', ');
 }
 
 function topTags(rs: Review[], limit = 4): { tag: ReviewTag; count: number }[] {
@@ -41,6 +52,7 @@ export function ReviewSection({
   const p = usePalette();
   const { reportedReviewIds, reportReview } = useAppStore();
   const [reportTarget, setReportTarget] = useState<Review | null>(null);
+  const [detailTarget, setDetailTarget] = useState<Review | null>(null);
 
   // 신고된 리뷰는 등급 산정에서만 빠지고 목록에는 그대로 남는다 (docs/04 4-2)
   const scored = reviews.filter((r) => !reportedReviewIds.has(r.reviewId));
@@ -118,14 +130,20 @@ export function ReviewSection({
       {written.slice(0, 3).map((r) => {
         const reported = reportedReviewIds.has(r.reviewId);
         return (
-          <View
+          <Pressable
             key={r.reviewId}
-            style={[styles.review, { backgroundColor: p.card, borderColor: p.line }]}>
+            onPress={() => setDetailTarget(r)}
+            style={({ pressed }) => [
+              styles.review,
+              { backgroundColor: p.card, borderColor: p.line, opacity: pressed ? 0.94 : 1 },
+            ]}>
             <View style={styles.reviewTop}>
               <View style={styles.reviewer}>
                 <Text style={[styles.nickname, { color: p.ink }]}>{r.nickname}</Text>
-                {r.petName && (
-                  <Text style={[styles.petName, { color: p.muted }]}>{r.petName}와 방문</Text>
+                {r.pets.length > 0 && (
+                  <Text style={[styles.petName, { color: p.muted }]} numberOfLines={1}>
+                    {petSummary(r)}
+                  </Text>
                 )}
               </View>
               <StarsDisplay
@@ -151,12 +169,17 @@ export function ReviewSection({
                   신고 접수 · 등급 산정 제외
                 </Text>
               ) : (
-                <Pressable onPress={() => setReportTarget(r)} hitSlop={8}>
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setReportTarget(r);
+                  }}
+                  hitSlop={8}>
                   <Text style={[styles.reportLink, { color: p.muted }]}>신고</Text>
                 </Pressable>
               )}
             </View>
-          </View>
+          </Pressable>
         );
       })}
 
@@ -194,6 +217,65 @@ export function ReviewSection({
 
             <Pressable onPress={() => setReportTarget(null)} style={styles.cancel}>
               <Text style={[styles.cancelText, { color: p.muted }]}>취소</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* 리뷰 상세 — 함께 방문한 아이들의 종류·품종·몸무게가 전부 보인다 */}
+      <Modal
+        visible={detailTarget !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDetailTarget(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setDetailTarget(null)}>
+          <Pressable style={[styles.sheet, { backgroundColor: p.card }]} onPress={(e) => e.stopPropagation()}>
+            {detailTarget && (
+              <>
+                <View style={styles.detailHead}>
+                  <Text style={[styles.sheetTitle, { color: p.ink }]}>{detailTarget.nickname}</Text>
+                  <StarsDisplay
+                    value={(detailTarget.ratingSpace + detailTarget.ratingStaff + detailTarget.ratingAmenity) / 3}
+                    size={14}
+                  />
+                </View>
+
+                {detailTarget.pets.length > 0 ? (
+                  <View style={[styles.detailPets, { borderColor: p.line }]}>
+                    <Text style={[styles.detailPetsLabel, { color: p.muted }]}>함께 방문한 아이</Text>
+                    {detailTarget.pets.map((pi, i) => (
+                      <View key={i} style={styles.detailPetRow}>
+                        <Ionicons name="paw" size={13} color={p.accent} />
+                        <Text style={[styles.detailPetText, { color: p.ink }]}>
+                          {PET_KIND_LABEL[pi.kind]} · {pi.species}
+                          {pi.weight > 0 ? ` · ${pi.weight}kg` : ''}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={[styles.sheetBody, { color: p.muted }]}>
+                    반려동물 정보는 비공개된 리뷰예요.
+                  </Text>
+                )}
+
+                {detailTarget.content && (
+                  <Text style={[styles.detailContent, { color: p.ink }]}>{detailTarget.content}</Text>
+                )}
+                {detailTarget.tags.length > 0 && (
+                  <View style={styles.reviewTags}>
+                    {detailTarget.tags.map((t) => (
+                      <Text key={t} style={[styles.reviewTag, { color: p.accent }]}>
+                        #{REVIEW_TAG_LABEL[t]}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+                <Text style={[styles.visited, { color: p.muted }]}>{detailTarget.visitedAt} 방문</Text>
+              </>
+            )}
+            <Pressable onPress={() => setDetailTarget(null)} style={styles.cancel}>
+              <Text style={[styles.cancelText, { color: p.muted }]}>닫기</Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -265,6 +347,12 @@ const styles = StyleSheet.create({
   },
   sheetTitle: { fontSize: 17, fontWeight: '900', letterSpacing: -0.4 },
   sheetBody: { fontSize: 12.5, lineHeight: 19, marginBottom: Spacing.sm },
+  detailHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  detailPets: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.md, gap: 6, marginTop: 4 },
+  detailPetsLabel: { fontSize: 11.5, fontWeight: '800' },
+  detailPetRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  detailPetText: { fontSize: 13.5, fontWeight: '700' },
+  detailContent: { fontSize: 14, lineHeight: 21, marginTop: 4 },
   reasonRow: {
     flexDirection: 'row',
     alignItems: 'center',

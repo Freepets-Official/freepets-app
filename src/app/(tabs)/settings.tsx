@@ -157,8 +157,18 @@ export default function SettingsScreen() {
       <Group title="정보 · 지원">
         <Row icon="notifications-circle-outline" label="공지사항" onPress={() => {}} chevron />
         <Row icon="chatbubble-ellipses-outline" label="문의하기" onPress={() => {}} chevron />
-        <Row icon="document-text-outline" label="이용약관" onPress={() => {}} chevron />
-        <Row icon="shield-checkmark-outline" label="개인정보 처리방침" onPress={() => {}} chevron />
+        <Row
+          icon="document-text-outline"
+          label="이용약관"
+          onPress={() => router.push('/policy')}
+          chevron
+        />
+        <Row
+          icon="shield-checkmark-outline"
+          label="개인정보 처리방침"
+          onPress={() => router.push({ pathname: '/policy', params: { tab: 'privacy' } })}
+          chevron
+        />
         <Row icon="information-circle-outline" label="앱 버전" sub="1.0.0" last />
       </Group>
 

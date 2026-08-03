@@ -55,6 +55,7 @@ function RootNavigator() {
         name="calendar-event"
         options={{ title: '일정 추가', headerBackButtonDisplayMode: 'minimal' }}
       />
+      <Stack.Screen name="policy" options={{ title: '약관·정책', headerBackButtonDisplayMode: 'minimal' }} />
       <Stack.Screen
         name="course"
         options={{ title: '여행 코스', headerBackButtonDisplayMode: 'minimal' }}
