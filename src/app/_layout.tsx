@@ -52,6 +52,10 @@ function RootNavigator() {
       <Stack.Screen name="owner-dashboard" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
+        name="calendar-event"
+        options={{ title: '일정 추가', headerBackButtonDisplayMode: 'minimal' }}
+      />
+      <Stack.Screen
         name="course"
         options={{ title: '여행 코스', headerBackButtonDisplayMode: 'minimal' }}
       />

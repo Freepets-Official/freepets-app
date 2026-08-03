@@ -1,8 +1,10 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { judgeGroup } from '@/data/judge';
-import { FACILITIES, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, INITIAL_SATISFACTIONS, REVIEWS } from '@/data/mock';
+import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, INITIAL_SATISFACTIONS, REVIEWS } from '@/data/mock';
+import { eventOccursOn } from '@/data/types';
 import type {
+  CalendarEvent,
   Confidence,
   ConfidenceSource,
   Facility,
@@ -25,6 +27,8 @@ export interface AppSettings {
   notifReport: boolean;
   notifNearby: boolean;
   notifMarketing: boolean;
+  /** 캘린더: 동반 여행 일정 자동 기록 (사용자 허용 시) */
+  autoTravelLog: boolean;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -35,6 +39,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   notifReport: true,
   notifNearby: true,
   notifMarketing: false,
+  autoTravelLog: true,
 };
 
 /**
@@ -245,6 +250,17 @@ interface AppStore {
   toggleBenefit: (facilityId: number, benefitId: number) => void;
   removeBenefit: (facilityId: number, benefitId: number) => void;
 
+  /** 반려동물 캘린더 — 접종·약·검진·여행 일정 */
+  calendarEvents: CalendarEvent[];
+  addCalendarEvent: (input: Omit<CalendarEvent, 'eventId'>) => void;
+  removeCalendarEvent: (eventId: number) => void;
+  toggleEventReminder: (eventId: number) => void;
+  /** 특정 날짜(YYYY-MM-DD)의 일정 (반복 반영) — 시간순 */
+  eventsOn: (date: string) => CalendarEvent[];
+  /** 약 복용 기록 토글/조회 (eventId+날짜 단위) */
+  toggleMedTaken: (eventId: number, date: string) => void;
+  isMedTaken: (eventId: number, date: string) => boolean;
+
   /** 로그인 세션 (계정 하나 + 활성 프로필) */
   session: Session;
   /** 이 계정이 가진 프로필들 — 소비자는 항상, 사업자는 매장을 등록했을 때 생긴다 */
@@ -278,6 +294,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [promotions, setPromotions] = useState<Record<number, Promotion>>({});
   const [benefits, setBenefits] = useState<Record<number, Benefit[]>>({});
   const [session, setSession] = useState<Session>({ authed: false, email: null, activeProfile: null });
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(INITIAL_CAL_EVENTS);
+  // 약 복용 기록 — "eventId:YYYY-MM-DD" 집합
+  const [medLog, setMedLog] = useState<Set<string>>(new Set());
+  const nextEventId = useRef(INITIAL_CAL_EVENTS.length + 1);
   const nextBenefitId = useRef(1);
   const nextPetId = useRef(INITIAL_PETS.length + 1);
   const nextCheckId = useRef(INITIAL_CHECKS.length + 1);
@@ -623,6 +643,42 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const addCalendarEvent = useCallback((input: Omit<CalendarEvent, 'eventId'>) => {
+    setCalendarEvents((prev) => [...prev, { ...input, eventId: nextEventId.current++ }]);
+  }, []);
+
+  const removeCalendarEvent = useCallback((eventId: number) => {
+    setCalendarEvents((prev) => prev.filter((e) => e.eventId !== eventId));
+  }, []);
+
+  const toggleEventReminder = useCallback((eventId: number) => {
+    setCalendarEvents((prev) =>
+      prev.map((e) => (e.eventId === eventId ? { ...e, reminder: !e.reminder } : e)),
+    );
+  }, []);
+
+  const eventsOn = useCallback(
+    (date: string) =>
+      calendarEvents
+        .filter((e) => eventOccursOn(e, date))
+        .sort((a, b) => (a.time ?? '99:99').localeCompare(b.time ?? '99:99')),
+    [calendarEvents],
+  );
+
+  const toggleMedTaken = useCallback((eventId: number, date: string) => {
+    setMedLog((prev) => {
+      const key = `${eventId}:${date}`;
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }, []);
+
+  const isMedTaken = useCallback(
+    (eventId: number, date: string) => medLog.has(`${eventId}:${date}`),
+    [medLog],
+  );
+
   // 매장을 하나라도 등록하면 사업자 프로필이 계정에 생긴다 (A-하이브리드: 가입은 소비자 하나)
   const availableProfiles = useMemo<ProfileKind[]>(
     () => (Object.keys(businessRegs).length > 0 ? ['consumer', 'owner'] : ['consumer']),
@@ -693,6 +749,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       addBenefit,
       toggleBenefit,
       removeBenefit,
+      calendarEvents,
+      addCalendarEvent,
+      removeCalendarEvent,
+      toggleEventReminder,
+      eventsOn,
+      toggleMedTaken,
+      isMedTaken,
       session,
       availableProfiles,
       login,
@@ -742,6 +805,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       addBenefit,
       toggleBenefit,
       removeBenefit,
+      calendarEvents,
+      addCalendarEvent,
+      removeCalendarEvent,
+      toggleEventReminder,
+      eventsOn,
+      toggleMedTaken,
+      isMedTaken,
       session,
       availableProfiles,
       login,

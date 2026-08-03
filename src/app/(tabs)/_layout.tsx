@@ -34,15 +34,14 @@ export default function TabLayout() {
             ),
           }}
         />
-        {/* 랭킹은 탐색 탭에 토글로 흡수됨 — 탭바에서만 숨긴다(라우트는 유지).
-            탭을 다시 분리하려면 href: null 한 줄만 지우면 된다. */}
+        {/* 랭킹은 탐색 탭 토글(RankingView)로 완전히 흡수됨 — 별도 탭 라우트 없음.
+            다시 분리하려면 (tabs)/ranking.tsx를 <Screen><RankingView/></Screen>로 되살리면 된다. */}
         <Tabs.Screen
-          name="ranking"
+          name="calendar"
           options={{
-            href: null,
-            title: '랭킹',
+            title: '캘린더',
             tabBarIcon: ({ color, focused }) => (
-              <Ionicons name={focused ? 'trophy' : 'trophy-outline'} size={22} color={color} />
+              <Ionicons name={focused ? 'calendar' : 'calendar-outline'} size={22} color={color} />
             ),
           }}
         />

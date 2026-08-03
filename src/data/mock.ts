@@ -1,6 +1,6 @@
 import type { Report } from '@/store/app-store';
 
-import type { Facility, Pet, PetCheck, PetSatisfaction, Review, ReviewTag } from '@/data/types';
+import type { CalendarEvent, Facility, Pet, PetCheck, PetSatisfaction, Review, ReviewTag } from '@/data/types';
 
 /**
  * 데모용 목 데이터. 백엔드 연동 전까지 화면 검증에 사용한다.
@@ -458,3 +458,13 @@ export const INITIAL_CHECKS: PetCheck[] = [
 export function reviewsOf(facilityId: number): Review[] {
   return REVIEWS.filter((r) => r.facilityId === facilityId);
 }
+
+// 반려동물 캘린더 씨드 — 2026년 8월 기준. 몽이(1)·보리(2)
+export const INITIAL_CAL_EVENTS: CalendarEvent[] = [
+  { eventId: 1, petId: 1, type: 'MED', title: '심장사상충 예방약', date: '2026-08-03', time: '09:00', repeat: 'MONTHLY', reminder: true, notes: '식후 복용' },
+  { eventId: 2, petId: 1, type: 'MED', title: '관절 영양제', date: '2026-08-01', time: '20:00', repeat: 'DAILY', reminder: true, notes: null },
+  { eventId: 3, petId: 2, type: 'VACCINE', title: '종합백신 2차', date: '2026-08-08', time: '11:00', repeat: 'NONE', reminder: true, notes: '강릉동물병원' },
+  { eventId: 4, petId: 1, type: 'CHECKUP', title: '연 1회 건강검진', date: '2026-08-15', time: '14:30', repeat: 'NONE', reminder: true, notes: '강릉동물병원 · 12시간 공복' },
+  { eventId: 5, petId: null, type: 'TRAVEL', title: '강릉 반려견 여행', date: '2026-08-22', time: null, repeat: 'NONE', reminder: false, notes: '몽이·보리 동반 · 테라로사 코스' },
+  { eventId: 6, petId: 2, type: 'VACCINE', title: '광견병 예방접종', date: '2026-08-28', time: '10:00', repeat: 'NONE', reminder: true, notes: null },
+];
