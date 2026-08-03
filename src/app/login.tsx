@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoginScene } from '@/components/login-scene';
 import { SocialButtons } from '@/components/social-buttons';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
@@ -37,6 +38,9 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View style={styles.inner}>
+            {/* 움직이는 자연 배경 + 동물들 */}
+            <LoginScene />
+
             {/* 브랜드 */}
             <View style={styles.brand}>
               <View style={[styles.logo, { backgroundColor: p.accentSoft }]}>
