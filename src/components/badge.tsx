@@ -33,7 +33,8 @@ export function PetAllowedBadge({ allowed }: { allowed: boolean | null }) {
   // 동반 불가: 빨강 채운 배경 + 흰 볼드 글씨 (초록 vs 빨강 강한 대비)
   if (allowed === false)
     return <Badge label="동반 불가" color={p.onAccent} background={p.dangerSolid} />;
-  return <Badge label="미확인" color={p.unknown} background={p.unknownSoft} />;
+  // 정보가 없거나 아직 확정 전 — 회색 '미확인'보다 행동을 유도하는 앰버 '확인 필요'로
+  return <Badge label="확인 필요" color={p.warn} background={p.warnSoft} outline />;
 }
 
 export function ResultBadge({ result }: { result: CheckResult }) {

@@ -118,11 +118,7 @@ export default function FacilityDetailScreen() {
   const confidenceMessage =
     facilityConfidence === 'CONFIRMED'
       ? '최근 확인된 정보라 안심해도 돼요'
-      : facilityConfidence === 'LIKELY'
-        ? '원문 기준 · 현장에서 바뀌었을 수 있어요'
-        : facilityConfidence === 'ESTIMATED'
-          ? '추정 정보 · 방문 전 확인을 권장해요'
-          : '정보가 없어요 · 꼭 전화로 확인하세요';
+      : '아직 확정 전 · 방문 전 확인을 권장해요';
 
   return (
     <Screen>

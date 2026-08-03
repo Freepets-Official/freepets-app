@@ -18,11 +18,13 @@ export type Confidence = 'CONFIRMED' | 'LIKELY' | 'ESTIMATED' | 'UNVERIFIED';
 /** 신뢰도의 근거 */
 export type ConfidenceSource = 'OWNER' | 'CROWD' | 'PARSED' | 'USER_CALL' | 'DENIAL_REPORT' | 'NONE';
 
+// 사용자에겐 두 가지만 보여준다: 확정 / 확인 필요.
+// '유력·추정' 같은 애매한 중간 단계는 직관적인 '확인 필요'로 합친다(내부 ENUM은 유지).
 export const CONFIDENCE_LABEL: Record<Confidence, string> = {
   CONFIRMED: '확정',
-  LIKELY: '유력',
-  ESTIMATED: '추정',
-  UNVERIFIED: '미확인',
+  LIKELY: '확인 필요',
+  ESTIMATED: '확인 필요',
+  UNVERIFIED: '확인 필요',
 };
 
 export const CONFIDENCE_SOURCE_LABEL: Record<ConfidenceSource, string> = {

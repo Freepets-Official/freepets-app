@@ -7,18 +7,11 @@ import { usePalette } from '@/hooks/use-theme';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
-/** 신뢰도별 색·아이콘 — 결과색(가능/불가)과 겹치지 않게 파랑·회색 계열을 섞는다 */
+/** 신뢰도는 두 가지만: 확정(초록) / 확인 필요(앰버). 애매한 중간 단계는 두지 않는다 */
 function toneOf(c: Confidence, p: ReturnType<typeof usePalette>) {
-  switch (c) {
-    case 'CONFIRMED':
-      return { color: p.success, bg: p.successSoft, icon: 'shield-checkmark' as IconName };
-    case 'LIKELY':
-      return { color: '#2B6CB0', bg: '#E7F0FA', icon: 'checkmark-circle' as IconName };
-    case 'ESTIMATED':
-      return { color: p.warn, bg: p.warnSoft, icon: 'help-circle' as IconName };
-    case 'UNVERIFIED':
-      return { color: p.unknown, bg: p.unknownSoft, icon: 'ellipse-outline' as IconName };
-  }
+  if (c === 'CONFIRMED')
+    return { color: p.success, bg: p.successSoft, icon: 'shield-checkmark' as IconName };
+  return { color: p.warn, bg: p.warnSoft, icon: 'alert-circle' as IconName };
 }
 
 /** 신뢰도 배지 (칩) */

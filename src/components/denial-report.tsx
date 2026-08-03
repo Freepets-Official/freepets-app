@@ -34,7 +34,7 @@ export function DenialReport({ facilityId }: { facilityId: number }) {
             거부 제보가 바로 반영됐어요 · {sinceText(sent.createdAt)}
           </Text>
           <Text style={[styles.sentText, { color: p.ink }]}>
-            이 시설의 정보 신뢰도를 &lsquo;미확인&rsquo;으로 낮췄어요. 지금 이곳으로 향하던 다른
+            이 시설의 정보 신뢰도를 &lsquo;확인 필요&rsquo;로 낮췄어요. 지금 이곳으로 향하던 다른
             보호자에게도 같은 경고가 갑니다.
           </Text>
         </View>
