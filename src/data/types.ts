@@ -218,8 +218,33 @@ export interface Pet {
   breedSize: BreedSize;
   vaccinated: boolean;
   vaccinationDate: string | null;
+  /** 다음 접종 예정일(사용자 지정). null이면 개·고양이는 마지막 접종+1년으로 자동 제안 */
+  nextVaccinationDate: string | null;
   /** 프로필 사진 (선택). 없으면 이름 첫 글자로 아바타를 만든다 */
   photoUri: string | null;
+}
+
+/**
+ * 다음 접종 예정일 — 사용자가 지정했으면 그 값, 없으면 개·고양이는 마지막 접종 + 1년으로 제안.
+ * (부스터 1년 주기 가정. 정확한 일정은 동물병원 안내 기준 — 앱은 참고·리마인더용)
+ */
+export function nextVaccinationOf(pet: Pet): string | null {
+  if (pet.nextVaccinationDate) return pet.nextVaccinationDate;
+  if ((pet.kind === 'DOG' || pet.kind === 'CAT') && pet.vaccinationDate) {
+    const d = new Date(`${pet.vaccinationDate}T00:00:00`);
+    d.setFullYear(d.getFullYear() + 1);
+    return ymd(d);
+  }
+  return null;
+}
+
+/** 다음 접종까지 남은 일수 (음수면 기한 지남). 예정일이 없으면 null */
+export function vaccinationDday(pet: Pet): number | null {
+  const next = nextVaccinationOf(pet);
+  if (!next) return null;
+  const today = new Date(`${ymd(new Date())}T00:00:00`).getTime();
+  const due = new Date(`${next}T00:00:00`).getTime();
+  return Math.round((due - today) / 86400000);
 }
 
 /**

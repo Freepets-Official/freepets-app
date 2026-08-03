@@ -13,6 +13,8 @@ import {
   AI_JUDGEABLE_KINDS,
   BREED_SIZE_LABEL,
   PET_KIND_LABEL,
+  nextVaccinationOf,
+  vaccinationDday,
   type BreedSize,
   type PetKind,
 } from '@/data/types';
@@ -24,7 +26,22 @@ const PET_KINDS = Object.keys(PET_KIND_LABEL) as PetKind[];
 
 export default function PetsScreen() {
   const p = usePalette();
-  const { pets, addPet, removePet } = useAppStore();
+  const { pets, addPet, removePet, addCalendarEvent } = useAppStore();
+  const [addedVax, setAddedVax] = useState<Set<number>>(new Set());
+
+  const addVaxToCalendar = (petId: number, species: string, date: string) => {
+    addCalendarEvent({
+      petId,
+      type: 'VACCINE',
+      title: `${species} 예방접종`,
+      date,
+      time: null,
+      repeat: 'NONE',
+      reminder: true,
+      notes: '다음 접종 예정 — 정확한 일정은 동물병원 확인',
+    });
+    setAddedVax((prev) => new Set(prev).add(petId));
+  };
 
   const [formOpen, setFormOpen] = useState(false);
   const [name, setName] = useState('');
@@ -36,6 +53,7 @@ export default function PetsScreen() {
   const sizeMatters = kind === 'DOG' || kind === 'CAT';
   const [vaccinated, setVaccinated] = useState(false);
   const [vaccinationDate, setVaccinationDate] = useState('');
+  const [nextVaccinationDate, setNextVaccinationDate] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,6 +85,10 @@ export default function PetsScreen() {
     if (vaccinated && dateInput && !/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
       return setError('접종 날짜를 YYYY-MM-DD 형식으로 입력해 주세요 (예: 2026-03-15)');
     }
+    const nextInput = nextVaccinationDate.trim();
+    if (nextInput && !/^\d{4}-\d{2}-\d{2}$/.test(nextInput)) {
+      return setError('다음 접종 예정일을 YYYY-MM-DD 형식으로 입력해 주세요');
+    }
 
     addPet({
       name: name.trim(),
@@ -76,6 +98,7 @@ export default function PetsScreen() {
       breedSize: sizeMatters ? breedSize : 'SMALL',
       vaccinated,
       vaccinationDate: vaccinated && dateInput ? dateInput : null,
+      nextVaccinationDate: nextInput || null,
       photoUri,
     });
     setName('');
@@ -85,6 +108,7 @@ export default function PetsScreen() {
     setBreedSize('SMALL');
     setVaccinated(false);
     setVaccinationDate('');
+    setNextVaccinationDate('');
     setPhotoUri(null);
     setError(null);
     setFormOpen(false);
@@ -121,6 +145,36 @@ export default function PetsScreen() {
                   <Badge label="접종 필요" color={p.warn} background={p.warnSoft} />
                 )}
               </View>
+
+              {/* 다음 접종 예정 + 캘린더 알림 추가 */}
+              {(() => {
+                const next = nextVaccinationOf(pet);
+                if (!next) return null;
+                const dday = vaccinationDday(pet) ?? 0;
+                const overdue = dday < 0;
+                const added = addedVax.has(pet.petId);
+                return (
+                  <View style={styles.vaxRow}>
+                    <Ionicons name="medkit" size={13} color={overdue ? p.danger : p.accent} />
+                    <Text style={[styles.vaxText, { color: overdue ? p.danger : p.muted }]}>
+                      다음 접종 {next} · {overdue ? `${-dday}일 지남` : `D-${dday}`}
+                    </Text>
+                    <Pressable
+                      onPress={() => !added && addVaxToCalendar(pet.petId, pet.species, next)}
+                      hitSlop={6}
+                      style={[styles.vaxBtn, { backgroundColor: added ? p.successSoft : p.accentSoft }]}>
+                      <Ionicons
+                        name={added ? 'checkmark' : 'calendar'}
+                        size={12}
+                        color={added ? p.success : p.accent}
+                      />
+                      <Text style={[styles.vaxBtnText, { color: added ? p.success : p.accent }]}>
+                        {added ? '추가됨' : '캘린더'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              })()}
             </View>
             <Pressable
               onPress={() => removePet(pet.petId)}
@@ -231,6 +285,17 @@ export default function PetsScreen() {
             />
           )}
 
+          {(kind === 'DOG' || kind === 'CAT') && (
+            <TextInput
+              value={nextVaccinationDate}
+              onChangeText={setNextVaccinationDate}
+              placeholder="다음 접종 예정일 (선택 · 비우면 접종일+1년 자동)"
+              placeholderTextColor={p.muted}
+              keyboardType="numbers-and-punctuation"
+              style={[styles.input, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
+            />
+          )}
+
           {error && <Text style={[styles.error, { color: p.danger }]}>{error}</Text>}
 
           <View style={styles.formActions}>
@@ -294,6 +359,17 @@ const styles = StyleSheet.create({
   name: { fontSize: 18, fontWeight: '800', letterSpacing: -0.4 },
   detail: { fontSize: 13 },
   badges: { flexDirection: 'row', gap: 6, marginTop: 6 },
+  vaxRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
+  vaxText: { fontSize: 11.5, fontWeight: '600', flexShrink: 1, fontVariant: ['tabular-nums'] },
+  vaxBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: Radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  vaxBtnText: { fontSize: 11, fontWeight: '800' },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',

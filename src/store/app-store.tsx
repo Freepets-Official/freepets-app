@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState, type
 
 import { judgeGroup } from '@/data/judge';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, INITIAL_SATISFACTIONS, REVIEWS } from '@/data/mock';
-import { eventOccursOn } from '@/data/types';
+import { eventOccursOn, nextVaccinationOf, vaccinationDday } from '@/data/types';
 import type {
   CalendarEvent,
   Confidence,
@@ -187,6 +187,9 @@ interface AppStore {
   /** 선택한 여러 마리를 한 번에 판별한다 */
   runCheck: (facilityId: number, petIds: number[]) => PetCheck | null;
 
+  /** 다음 접종이 30일 이내로 다가왔거나 지난 아이들 (홈 알림용) — 임박순 */
+  upcomingVaccinations: () => { pet: Pet; dday: number; date: string }[];
+
   reviews: Review[];
   reviewsOf: (facilityId: number) => Review[];
   addReview: (input: NewReview) => void;
@@ -314,6 +317,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const removePet = useCallback((petId: number) => {
     setPets((prev) => prev.filter((p) => p.petId !== petId));
   }, []);
+
+  const upcomingVaccinations = useCallback(() => {
+    return pets
+      .map((pt) => ({ pet: pt, dday: vaccinationDday(pt), date: nextVaccinationOf(pt) }))
+      .filter(
+        (x): x is { pet: Pet; dday: number; date: string } =>
+          x.dday !== null && x.date !== null && x.dday <= 30,
+      )
+      .sort((a, b) => a.dday - b.dday);
+  }, [pets]);
 
   const runCheck = useCallback(
     (facilityId: number, petIds: number[]): PetCheck | null => {
@@ -721,6 +734,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       removePet,
       checks,
       runCheck,
+      upcomingVaccinations,
       reviews,
       reviewsOf,
       addReview,
@@ -777,6 +791,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       removePet,
       checks,
       runCheck,
+      upcomingVaccinations,
       reviews,
       reviewsOf,
       addReview,

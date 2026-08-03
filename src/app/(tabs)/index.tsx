@@ -22,8 +22,9 @@ function formatDate(iso: string): string {
 export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { pets, checks, plannedDenialAlerts } = useAppStore();
+  const { pets, checks, plannedDenialAlerts, upcomingVaccinations } = useAppStore();
   const alerts = plannedDenialAlerts();
+  const vax = upcomingVaccinations();
 
   return (
     <Screen eyebrow="우리 아이들" title="반려동물 여권" subtitle="아이마다 좋아한 장소를 한눈에 확인하세요.">
@@ -55,6 +56,39 @@ export default function HomeScreen() {
               <Ionicons name="chevron-forward" size={18} color={p.danger} />
             </Pressable>
           ))}
+        </View>
+      )}
+
+      {/* 다가오는(또는 지난) 예방접종 — 개·고양이 부스터 리마인더 */}
+      {vax.length > 0 && (
+        <View style={styles.alertWrap}>
+          {vax.map(({ pet, dday, date }) => {
+            const overdue = dday < 0;
+            const tone = overdue ? p.danger : p.accent;
+            const toneSoft = overdue ? p.dangerSoft : p.accentSoft;
+            return (
+              <Pressable
+                key={pet.petId}
+                onPress={() => router.push('/calendar')}
+                style={({ pressed }) => [
+                  styles.alertCard,
+                  { backgroundColor: pressed ? toneSoft : p.card, borderColor: tone },
+                ]}>
+                <View style={[styles.alertIcon, { backgroundColor: toneSoft }]}>
+                  <Ionicons name="medkit" size={18} color={tone} />
+                </View>
+                <View style={styles.alertText}>
+                  <Text style={[styles.alertTitle, { color: tone }]}>
+                    {overdue ? `${pet.name} 접종 기한이 지났어요` : `${pet.name} 예방접종이 다가와요`}
+                  </Text>
+                  <Text style={[styles.alertBody, { color: p.ink }]} numberOfLines={2}>
+                    다음 접종 {date} · {overdue ? `${-dday}일 지남` : `D-${dday}`} — 캘린더에서 확인하세요
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={tone} />
+              </Pressable>
+            );
+          })}
         </View>
       )}
 

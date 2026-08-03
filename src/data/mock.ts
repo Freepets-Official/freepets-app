@@ -260,7 +260,9 @@ export const INITIAL_PETS: Pet[] = [
     weight: 3.2,
     breedSize: 'SMALL',
     vaccinated: true,
-    vaccinationDate: '2026-03-15',
+    // 데모: 작년 접종 → 다음 접종(+1년)이 곧 다가오게
+    vaccinationDate: '2025-08-18',
+    nextVaccinationDate: null,
     photoUri: null,
   },
   {
@@ -272,6 +274,7 @@ export const INITIAL_PETS: Pet[] = [
     breedSize: 'LARGE',
     vaccinated: false,
     vaccinationDate: null,
+    nextVaccinationDate: null,
     photoUri: null,
   },
   {
@@ -284,6 +287,7 @@ export const INITIAL_PETS: Pet[] = [
     breedSize: 'SMALL',
     vaccinated: false,
     vaccinationDate: null,
+    nextVaccinationDate: null,
     photoUri: null,
   },
 ];
