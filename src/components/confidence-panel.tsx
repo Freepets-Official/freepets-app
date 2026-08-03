@@ -39,14 +39,10 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
       <Text style={[styles.explain, { color: p.ink }]}>
         {isConfirmed
           ? '최근 확인된 정보예요. 안심하고 방문하세요.'
-          : confidence === 'LIKELY'
-            ? '관광공사 원문 기준이라 대체로 정확하지만, 현장에서 바뀌었을 수 있어요.'
-            : confidence === 'ESTIMATED'
-              ? '원문이 모호해 추정한 정보예요. 방문 전 확인을 권장해요.'
-              : // 거부 제보로 하향된 경우는 "정보가 없다"가 아니라 "있던 정보가 틀렸다"는 뜻이다
-                source === 'DENIAL_REPORT'
-                ? '현장에서 거부당한 제보가 접수돼 신뢰도를 낮췄어요. 등록된 조건을 그대로 믿지 마세요.'
-                : '등록된 조건 정보가 없어요. 방문 전 꼭 확인하세요.'}
+          : // 거부 제보로 하향된 경우는 "정보가 없다"가 아니라 "있던 정보가 틀렸다"는 뜻이다
+            source === 'DENIAL_REPORT'
+            ? '현장에서 거부당한 제보가 접수돼 신뢰도를 낮췄어요. 등록된 조건을 그대로 믿지 마세요.'
+            : '아직 확정되지 않은 정보예요. 방문 전 시설에 확인하는 걸 권장해요.'}
       </Text>
 
       {!isConfirmed && (
