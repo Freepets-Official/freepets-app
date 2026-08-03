@@ -245,3 +245,61 @@ export const REQUIREMENT_LABEL: Record<Requirement, string> = {
   SMALL_ONLY: '소형견만',
   OUTDOOR_ONLY: '야외만',
 };
+
+/* ── 반려동물 캘린더 ─────────────────────────────────────────
+ * 예방접종·약 복용·건강검진·여행 일정을 한 곳에서 관리한다. */
+export type CalEventType = 'VACCINE' | 'MED' | 'CHECKUP' | 'TRAVEL';
+export type CalRepeat = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
+
+export interface CalendarEvent {
+  eventId: number;
+  /** 어느 아이의 일정인지. null이면 전체(여행 등) */
+  petId: number | null;
+  type: CalEventType;
+  title: string;
+  /** YYYY-MM-DD (시작일) */
+  date: string;
+  /** HH:MM, 없으면 종일 */
+  time: string | null;
+  repeat: CalRepeat;
+  /** 알림 켜짐 여부 (실제 푸시는 백엔드/expo-notifications 연동 시) */
+  reminder: boolean;
+  notes: string | null;
+}
+
+/** 이벤트 종류별 표시 메타 — 앱 파스텔 팔레트에 맞춘 귀여운 색 */
+export const CAL_EVENT_META: Record<
+  CalEventType,
+  { label: string; icon: string; color: string; soft: string }
+> = {
+  VACCINE: { label: '예방접종', icon: 'medkit', color: '#E86397', soft: '#FDEAF2' },
+  MED: { label: '약 복용', icon: 'medical', color: '#E0952B', soft: '#FBEFD6' },
+  CHECKUP: { label: '건강검진', icon: 'pulse', color: '#2BB3A3', soft: '#DBF4F0' },
+  TRAVEL: { label: '여행', icon: 'airplane', color: '#4C8DF5', soft: '#E6EEFD' },
+};
+
+export const CAL_REPEAT_LABEL: Record<CalRepeat, string> = {
+  NONE: '반복 안 함',
+  DAILY: '매일',
+  WEEKLY: '매주',
+  MONTHLY: '매월',
+};
+
+/** 로컬 날짜를 YYYY-MM-DD로 (UTC 밀림 방지) */
+export function ymd(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/** 반복을 고려해 이벤트가 특정 날짜(YYYY-MM-DD)에 발생하는지 */
+export function eventOccursOn(e: CalendarEvent, target: string): boolean {
+  if (e.date === target) return true;
+  if (e.repeat === 'NONE' || target < e.date) return false;
+  const d = new Date(`${target}T00:00:00`);
+  const s = new Date(`${e.date}T00:00:00`);
+  if (e.repeat === 'DAILY') return true;
+  if (e.repeat === 'WEEKLY') return d.getDay() === s.getDay();
+  if (e.repeat === 'MONTHLY') return d.getDate() === s.getDate();
+  return false;
+}

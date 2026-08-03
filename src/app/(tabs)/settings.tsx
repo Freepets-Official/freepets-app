@@ -102,6 +102,18 @@ export default function SettingsScreen() {
         />
       </Group>
 
+      {/* 캘린더 (앱 특화) */}
+      <Group title="캘린더" caption="프리펫스 전용">
+        <ToggleRow
+          icon="airplane-outline"
+          label="여행 일정 자동 기록"
+          sub="동반 방문을 확정하면 캘린더에 여행 일정으로 남겨요"
+          value={settings.autoTravelLog}
+          onChange={(v) => updateSettings({ autoTravelLog: v })}
+          last
+        />
+      </Group>
+
       {/* 알림 */}
       <Group title="알림">
         <ToggleRow
