@@ -37,6 +37,8 @@ export default function FacilityDetailScreen() {
   const [loading, setLoading] = useState(false);
   const [check, setCheck] = useState<PetCheck | null>(null);
   const [done, setDone] = useState<Set<string>>(new Set());
+  // 판별·만족도·친화도 세 섹션을 토글로 — 한 화면에 다 쌓으면 스크롤이 너무 길다
+  const [tab, setTab] = useState<'check' | 'satis' | 'review'>('check');
 
   const alternatives = useMemo(() => {
     if (!facility) return [];
@@ -167,9 +169,41 @@ export default function FacilityDetailScreen() {
 
       <ConfidencePanel facility={facility} />
 
-      <SectionTitle title="AI 출입 판별" caption={pets.length > 1 ? '데려갈 아이를 골라요' : undefined} />
+      <OwnerPromotionSection facilityId={facility.facilityId} />
 
-      {pets.length === 0 ? (
+      {/* 판별 · 우리 아이 · 친화도 토글 — 스크롤을 줄인다 */}
+      <View style={[styles.segment, { backgroundColor: p.surface, borderColor: p.line }]}>
+        {(
+          [
+            { key: 'check', icon: 'sparkles', label: 'AI 판별' },
+            { key: 'satis', icon: 'happy', label: '우리 아이' },
+            { key: 'review', icon: 'paw', label: '친화도' },
+          ] as const
+        ).map((t) => {
+          const on = tab === t.key;
+          return (
+            <Pressable
+              key={t.key}
+              onPress={() => setTab(t.key)}
+              style={[styles.segItem, on && { backgroundColor: p.card }]}>
+              <Ionicons
+                name={on ? t.icon : (`${t.icon}-outline` as const)}
+                size={15}
+                color={on ? p.accent : p.muted}
+              />
+              <Text style={[styles.segLabel, { color: on ? p.ink : p.muted }]}>{t.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {tab === 'check' && (
+        <>
+          {pets.length > 1 && (
+            <Text style={[styles.pickHint, { color: p.muted }]}>데려갈 아이를 골라요</Text>
+          )}
+
+          {pets.length === 0 ? (
         <Text style={[styles.meta, { color: p.muted }]}>
           내 반려동물 탭에서 반려동물을 먼저 등록해 주세요.
         </Text>
@@ -366,26 +400,46 @@ export default function FacilityDetailScreen() {
               AI 판별이 실제와 달랐나요? 제보하기
             </Text>
           </Pressable>
+            </>
+          )}
         </>
       )}
 
-      <OwnerPromotionSection facilityId={facility.facilityId} />
+      {tab === 'satis' && <SatisfactionSection facilityId={facility.facilityId} />}
 
-      <SatisfactionSection facilityId={facility.facilityId} />
-
-      <ReviewSection
-        reviews={reviewsOf(facility.facilityId)}
-        canWrite={canReview(facility.facilityId)}
-        onWrite={() => {
-          if (!canReview(facility.facilityId)) return;
-          router.push({ pathname: '/review/[id]', params: { id: String(facility.facilityId) } });
-        }}
-      />
+      {tab === 'review' && (
+        <ReviewSection
+          reviews={reviewsOf(facility.facilityId)}
+          canWrite={canReview(facility.facilityId)}
+          onWrite={() => {
+            if (!canReview(facility.facilityId)) return;
+            router.push({ pathname: '/review/[id]', params: { id: String(facility.facilityId) } });
+          }}
+        />
+      )}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  segment: {
+    flexDirection: 'row',
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    padding: 3,
+    gap: 3,
+  },
+  segItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    borderRadius: Radius.full,
+    paddingVertical: 9,
+  },
+  segLabel: { fontSize: 13, fontWeight: '800', letterSpacing: -0.2 },
+  pickHint: { fontSize: 12.5, fontWeight: '700', marginTop: 2 },
   header: { gap: 4, paddingTop: Spacing.sm },
   headerTop: {
     flexDirection: 'row',
