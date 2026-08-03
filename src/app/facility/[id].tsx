@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { PetAllowedBadge, ResultBadge } from '@/components/badge';
@@ -18,7 +18,14 @@ import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import { FACILITIES, formatDistance } from '@/data/mock';
-import { CATEGORY_LABEL, pawGradeOf, type PetCheck } from '@/data/types';
+import {
+  AI_JUDGEABLE_KINDS,
+  CATEGORY_LABEL,
+  KIND_TIPS,
+  PET_KIND_LABEL,
+  pawGradeOf,
+  type PetCheck,
+} from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -26,14 +33,21 @@ export default function FacilityDetailScreen() {
   const p = usePalette();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { pets, runCheck, reviewsOf, canReview, confidenceOf, effectiveFacility } = useAppStore();
+  const { pets, runCheck, reviewsOf, canReview, confidenceOf, effectiveFacility, promotionOf } =
+    useAppStore();
 
   const base = FACILITIES.find((f) => f.facilityId === Number(id));
   // 사업자가 확정한 조건이 있으면 그 값으로 표시한다 (판별은 runCheck가 내부에서 같은 override를 적용) (F5)
   const facility = base ? effectiveFacility(base) : undefined;
 
-  // 기본은 등록된 모든 아이 선택 — 다 함께 갈 수 있는지 한 번에 확인
-  const [selectedIds, setSelectedIds] = useState<number[]>(pets.map((p) => p.petId));
+  // AI 판별은 개·고양이만 (관광공사 원문이 다루는 종). 그 외는 '직접 확인'으로 안내한다
+  const judgeable = pets.filter((pt) => AI_JUDGEABLE_KINDS.includes(pt.kind));
+  const special = pets.filter((pt) => !AI_JUDGEABLE_KINDS.includes(pt.kind));
+
+  // 기본은 판별 가능한 아이(개·고양이) 전부 선택 — 다 함께 갈 수 있는지 한 번에 확인
+  const [selectedIds, setSelectedIds] = useState<number[]>(() =>
+    pets.filter((pt) => AI_JUDGEABLE_KINDS.includes(pt.kind)).map((pt) => pt.petId),
+  );
   const [loading, setLoading] = useState(false);
   const [check, setCheck] = useState<PetCheck | null>(null);
   const [done, setDone] = useState<Set<string>>(new Set());
@@ -195,68 +209,128 @@ export default function FacilityDetailScreen() {
 
       {tab === 'check' && (
         <>
-          {pets.length > 1 && (
-            <Text style={[styles.pickHint, { color: p.muted }]}>데려갈 아이를 골라요</Text>
-          )}
-
           {pets.length === 0 ? (
-        <Text style={[styles.meta, { color: p.muted }]}>
-          내 반려동물 탭에서 반려동물을 먼저 등록해 주세요.
-        </Text>
-      ) : (
-        <>
-          <View style={styles.petRow}>
-            {pets.map((pet) => {
-              const on = selectedIds.includes(pet.petId);
-              return (
-                <Pressable
-                  key={pet.petId}
-                  onPress={() => togglePet(pet.petId)}
-                  style={[
-                    styles.petChip,
-                    { backgroundColor: on ? p.accentSoft : p.surface, borderColor: on ? p.accent : p.line },
-                  ]}>
-                  <Ionicons
-                    name={on ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={16}
-                    color={on ? p.accent : p.muted}
-                  />
-                  <Text style={[styles.petChipText, { color: on ? p.accent : p.muted }]}>
-                    {pet.name} · {pet.weight}kg
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+            <Text style={[styles.meta, { color: p.muted }]}>
+              내 반려동물 탭에서 반려동물을 먼저 등록해 주세요.
+            </Text>
+          ) : (
+            <>
+              {judgeable.length > 0 && (
+                <>
+                  {judgeable.length > 1 && (
+                    <Text style={[styles.pickHint, { color: p.muted }]}>데려갈 아이를 골라요</Text>
+                  )}
+                  <View style={styles.petRow}>
+                    {judgeable.map((pet) => {
+                      const on = selectedIds.includes(pet.petId);
+                      return (
+                        <Pressable
+                          key={pet.petId}
+                          onPress={() => togglePet(pet.petId)}
+                          style={[
+                            styles.petChip,
+                            { backgroundColor: on ? p.accentSoft : p.surface, borderColor: on ? p.accent : p.line },
+                          ]}>
+                          <Ionicons
+                            name={on ? 'checkmark-circle' : 'ellipse-outline'}
+                            size={16}
+                            color={on ? p.accent : p.muted}
+                          />
+                          <Text style={[styles.petChipText, { color: on ? p.accent : p.muted }]}>
+                            {pet.name} · {pet.weight}kg
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
 
-          <Pressable
-            onPress={startCheck}
-            disabled={loading || selectedIds.length === 0}
-            style={({ pressed }) => [
-              styles.checkButton,
-              {
-                backgroundColor:
-                  selectedIds.length === 0 ? p.line : pressed || loading ? p.accentDark : p.accent,
-              },
-            ]}>
-            {loading ? (
-              <>
-                <ActivityIndicator color={p.onAccent} size="small" />
-                <Text style={[styles.checkLabel, { color: p.onAccent }]}>
-                  AI가 출입 조건을 분석하고 있어요…
-                </Text>
-              </>
-            ) : (
-              <>
-                <Ionicons name="sparkles" size={17} color={p.onAccent} />
-                <Text style={[styles.checkLabel, { color: p.onAccent }]}>
-                  {selectedIds.length > 1 ? `${selectedIds.length}마리 함께 판별하기` : 'AI 출입 판별하기'}
-                </Text>
-              </>
-            )}
-          </Pressable>
-        </>
-      )}
+                  <Pressable
+                    onPress={startCheck}
+                    disabled={loading || selectedIds.length === 0}
+                    style={({ pressed }) => [
+                      styles.checkButton,
+                      {
+                        backgroundColor:
+                          selectedIds.length === 0 ? p.line : pressed || loading ? p.accentDark : p.accent,
+                      },
+                    ]}>
+                    {loading ? (
+                      <>
+                        <ActivityIndicator color={p.onAccent} size="small" />
+                        <Text style={[styles.checkLabel, { color: p.onAccent }]}>
+                          AI가 출입 조건을 분석하고 있어요…
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Ionicons name="sparkles" size={17} color={p.onAccent} />
+                        <Text style={[styles.checkLabel, { color: p.onAccent }]}>
+                          {selectedIds.length > 1 ? `${selectedIds.length}마리 함께 판별하기` : 'AI 출입 판별하기'}
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                </>
+              )}
+
+              {/* 개·고양이 외 종(새·파충류 등)은 원본 데이터가 없어 판별 대신 직접 확인으로 안내 */}
+              {special.length > 0 && (
+                <View style={[styles.specialCard, { backgroundColor: p.surface, borderColor: p.line }]}>
+                  <View style={styles.specialHead}>
+                    <Ionicons name="information-circle" size={17} color={p.warn} />
+                    <Text style={[styles.specialTitle, { color: p.ink }]}>직접 확인이 필요한 아이</Text>
+                  </View>
+                  <Text style={[styles.specialBody, { color: p.muted }]}>
+                    {special.map((s) => `${s.name}(${PET_KIND_LABEL[s.kind]})`).join(' · ')}는 관광공사·AI
+                    기준 정보가 없어 자동 판별이 어려워요. 시설에 직접 확인하는 게 정확합니다.
+                  </Text>
+
+                  {special.map((s) =>
+                    KIND_TIPS[s.kind].length > 0 ? (
+                      <View key={s.petId} style={styles.specialTips}>
+                        <Text style={[styles.specialTipsLabel, { color: p.ink }]}>
+                          {PET_KIND_LABEL[s.kind]} 준비
+                        </Text>
+                        {KIND_TIPS[s.kind].map((tip) => (
+                          <View key={tip} style={styles.specialTipRow}>
+                            <Ionicons name="checkmark" size={13} color={p.accent} />
+                            <Text style={[styles.specialTipText, { color: p.muted }]}>{tip}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null,
+                  )}
+
+                  {promotionOf(facility.facilityId)?.intro ? (
+                    <View style={[styles.ownerNote, { backgroundColor: p.card, borderColor: p.line }]}>
+                      <Text style={[styles.ownerNoteLabel, { color: p.accent }]}>사장님 소개</Text>
+                      <Text style={[styles.ownerNoteText, { color: p.ink }]}>
+                        {promotionOf(facility.facilityId)?.intro}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {facility.phone ? (
+                    <Pressable
+                      onPress={() => Linking.openURL(`tel:${facility.phone}`)}
+                      style={({ pressed }) => [
+                        styles.callBtn,
+                        { backgroundColor: pressed ? p.accentDark : p.accent },
+                      ]}>
+                      <Ionicons name="call" size={16} color={p.onAccent} />
+                      <Text style={[styles.callBtnText, { color: p.onAccent }]}>
+                        전화로 직접 확인 ({facility.phone})
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={[styles.specialBody, { color: p.muted }]}>
+                      등록된 전화번호가 없어요. 방문 전 시설에 확인해 주세요.
+                    </Text>
+                  )}
+                </View>
+              )}
+            </>
+          )}
 
       {check && tone && (
         <>
@@ -436,6 +510,26 @@ const styles = StyleSheet.create({
   },
   segLabel: { fontSize: 13, fontWeight: '800', letterSpacing: -0.2 },
   pickHint: { fontSize: 12.5, fontWeight: '700', marginTop: 2 },
+  specialCard: { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: Spacing.md },
+  specialHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  specialTitle: { fontSize: 14.5, fontWeight: '800' },
+  specialBody: { fontSize: 13, lineHeight: 20 },
+  specialTips: { gap: 4 },
+  specialTipsLabel: { fontSize: 12.5, fontWeight: '800' },
+  specialTipRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  specialTipText: { fontSize: 12.5 },
+  ownerNote: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.md, gap: 3 },
+  ownerNoteLabel: { fontSize: 11.5, fontWeight: '800' },
+  ownerNoteText: { fontSize: 13, lineHeight: 19 },
+  callBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    borderRadius: Radius.full,
+    paddingVertical: 13,
+  },
+  callBtnText: { fontSize: 14, fontWeight: '800' },
   header: { gap: 4, paddingTop: Spacing.sm },
   headerTop: {
     flexDirection: 'row',

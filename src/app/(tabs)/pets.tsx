@@ -9,11 +9,18 @@ import { Chip } from '@/components/chip';
 import { PetAvatar } from '@/components/pet-avatar';
 import { Screen } from '@/components/screen';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
-import { BREED_SIZE_LABEL, type BreedSize } from '@/data/types';
+import {
+  AI_JUDGEABLE_KINDS,
+  BREED_SIZE_LABEL,
+  PET_KIND_LABEL,
+  type BreedSize,
+  type PetKind,
+} from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
 const BREED_SIZES = Object.keys(BREED_SIZE_LABEL) as BreedSize[];
+const PET_KINDS = Object.keys(PET_KIND_LABEL) as PetKind[];
 
 export default function PetsScreen() {
   const p = usePalette();
@@ -21,9 +28,12 @@ export default function PetsScreen() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [name, setName] = useState('');
+  const [kind, setKind] = useState<PetKind>('DOG');
   const [species, setSpecies] = useState('');
   const [weight, setWeight] = useState('');
   const [breedSize, setBreedSize] = useState<BreedSize>('SMALL');
+  // 개·고양이는 체중·체급으로 판별되지만, 그 외 종은 그 값이 무의미하다
+  const sizeMatters = kind === 'DOG' || kind === 'CAT';
   const [vaccinated, setVaccinated] = useState(false);
   const [vaccinationDate, setVaccinationDate] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -44,8 +54,14 @@ export default function PetsScreen() {
   const submit = () => {
     const w = Number(weight);
     if (!name.trim()) return setError('이름을 입력해 주세요');
-    if (!species.trim()) return setError('견종을 입력해 주세요');
-    if (!weight.trim() || Number.isNaN(w) || w <= 0) return setError('체중을 숫자로 입력해 주세요 (kg)');
+    if (!species.trim()) return setError('품종을 입력해 주세요');
+    // 체중은 개·고양이만 필수(판별에 쓰임). 그 외 종은 비워도 된다
+    if (sizeMatters && (!weight.trim() || Number.isNaN(w) || w <= 0)) {
+      return setError('체중을 숫자로 입력해 주세요 (kg)');
+    }
+    if (!sizeMatters && weight.trim() && (Number.isNaN(w) || w <= 0)) {
+      return setError('체중을 숫자로 입력해 주세요 (kg)');
+    }
     // 접종 완료면 날짜를 받는다. 형식이 있으면 검증, 비워두면 날짜 미기재로 저장
     const dateInput = vaccinationDate.trim();
     if (vaccinated && dateInput && !/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
@@ -54,14 +70,16 @@ export default function PetsScreen() {
 
     addPet({
       name: name.trim(),
+      kind,
       species: species.trim(),
-      weight: w,
-      breedSize,
+      weight: weight.trim() ? w : 0,
+      breedSize: sizeMatters ? breedSize : 'SMALL',
       vaccinated,
       vaccinationDate: vaccinated && dateInput ? dateInput : null,
       photoUri,
     });
     setName('');
+    setKind('DOG');
     setSpecies('');
     setWeight('');
     setBreedSize('SMALL');
@@ -86,11 +104,14 @@ export default function PetsScreen() {
             <View style={styles.info}>
               <Text style={[styles.name, { color: p.ink }]}>{pet.name}</Text>
               <Text style={[styles.detail, { color: p.muted }]}>
-                {pet.species} · {pet.weight}kg
+                {PET_KIND_LABEL[pet.kind]} · {pet.species}
+                {(pet.kind === 'DOG' || pet.kind === 'CAT') && pet.weight > 0
+                  ? ` · ${pet.weight}kg`
+                  : ''}
               </Text>
               <View style={styles.badges}>
                 <Badge
-                  label={`${BREED_SIZE_LABEL[pet.breedSize]}견`}
+                  label={pet.kind === 'DOG' ? `${BREED_SIZE_LABEL[pet.breedSize]}견` : PET_KIND_LABEL[pet.kind]}
                   color={p.unknown}
                   background={p.unknownSoft}
                 />
@@ -135,33 +156,56 @@ export default function PetsScreen() {
             placeholderTextColor={p.muted}
             style={[styles.input, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
           />
+
+          <Text style={[styles.label, { color: p.muted }]}>동물 종류</Text>
+          <View style={styles.sizeRow}>
+            {PET_KINDS.map((k) => (
+              <Chip
+                key={k}
+                label={PET_KIND_LABEL[k]}
+                selected={kind === k}
+                onPress={() => setKind(k)}
+              />
+            ))}
+          </View>
+          {!AI_JUDGEABLE_KINDS.includes(kind) && (
+            <Text style={[styles.kindHint, { color: p.muted }]}>
+              {PET_KIND_LABEL[kind]}는 관광공사·AI 기준 정보가 없어, 판별 대신 시설에 직접 확인하도록
+              안내해요.
+            </Text>
+          )}
+
           <TextInput
             value={species}
             onChangeText={setSpecies}
-            placeholder="견종 (예: 말티즈)"
+            placeholder="품종 (예: 말티즈, 앵무새)"
             placeholderTextColor={p.muted}
             style={[styles.input, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
           />
           <TextInput
             value={weight}
             onChangeText={setWeight}
-            placeholder="체중 (kg)"
+            placeholder={sizeMatters ? '체중 (kg)' : '체중 (kg · 선택)'}
             placeholderTextColor={p.muted}
             keyboardType="decimal-pad"
             style={[styles.input, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
           />
 
-          <Text style={[styles.label, { color: p.muted }]}>체급</Text>
-          <View style={styles.sizeRow}>
-            {BREED_SIZES.map((s) => (
-              <Chip
-                key={s}
-                label={BREED_SIZE_LABEL[s]}
-                selected={breedSize === s}
-                onPress={() => setBreedSize(s)}
-              />
-            ))}
-          </View>
+          {sizeMatters && (
+            <>
+              <Text style={[styles.label, { color: p.muted }]}>체급</Text>
+              <View style={styles.sizeRow}>
+                {BREED_SIZES.map((s) => (
+                  <Chip
+                    key={s}
+                    label={BREED_SIZE_LABEL[s]}
+                    selected={breedSize === s}
+                    onPress={() => setBreedSize(s)}
+                  />
+                ))}
+              </View>
+            </>
+          )}
 
           <View style={[styles.switchRow, { borderTopColor: p.line }]}>
             <Text style={[styles.label, { color: p.ink }]}>종합 예방접종 완료</Text>
@@ -276,7 +320,8 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
   },
   label: { fontSize: 13, fontWeight: '700' },
-  sizeRow: { flexDirection: 'row', gap: Spacing.sm },
+  sizeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  kindHint: { fontSize: 12, lineHeight: 17, marginTop: -4 },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
