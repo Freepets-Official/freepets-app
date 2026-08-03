@@ -1,5 +1,35 @@
 export type Category = 'TOUR' | 'STAY' | 'CAFE' | 'LEISURE' | 'SHOPPING' | 'RESTAURANT';
 export type BreedSize = 'SMALL' | 'MEDIUM' | 'LARGE';
+
+/** 동물 종류 — 개·고양이 외에도 키우므로 등록 시 선택한다 */
+export type PetKind = 'DOG' | 'CAT' | 'BIRD' | 'RABBIT' | 'REPTILE' | 'SMALL_MAMMAL' | 'OTHER';
+
+export const PET_KIND_LABEL: Record<PetKind, string> = {
+  DOG: '강아지',
+  CAT: '고양이',
+  BIRD: '새',
+  RABBIT: '토끼',
+  REPTILE: '파충류',
+  SMALL_MAMMAL: '소동물',
+  OTHER: '기타',
+};
+
+/**
+ * AI 출입 판별이 가능한 종 — 관광공사 원문(acmpyPsblCpam)이 실제로 다루는 개·고양이만.
+ * 그 외 종은 원본 데이터가 비어 있어 판별 대신 '직접 확인'(사업자 소개·전화)으로 안내한다.
+ */
+export const AI_JUDGEABLE_KINDS: PetKind[] = ['DOG', 'CAT'];
+
+/** 종별 준비 팁 — 원본에 없는 정보를 우리가 채운다(직접 확인 안내에 함께 노출) */
+export const KIND_TIPS: Record<PetKind, string[]> = {
+  DOG: [],
+  CAT: ['하네스 또는 이동장 준비', '낯선 환경 스트레스 주의'],
+  BIRD: ['이동장(새장) 필수', '소음·깃털에 민감한 곳이 있어요'],
+  RABBIT: ['이동장 필수', '온도·스트레스 관리'],
+  REPTILE: ['이동장·보온 준비', '탈출 방지', '종에 따라 사전 문의 권장'],
+  SMALL_MAMMAL: ['이동장 필수', '온도·스트레스 관리'],
+  OTHER: ['시설에 동반 가능 여부를 먼저 확인하세요'],
+};
 export type CheckResult = 'ALLOWED' | 'CONDITIONAL' | 'DENIED';
 export type Requirement =
   | 'LEASH'
@@ -170,6 +200,9 @@ export function pawGradeOf(reviews: Review[]): PawGrade {
 export interface Pet {
   petId: number;
   name: string;
+  /** 동물 종류 (강아지·고양이·새·토끼·파충류·소동물·기타) */
+  kind: PetKind;
+  /** 품종 (예: 말티즈, 앵무새). '견종'이 아니라 종류 불문 품종 */
   species: string;
   weight: number;
   breedSize: BreedSize;

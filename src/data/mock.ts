@@ -255,6 +255,7 @@ export const INITIAL_PETS: Pet[] = [
   {
     petId: 1,
     name: '몽이',
+    kind: 'DOG',
     species: '말티즈',
     weight: 3.2,
     breedSize: 'SMALL',
@@ -265,9 +266,22 @@ export const INITIAL_PETS: Pet[] = [
   {
     petId: 2,
     name: '보리',
+    kind: 'DOG',
     species: '골든리트리버',
     weight: 27.5,
     breedSize: 'LARGE',
+    vaccinated: false,
+    vaccinationDate: null,
+    photoUri: null,
+  },
+  {
+    // 소수 동물 예시 — AI 판별 대신 '직접 확인'으로 안내되는 흐름을 보여준다
+    petId: 3,
+    name: '초록이',
+    kind: 'BIRD',
+    species: '앵무새',
+    weight: 0.4,
+    breedSize: 'SMALL',
     vaccinated: false,
     vaccinationDate: null,
     photoUri: null,
