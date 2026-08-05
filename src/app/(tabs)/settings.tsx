@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { type ComponentProps, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { useState, type ComponentProps, type ReactNode } from 'react';
+import { Linking, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Chip } from '@/components/chip';
 import { Screen } from '@/components/screen';
@@ -19,6 +19,8 @@ export default function SettingsScreen() {
     useAppStore();
   const regCount = Object.keys(businessRegs).length;
   const hasOwnerProfile = availableProfiles.includes('owner');
+  const [cacheCleared, setCacheCleared] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
 
   return (
     <Screen eyebrow="설정" title="설정">
@@ -147,16 +149,38 @@ export default function SettingsScreen() {
 
       {/* 일반 */}
       <Group title="일반">
-        <Row icon="language-outline" label="언어" sub="한국어" onPress={() => {}} chevron />
-        <Row icon="moon-outline" label="화면 테마" sub="라이트 고정" onPress={() => {}} />
-        <Row icon="lock-closed-outline" label="개인정보 · 위치 권한" onPress={() => {}} chevron />
-        <Row icon="trash-outline" label="캐시 삭제" sub="12.4MB" onPress={() => {}} last />
+        <Row icon="language-outline" label="언어" sub="한국어" />
+        <Row icon="moon-outline" label="화면 테마" sub="라이트 고정" />
+        <Row
+          icon="lock-closed-outline"
+          label="개인정보 · 위치 권한"
+          onPress={() => router.push({ pathname: '/policy', params: { tab: 'privacy' } })}
+          chevron
+        />
+        <Row
+          icon="trash-outline"
+          label="캐시 삭제"
+          sub={cacheCleared ? '0MB · 삭제됨' : '12.4MB'}
+          onPress={() => setCacheCleared(true)}
+          last
+        />
       </Group>
 
       {/* 정보 */}
       <Group title="정보 · 지원">
-        <Row icon="notifications-circle-outline" label="공지사항" onPress={() => {}} chevron />
-        <Row icon="chatbubble-ellipses-outline" label="문의하기" onPress={() => {}} chevron />
+        <Row
+          icon="notifications-circle-outline"
+          label="공지사항"
+          onPress={() => router.push('/notices')}
+          chevron
+        />
+        <Row
+          icon="chatbubble-ellipses-outline"
+          label="문의하기"
+          sub="freepets.official@gmail.com"
+          onPress={() => Linking.openURL('mailto:freepets.official@gmail.com?subject=프리펫스 문의')}
+          chevron
+        />
         <Row
           icon="document-text-outline"
           label="이용약관"
@@ -175,10 +199,43 @@ export default function SettingsScreen() {
       {/* 계정 관리 */}
       <Group title="계정 관리">
         <Row icon="log-out-outline" label="로그아웃" onPress={logout} tint />
-        <Row icon="person-remove-outline" label="회원 탈퇴" onPress={() => {}} tint last />
+        <Row
+          icon="person-remove-outline"
+          label="회원 탈퇴"
+          onPress={() => setWithdrawOpen(true)}
+          tint
+          last
+        />
       </Group>
 
       <Text style={[styles.footer, { color: p.muted }]}>프리펫스 · 반려동물 동반여행 AI 판별</Text>
+
+      {/* 회원 탈퇴 확인 */}
+      <Modal
+        visible={withdrawOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setWithdrawOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setWithdrawOpen(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: p.card }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.sheetTitle, { color: p.ink }]}>정말 탈퇴하시겠어요?</Text>
+            <Text style={[styles.sheetBody, { color: p.muted }]}>
+              탈퇴하면 계정과 등록한 반려동물·리뷰·일정이 모두 삭제되고 되돌릴 수 없어요.
+            </Text>
+            <Pressable
+              onPress={() => {
+                setWithdrawOpen(false);
+                logout();
+              }}
+              style={[styles.withdrawBtn, { backgroundColor: p.danger }]}>
+              <Text style={[styles.withdrawBtnText, { color: '#FFFFFF' }]}>탈퇴하기</Text>
+            </Pressable>
+            <Pressable onPress={() => setWithdrawOpen(false)} style={styles.cancelBtn}>
+              <Text style={[styles.cancelBtnText, { color: p.muted }]}>취소</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
@@ -298,4 +355,18 @@ const styles = StyleSheet.create({
   blockDivider: { height: 1 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 2 },
   footer: { fontSize: 11.5, textAlign: 'center', paddingTop: Spacing.sm },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheet: {
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    padding: Spacing.xl,
+    paddingBottom: Spacing.xxl,
+    gap: Spacing.sm,
+  },
+  sheetTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.4 },
+  sheetBody: { fontSize: 13, lineHeight: 20, marginBottom: Spacing.sm },
+  withdrawBtn: { alignItems: 'center', borderRadius: Radius.md, paddingVertical: 15 },
+  withdrawBtnText: { fontSize: 15, fontWeight: '800' },
+  cancelBtn: { alignItems: 'center', paddingVertical: Spacing.md },
+  cancelBtnText: { fontSize: 14, fontWeight: '700' },
 });
