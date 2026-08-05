@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { PetAllowedBadge } from '@/components/badge';
 import { ConfidenceBadge } from '@/components/confidence-badge';
@@ -43,7 +44,12 @@ export function FacilityCard({ facility }: { facility: Facility }) {
         </View>
       </View>
 
-      <Text style={[styles.name, { color: p.ink }]}>{facility.name}</Text>
+      {/* 카드→상세 shared element — 이름이 그대로 이어지며 커진다(네이티브 전용) */}
+      <Animated.Text
+        sharedTransitionTag={`fac-name-${facility.facilityId}`}
+        style={[styles.name, { color: p.ink }]}>
+        {facility.name}
+      </Animated.Text>
       {grade.level !== null && (
         <View style={styles.pawRow}>
           <PawBadge grade={grade} size="sm" showLabel={false} />

@@ -171,7 +171,12 @@ export default function FacilityDetailScreen() {
           </Text>
           <PetAllowedBadge allowed={facility.petAllowed} />
         </View>
-        <Text style={[styles.name, { color: p.ink }]}>{facility.name}</Text>
+        {/* 카드에서 이어지는 shared element (같은 태그) */}
+        <Animated.Text
+          sharedTransitionTag={`fac-name-${facility.facilityId}`}
+          style={[styles.name, { color: p.ink }]}>
+          {facility.name}
+        </Animated.Text>
         <View style={styles.pawRow}>
           <PawBadge grade={pawGradeOf(reviewsOf(facility.facilityId))} />
         </View>
