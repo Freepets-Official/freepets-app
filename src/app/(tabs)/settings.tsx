@@ -15,7 +15,7 @@ const RADII = [1, 3, 5, 10];
 export default function SettingsScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { settings, updateSettings, businessRegs, session, availableProfiles, switchProfile, logout } =
+  const { settings, updateSettings, businessRegs, session, account, availableProfiles, switchProfile, logout } =
     useAppStore();
   const regCount = Object.keys(businessRegs).length;
   const hasOwnerProfile = availableProfiles.includes('owner');
@@ -35,7 +35,13 @@ export default function SettingsScreen() {
             chevron
           />
         )}
-        <Row icon="person-circle-outline" label="프로필 관리" onPress={() => {}} chevron />
+        <Row
+          icon="person-circle-outline"
+          label="프로필 관리"
+          sub={account.nickname}
+          onPress={() => router.push('/profile-edit')}
+          chevron
+        />
         <Row
           icon="mail-outline"
           label="계정 정보"

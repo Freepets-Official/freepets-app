@@ -57,6 +57,7 @@ function RootNavigator() {
       />
       <Stack.Screen name="policy" options={{ title: '약관·정책', headerBackButtonDisplayMode: 'minimal' }} />
       <Stack.Screen name="notices" options={{ title: '공지사항', headerBackButtonDisplayMode: 'minimal' }} />
+      <Stack.Screen name="profile-edit" options={{ title: '프로필 관리', headerBackButtonDisplayMode: 'minimal' }} />
       <Stack.Screen
         name="course"
         options={{ title: '여행 코스', headerBackButtonDisplayMode: 'minimal' }}
