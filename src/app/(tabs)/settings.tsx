@@ -45,9 +45,7 @@ export default function SettingsScreen() {
         <Row
           icon="mail-outline"
           label="계정 정보"
-          sub={session.email ?? 'sjwtlswodn@naver.com'}
-          onPress={() => {}}
-          chevron
+          sub={session.email ?? 'guest@freepets.app'}
           last
         />
       </Group>
