@@ -57,6 +57,12 @@ export interface Session {
   activeProfile: ProfileKind | null;
 }
 
+/** 계정 프로필 — 닉네임·아바타. 리뷰 작성자명 등에 쓰인다(저장은 백엔드 연동 시) */
+export interface Account {
+  nickname: string;
+  avatarUri: string | null;
+}
+
 export type ReportType = 'ENTERED' | 'DENIED' | 'CONDITION_CHANGED';
 
 /** 문 앞에서 거부당한 이유 — 원터치 제보라 서술 대신 코드로 받는다 */
@@ -267,6 +273,10 @@ interface AppStore {
   toggleMedTaken: (eventId: number, date: string) => void;
   isMedTaken: (eventId: number, date: string) => boolean;
 
+  /** 계정 프로필 (닉네임·아바타) */
+  account: Account;
+  updateAccount: (patch: Partial<Account>) => void;
+
   /** 로그인 세션 (계정 하나 + 활성 프로필) */
   session: Session;
   /** 이 계정이 가진 프로필들 — 소비자는 항상, 사업자는 매장을 등록했을 때 생긴다 */
@@ -300,6 +310,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [promotions, setPromotions] = useState<Record<number, Promotion>>({});
   const [benefits, setBenefits] = useState<Record<number, Benefit[]>>({});
   const [session, setSession] = useState<Session>({ authed: false, email: null, activeProfile: null });
+  const [account, setAccount] = useState<Account>({ nickname: '나', avatarUri: null });
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(INITIAL_CAL_EVENTS);
   // 약 복용 기록 — "eventId:YYYY-MM-DD" 집합
   const [medLog, setMedLog] = useState<Set<string>>(new Set());
@@ -390,7 +401,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         reviewId: nextReviewId.current++,
         facilityId: input.facilityId,
         userId: MY_USER_ID,
-        nickname: '나',
+        nickname: account.nickname,
         petName: chosen[0]?.name ?? null,
         pets: petInfos,
         ratingSpace: input.ratingSpace,
@@ -406,7 +417,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ...prev.filter((r) => !(r.facilityId === input.facilityId && r.userId === MY_USER_ID)),
       ]);
     },
-    [pets],
+    [pets, account.nickname],
   );
 
   const addReport = useCallback(
@@ -727,6 +738,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setSession((s) => ({ ...s, activeProfile: null }));
   }, []);
 
+  const updateAccount = useCallback((patch: Partial<Account>) => {
+    setAccount((prev) => ({ ...prev, ...patch }));
+  }, []);
+
   const value = useMemo(
     () => ({
       pets,
@@ -784,6 +799,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       logout,
       selectProfile,
       switchProfile,
+      account,
+      updateAccount,
     }),
     [
       pets,
@@ -841,6 +858,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       logout,
       selectProfile,
       switchProfile,
+      account,
+      updateAccount,
     ],
   );
 
