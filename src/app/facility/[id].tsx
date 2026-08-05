@@ -24,6 +24,7 @@ import {
   KIND_TIPS,
   PET_KIND_LABEL,
   pawGradeOf,
+  ymd,
   type PetCheck,
 } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
@@ -33,8 +34,18 @@ export default function FacilityDetailScreen() {
   const p = usePalette();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { pets, runCheck, reviewsOf, canReview, confidenceOf, effectiveFacility, promotionOf } =
-    useAppStore();
+  const {
+    pets,
+    runCheck,
+    reviewsOf,
+    canReview,
+    confidenceOf,
+    effectiveFacility,
+    promotionOf,
+    settings,
+    calendarEvents,
+    addCalendarEvent,
+  } = useAppStore();
 
   const base = FACILITIES.find((f) => f.facilityId === Number(id));
   // 사업자가 확정한 조건이 있으면 그 값으로 표시한다 (판별은 runCheck가 내부에서 같은 override를 적용) (F5)
@@ -88,9 +99,26 @@ export default function FacilityDetailScreen() {
     setCheck(null);
     // 데모: 백엔드 B(Claude AI) 호출을 흉내 내는 지연. 실제 연동 시 POST /api/v1/ai/check 로 대체.
     setTimeout(() => {
-      setCheck(runCheck(facility.facilityId, selectedIds));
+      const result = runCheck(facility.facilityId, selectedIds);
+      setCheck(result);
       setDone(new Set());
       setLoading(false);
+      // 여행 자동 기록(설정 허용 시) — 판별받고 방문하려는 곳을 캘린더 여행 일정으로 남긴다
+      if (result && result.overall !== 'DENIED' && settings.autoTravelLog) {
+        const title = `${facility.name} 방문`;
+        if (!calendarEvents.some((e) => e.type === 'TRAVEL' && e.title === title)) {
+          addCalendarEvent({
+            petId: null,
+            type: 'TRAVEL',
+            title,
+            date: ymd(new Date()),
+            time: null,
+            repeat: 'NONE',
+            reminder: false,
+            notes: '판별받고 방문한 곳 — 자동 기록',
+          });
+        }
+      }
     }, 900);
   };
 
