@@ -45,30 +45,43 @@ function RootNavigator() {
         headerStyle: { backgroundColor: p.bg },
         headerTintColor: p.accent,
         contentStyle: { backgroundColor: p.bg },
+        // 스택 진입 기본 전환 — iOS식 오른쪽 슬라이드(뒤로가기 제스처 포함)
+        animation: 'slide_from_right',
       }}>
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="signup" options={{ headerShown: false }} />
-      <Stack.Screen name="profile-select" options={{ headerShown: false }} />
-      <Stack.Screen name="owner-dashboard" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      {/* 인증 게이트 화면은 replace로 갈아끼우므로 슬라이드보다 페이드가 자연스럽다 */}
+      <Stack.Screen name="login" options={{ headerShown: false, animation: 'fade' }} />
+      <Stack.Screen name="signup" options={{ headerShown: false, animation: 'fade' }} />
+      <Stack.Screen name="profile-select" options={{ headerShown: false, animation: 'fade' }} />
+      <Stack.Screen name="owner-dashboard" options={{ headerShown: false, animation: 'fade' }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'fade' }} />
+      {/* 입력·정보 화면은 아래에서 올라오는 모달 느낌 */}
       <Stack.Screen
         name="calendar-event"
-        options={{ title: '일정 추가', headerBackButtonDisplayMode: 'minimal' }}
+        options={{ title: '일정 추가', headerBackButtonDisplayMode: 'minimal', animation: 'slide_from_bottom' }}
       />
-      <Stack.Screen name="policy" options={{ title: '약관·정책', headerBackButtonDisplayMode: 'minimal' }} />
-      <Stack.Screen name="notices" options={{ title: '공지사항', headerBackButtonDisplayMode: 'minimal' }} />
-      <Stack.Screen name="profile-edit" options={{ title: '프로필 관리', headerBackButtonDisplayMode: 'minimal' }} />
+      <Stack.Screen
+        name="policy"
+        options={{ title: '약관·정책', headerBackButtonDisplayMode: 'minimal', animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="notices"
+        options={{ title: '공지사항', headerBackButtonDisplayMode: 'minimal', animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="profile-edit"
+        options={{ title: '프로필 관리', headerBackButtonDisplayMode: 'minimal', animation: 'slide_from_bottom' }}
+      />
       <Stack.Screen
         name="course"
         options={{ title: '여행 코스', headerBackButtonDisplayMode: 'minimal' }}
       />
       <Stack.Screen
         name="business"
-        options={{ title: '사업자 등록', headerBackButtonDisplayMode: 'minimal' }}
+        options={{ title: '사업자 등록', headerBackButtonDisplayMode: 'minimal', animation: 'slide_from_bottom' }}
       />
       <Stack.Screen
         name="restaurant"
-        options={{ title: '동반 음식점 등록', headerBackButtonDisplayMode: 'minimal' }}
+        options={{ title: '동반 음식점 등록', headerBackButtonDisplayMode: 'minimal', animation: 'slide_from_bottom' }}
       />
       <Stack.Screen
         name="facility/[id]"
@@ -76,11 +89,11 @@ function RootNavigator() {
       />
       <Stack.Screen
         name="review/[id]"
-        options={{ title: '리뷰 쓰기', headerBackButtonDisplayMode: 'minimal' }}
+        options={{ title: '리뷰 쓰기', headerBackButtonDisplayMode: 'minimal', animation: 'slide_from_bottom' }}
       />
       <Stack.Screen
         name="report/[id]"
-        options={{ title: '제보하기', headerBackButtonDisplayMode: 'minimal' }}
+        options={{ title: '제보하기', headerBackButtonDisplayMode: 'minimal', animation: 'slide_from_bottom' }}
       />
     </Stack>
   );
