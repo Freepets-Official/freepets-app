@@ -50,7 +50,7 @@ export function ReviewSection({
   onWrite: () => void;
 }) {
   const p = usePalette();
-  const { reportedReviewIds, reportReview } = useAppStore();
+  const { reportedReviewIds, reportReview, myUserId, removeReview } = useAppStore();
   const [reportTarget, setReportTarget] = useState<Review | null>(null);
   const [detailTarget, setDetailTarget] = useState<Review | null>(null);
 
@@ -164,7 +164,17 @@ export function ReviewSection({
 
             <View style={styles.reviewFoot}>
               <Text style={[styles.visited, { color: p.muted }]}>{r.visitedAt} 방문</Text>
-              {reported ? (
+              {r.userId === myUserId ? (
+                // 내 리뷰 — 신고 대신 삭제
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    removeReview(r.reviewId);
+                  }}
+                  hitSlop={8}>
+                  <Text style={[styles.reportLink, { color: p.danger }]}>삭제</Text>
+                </Pressable>
+              ) : reported ? (
                 <Text style={[styles.reportedMark, { color: p.warn }]}>
                   신고 접수 · 등급 산정 제외
                 </Text>
