@@ -105,7 +105,7 @@ export default function RestaurantScreen() {
               <Text style={[styles.blockLabel, { color: p.ink }]}>어느 매장인가요?</Text>
               {candidates.length === 0 ? (
                 <Text style={[styles.empty, { color: p.muted }]}>
-                  등록할 음식점이 없어요. (데모: ‘초당순두부 본점’으로 시연할 수 있어요)
+                  등록할 음식점이 없어요. 내 매장이 목록에 없으면 문의로 알려주세요.
                 </Text>
               ) : (
                 candidates.map((f) => (

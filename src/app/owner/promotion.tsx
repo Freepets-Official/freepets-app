@@ -83,7 +83,7 @@ export default function PromotionScreen() {
               )}
             </View>
             <Text style={[styles.hint, { color: p.muted }]}>
-              데모에서는 자리만 잡아둬요. 실제 업로드는 백엔드 연동 시 붙습니다.
+              사진 업로드는 준비 중이에요. 우선 소개글·편의시설부터 등록해 주세요.
             </Text>
           </View>
 
