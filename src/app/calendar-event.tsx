@@ -21,24 +21,27 @@ const REPEATS: CalRepeat[] = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'];
 export default function CalendarEventScreen() {
   const p = usePalette();
   const router = useRouter();
-  const params = useLocalSearchParams<{ date?: string }>();
-  const { pets, addCalendarEvent } = useAppStore();
+  const params = useLocalSearchParams<{ date?: string; eventId?: string }>();
+  const { pets, calendarEvents, addCalendarEvent, updateCalendarEvent } = useAppStore();
 
-  const [type, setType] = useState<CalEventType>('VACCINE');
-  const [title, setTitle] = useState('');
-  const [petId, setPetId] = useState<number | null>(pets[0]?.petId ?? null);
-  const [date, setDate] = useState(params.date || ymd(new Date()));
-  const [time, setTime] = useState('');
-  const [repeat, setRepeat] = useState<CalRepeat>('NONE');
-  const [reminder, setReminder] = useState(true);
-  const [notes, setNotes] = useState('');
+  // 편집 모드: eventId가 있으면 그 일정을 찾아 폼을 채운다
+  const editing = params.eventId ? calendarEvents.find((e) => String(e.eventId) === params.eventId) : undefined;
+
+  const [type, setType] = useState<CalEventType>(editing?.type ?? 'VACCINE');
+  const [title, setTitle] = useState(editing?.title ?? '');
+  const [petId, setPetId] = useState<number | null>(editing ? editing.petId : pets[0]?.petId ?? null);
+  const [date, setDate] = useState(editing?.date ?? params.date ?? ymd(new Date()));
+  const [time, setTime] = useState(editing?.time ?? '');
+  const [repeat, setRepeat] = useState<CalRepeat>(editing?.repeat ?? 'NONE');
+  const [reminder, setReminder] = useState(editing?.reminder ?? true);
+  const [notes, setNotes] = useState(editing?.notes ?? '');
 
   const canSave = title.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date);
 
   const save = () => {
     if (!canSave) return;
-    addCalendarEvent({
-      petId: type === 'TRAVEL' ? petId : petId,
+    const payload = {
+      petId,
       type,
       title: title.trim(),
       date,
@@ -46,13 +49,17 @@ export default function CalendarEventScreen() {
       repeat,
       reminder,
       notes: notes.trim() || null,
-    });
+    };
+    if (editing) updateCalendarEvent(editing.eventId, payload);
+    else addCalendarEvent(payload);
     router.back();
   };
 
   return (
     <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
-      <Stack.Screen options={{ title: '일정 추가', headerBackButtonDisplayMode: 'minimal' }} />
+      <Stack.Screen
+        options={{ title: editing ? '일정 수정' : '일정 추가', headerBackButtonDisplayMode: 'minimal' }}
+      />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           {/* 종류 */}

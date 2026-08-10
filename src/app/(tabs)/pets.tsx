@@ -26,8 +26,10 @@ const PET_KINDS = Object.keys(PET_KIND_LABEL) as PetKind[];
 
 export default function PetsScreen() {
   const p = usePalette();
-  const { pets, addPet, removePet, addCalendarEvent } = useAppStore();
+  const { pets, addPet, removePet, updatePet, addCalendarEvent } = useAppStore();
   const [addedVax, setAddedVax] = useState<Set<number>>(new Set());
+  // 편집 중인 아이 id (null이면 새 등록)
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const addVaxToCalendar = (petId: number, species: string, date: string) => {
     addCalendarEvent({
@@ -69,6 +71,36 @@ export default function PetsScreen() {
     if (!result.canceled && result.assets[0]) setPhotoUri(result.assets[0].uri);
   };
 
+  const resetForm = () => {
+    setName('');
+    setKind('DOG');
+    setSpecies('');
+    setWeight('');
+    setBreedSize('SMALL');
+    setVaccinated(false);
+    setVaccinationDate('');
+    setNextVaccinationDate('');
+    setPhotoUri(null);
+    setError(null);
+    setEditingId(null);
+  };
+
+  // 카드 탭 → 편집: 폼을 그 아이 값으로 채우고 연다
+  const openEdit = (pet: (typeof pets)[number]) => {
+    setEditingId(pet.petId);
+    setName(pet.name);
+    setKind(pet.kind);
+    setSpecies(pet.species);
+    setWeight(pet.weight > 0 ? String(pet.weight) : '');
+    setBreedSize(pet.breedSize);
+    setVaccinated(pet.vaccinated);
+    setVaccinationDate(pet.vaccinationDate ?? '');
+    setNextVaccinationDate(pet.nextVaccinationDate ?? '');
+    setPhotoUri(pet.photoUri);
+    setError(null);
+    setFormOpen(true);
+  };
+
   const submit = () => {
     const w = Number(weight);
     if (!name.trim()) return setError('이름을 입력해 주세요');
@@ -90,7 +122,7 @@ export default function PetsScreen() {
       return setError('다음 접종 예정일을 YYYY-MM-DD 형식으로 입력해 주세요');
     }
 
-    addPet({
+    const payload = {
       name: name.trim(),
       kind,
       species: species.trim(),
@@ -100,17 +132,10 @@ export default function PetsScreen() {
       vaccinationDate: vaccinated && dateInput ? dateInput : null,
       nextVaccinationDate: nextInput || null,
       photoUri,
-    });
-    setName('');
-    setKind('DOG');
-    setSpecies('');
-    setWeight('');
-    setBreedSize('SMALL');
-    setVaccinated(false);
-    setVaccinationDate('');
-    setNextVaccinationDate('');
-    setPhotoUri(null);
-    setError(null);
+    };
+    if (editingId !== null) updatePet(editingId, payload);
+    else addPet(payload);
+    resetForm();
     setFormOpen(false);
   };
 
@@ -121,9 +146,14 @@ export default function PetsScreen() {
       subtitle="등록한 정보를 기준으로 출입 조건을 판별해요.">
       <View style={styles.list}>
         {pets.map((pet) => (
-          <View
+          <Pressable
             key={pet.petId}
-            style={[styles.card, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
+            onPress={() => openEdit(pet)}
+            style={({ pressed }) => [
+              styles.card,
+              CardShadow,
+              { backgroundColor: p.card, borderColor: p.line, opacity: pressed ? 0.94 : 1 },
+            ]}>
             <PetAvatar pet={pet} size={50} />
             <View style={styles.info}>
               <Text style={[styles.name, { color: p.ink }]}>{pet.name}</Text>
@@ -160,7 +190,10 @@ export default function PetsScreen() {
                       다음 접종 {next} · {overdue ? `${-dday}일 지남` : `D-${dday}`}
                     </Text>
                     <Pressable
-                      onPress={() => !added && addVaxToCalendar(pet.petId, pet.species, next)}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        if (!added) addVaxToCalendar(pet.petId, pet.species, next);
+                      }}
                       hitSlop={6}
                       style={[styles.vaxBtn, { backgroundColor: added ? p.successSoft : p.accentSoft }]}>
                       <Ionicons
@@ -177,18 +210,23 @@ export default function PetsScreen() {
               })()}
             </View>
             <Pressable
-              onPress={() => removePet(pet.petId)}
+              onPress={(e) => {
+                e.stopPropagation();
+                removePet(pet.petId);
+              }}
               hitSlop={10}
               style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
               <Ionicons name="trash-outline" size={18} color={p.muted} />
             </Pressable>
-          </View>
+          </Pressable>
         ))}
       </View>
 
       {formOpen ? (
         <View style={[styles.form, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
-          <Text style={[styles.formTitle, { color: p.ink }]}>새 반려동물 등록</Text>
+          <Text style={[styles.formTitle, { color: p.ink }]}>
+            {editingId !== null ? '반려동물 수정' : '새 반려동물 등록'}
+          </Text>
 
           <Pressable onPress={pickPhoto} style={styles.photoPick}>
             {photoUri ? (
@@ -302,7 +340,7 @@ export default function PetsScreen() {
             <Pressable
               onPress={() => {
                 setFormOpen(false);
-                setError(null);
+                resetForm();
               }}
               style={({ pressed }) => [
                 styles.button,
@@ -316,13 +354,18 @@ export default function PetsScreen() {
                 styles.button,
                 { backgroundColor: pressed ? p.accentDark : p.accent },
               ]}>
-              <Text style={[styles.buttonLabel, { color: p.onAccent }]}>등록</Text>
+              <Text style={[styles.buttonLabel, { color: p.onAccent }]}>
+                {editingId !== null ? '수정 완료' : '등록'}
+              </Text>
             </Pressable>
           </View>
         </View>
       ) : (
         <Pressable
-          onPress={() => setFormOpen(true)}
+          onPress={() => {
+            resetForm();
+            setFormOpen(true);
+          }}
           style={({ pressed }) => [
             styles.addButton,
             { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },

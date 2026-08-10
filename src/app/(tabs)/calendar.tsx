@@ -168,6 +168,9 @@ export default function CalendarScreen() {
             e={e}
             petName={petName(e.petId)}
             taken={e.type === 'MED' ? isMedTaken(e.eventId, selected) : false}
+            onEdit={() =>
+              router.push({ pathname: '/calendar-event', params: { eventId: String(e.eventId) } })
+            }
             onToggleTaken={() => toggleMedTaken(e.eventId, selected)}
             onToggleReminder={() => toggleEventReminder(e.eventId)}
             onDelete={() => removeCalendarEvent(e.eventId)}
@@ -198,6 +201,7 @@ function EventRow({
   e,
   petName,
   taken,
+  onEdit,
   onToggleTaken,
   onToggleReminder,
   onDelete,
@@ -205,6 +209,7 @@ function EventRow({
   e: CalendarEvent;
   petName: string;
   taken: boolean;
+  onEdit: () => void;
   onToggleTaken: () => void;
   onToggleReminder: () => void;
   onDelete: () => void;
@@ -215,7 +220,13 @@ function EventRow({
     .filter(Boolean)
     .join(' · ');
   return (
-    <View style={[styles.row, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
+    <Pressable
+      onPress={onEdit}
+      style={({ pressed }) => [
+        styles.row,
+        CardShadow,
+        { backgroundColor: p.card, borderColor: p.line, opacity: pressed ? 0.94 : 1 },
+      ]}>
       <View style={[styles.rowIcon, { backgroundColor: meta.soft }]}>
         <Ionicons name={meta.icon as never} size={18} color={meta.color} />
       </View>
@@ -232,7 +243,10 @@ function EventRow({
         {e.notes ? <Text style={[styles.rowNotes, { color: p.muted }]}>{e.notes}</Text> : null}
         {e.type === 'MED' && (
           <Pressable
-            onPress={onToggleTaken}
+            onPress={(ev) => {
+              ev.stopPropagation();
+              onToggleTaken();
+            }}
             style={[
               styles.takenBtn,
               taken
@@ -251,18 +265,28 @@ function EventRow({
         )}
       </View>
       <View style={styles.rowActions}>
-        <Pressable onPress={onToggleReminder} hitSlop={6}>
+        <Pressable
+          onPress={(ev) => {
+            ev.stopPropagation();
+            onToggleReminder();
+          }}
+          hitSlop={6}>
           <Ionicons
             name={e.reminder ? 'notifications' : 'notifications-off-outline'}
             size={18}
             color={e.reminder ? p.accent : p.muted}
           />
         </Pressable>
-        <Pressable onPress={onDelete} hitSlop={6}>
+        <Pressable
+          onPress={(ev) => {
+            ev.stopPropagation();
+            onDelete();
+          }}
+          hitSlop={6}>
           <Ionicons name="trash-outline" size={17} color={p.muted} />
         </Pressable>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

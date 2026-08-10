@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { type ComponentProps } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -26,10 +26,13 @@ export default function OwnerDashboard() {
   const owned = Object.values(businessRegs)
     .map((reg) => FACILITIES.find((f) => f.facilityId === reg.facilityId))
     .filter((f): f is NonNullable<typeof f> => !!f);
-  // 관리 메뉴는 대표(첫) 매장 기준으로 연다 — 데모는 보통 한 곳
-  const primaryId = owned[0]?.facilityId;
+  // 매장이 여러 곳이면 관리 대상 매장을 고를 수 있다
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const activeId = selectedId ?? owned[0]?.facilityId ?? null;
+  const multi = owned.length > 1;
+  const activeName = owned.find((f) => f.facilityId === activeId)?.name;
   const go = (path: '/owner/promotion' | '/owner/benefits' | '/owner/stats') =>
-    primaryId != null && router.push({ pathname: path, params: { facilityId: String(primaryId) } });
+    activeId != null && router.push({ pathname: path, params: { facilityId: String(activeId) } });
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]} edges={['top']}>
@@ -68,14 +71,31 @@ export default function OwnerDashboard() {
               const checkCount = checks.filter((c) => c.facilityId === f.facilityId).length;
               return (
                 <View key={f.facilityId} style={styles.storeBlock}>
-                  {/* 매장 요약 */}
-                  <View style={[styles.card, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
+                  {/* 매장 요약 — 매장이 여러 곳이면 탭해서 관리 대상으로 선택 */}
+                  <Pressable
+                    onPress={multi ? () => setSelectedId(f.facilityId) : undefined}
+                    style={[
+                      styles.card,
+                      CardShadow,
+                      {
+                        backgroundColor: p.card,
+                        borderColor: multi && f.facilityId === activeId ? p.accent : p.line,
+                        borderWidth: multi && f.facilityId === activeId ? 1.5 : StyleSheet.hairlineWidth,
+                      },
+                    ]}>
                     <View style={styles.storeHead}>
                       <Text style={[styles.storeName, { color: p.ink }]}>{f.name}</Text>
-                      <View style={[styles.confirmBadge, { backgroundColor: p.successSoft }]}>
-                        <Ionicons name="shield-checkmark" size={12} color={p.success} />
-                        <Text style={[styles.confirmText, { color: p.success }]}>확정 · 사업자 확인</Text>
-                      </View>
+                      {multi && f.facilityId === activeId ? (
+                        <View style={[styles.confirmBadge, { backgroundColor: p.accentSoft }]}>
+                          <Ionicons name="radio-button-on" size={12} color={p.accent} />
+                          <Text style={[styles.confirmText, { color: p.accent }]}>관리 중</Text>
+                        </View>
+                      ) : (
+                        <View style={[styles.confirmBadge, { backgroundColor: p.successSoft }]}>
+                          <Ionicons name="shield-checkmark" size={12} color={p.success} />
+                          <Text style={[styles.confirmText, { color: p.success }]}>확정 · 사업자 확인</Text>
+                        </View>
+                      )}
                     </View>
                     <View style={styles.metrics}>
                       <Metric label="발자국 등급">
@@ -94,7 +114,7 @@ export default function OwnerDashboard() {
                         <Text style={[styles.metricValue, { color: p.ink }]}>{grade.count}건</Text>
                       </Metric>
                     </View>
-                  </View>
+                  </Pressable>
 
                   {/* 거부 제보 알림 */}
                   {denials.length > 0 && (
@@ -118,9 +138,11 @@ export default function OwnerDashboard() {
             })
           )}
 
-          {/* 관리 메뉴 */}
+          {/* 관리 메뉴 — 여러 매장이면 위에서 선택한 매장 기준 */}
           <View style={styles.menuGroup}>
-            <Text style={[styles.menuHead, { color: p.muted }]}>매장 관리</Text>
+            <Text style={[styles.menuHead, { color: p.muted }]}>
+              {multi && activeName ? `매장 관리 · ${activeName}` : '매장 관리'}
+            </Text>
             <View style={[styles.menuCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
               <MenuRow
                 icon="clipboard-outline"

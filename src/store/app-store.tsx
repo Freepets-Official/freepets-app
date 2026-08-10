@@ -185,9 +185,12 @@ export interface NewReview {
 }
 
 interface AppStore {
+  /** 내 사용자 id — 내가 쓴 리뷰 구분 등에 쓴다 */
+  myUserId: number;
   pets: Pet[];
   addPet: (input: Omit<Pet, 'petId'>) => void;
   removePet: (petId: number) => void;
+  updatePet: (petId: number, patch: Partial<Omit<Pet, 'petId'>>) => void;
 
   checks: PetCheck[];
   /** 선택한 여러 마리를 한 번에 판별한다 */
@@ -199,6 +202,7 @@ interface AppStore {
   reviews: Review[];
   reviewsOf: (facilityId: number) => Review[];
   addReview: (input: NewReview) => void;
+  removeReview: (reviewId: number) => void;
   /** 해당 시설에 판별 이력이 있어야 리뷰 작성 자격이 생긴다 */
   canReview: (facilityId: number) => boolean;
   myReviewFor: (facilityId: number) => Review | undefined;
@@ -266,6 +270,7 @@ interface AppStore {
   calendarEvents: CalendarEvent[];
   addCalendarEvent: (input: Omit<CalendarEvent, 'eventId'>) => void;
   removeCalendarEvent: (eventId: number) => void;
+  updateCalendarEvent: (eventId: number, patch: Partial<Omit<CalendarEvent, 'eventId'>>) => void;
   toggleEventReminder: (eventId: number) => void;
   /** 특정 날짜(YYYY-MM-DD)의 일정 (반복 반영) — 시간순 */
   eventsOn: (date: string) => CalendarEvent[];
@@ -327,6 +332,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const removePet = useCallback((petId: number) => {
     setPets((prev) => prev.filter((p) => p.petId !== petId));
+  }, []);
+
+  const updatePet = useCallback((petId: number, patch: Partial<Omit<Pet, 'petId'>>) => {
+    setPets((prev) => prev.map((p) => (p.petId === petId ? { ...p, ...patch } : p)));
   }, []);
 
   const upcomingVaccinations = useCallback(() => {
@@ -419,6 +428,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     },
     [pets, account.nickname],
   );
+
+  const removeReview = useCallback((reviewId: number) => {
+    setReviews((prev) => prev.filter((r) => r.reviewId !== reviewId));
+  }, []);
 
   const addReport = useCallback(
     (
@@ -683,6 +696,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setCalendarEvents((prev) => prev.filter((e) => e.eventId !== eventId));
   }, []);
 
+  const updateCalendarEvent = useCallback(
+    (eventId: number, patch: Partial<Omit<CalendarEvent, 'eventId'>>) => {
+      setCalendarEvents((prev) => prev.map((e) => (e.eventId === eventId ? { ...e, ...patch } : e)));
+    },
+    [],
+  );
+
   const toggleEventReminder = useCallback((eventId: number) => {
     setCalendarEvents((prev) =>
       prev.map((e) => (e.eventId === eventId ? { ...e, reminder: !e.reminder } : e)),
@@ -744,15 +764,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
+      myUserId: MY_USER_ID,
       pets,
       addPet,
       removePet,
+      updatePet,
       checks,
       runCheck,
       upcomingVaccinations,
       reviews,
       reviewsOf,
       addReview,
+      removeReview,
       canReview,
       myReviewFor,
       reports,
@@ -789,6 +812,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       calendarEvents,
       addCalendarEvent,
       removeCalendarEvent,
+      updateCalendarEvent,
       toggleEventReminder,
       eventsOn,
       toggleMedTaken,
@@ -806,12 +830,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       pets,
       addPet,
       removePet,
+      updatePet,
       checks,
       runCheck,
       upcomingVaccinations,
       reviews,
       reviewsOf,
       addReview,
+      removeReview,
       canReview,
       myReviewFor,
       reports,
@@ -848,6 +874,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       calendarEvents,
       addCalendarEvent,
       removeCalendarEvent,
+      updateCalendarEvent,
       toggleEventReminder,
       eventsOn,
       toggleMedTaken,
