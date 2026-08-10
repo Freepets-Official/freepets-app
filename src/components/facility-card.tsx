@@ -35,9 +35,11 @@ export function FacilityCard({ facility }: { facility: Facility }) {
         { backgroundColor: p.card, borderColor: p.line, opacity: pressed ? 0.92 : 1 },
       ]}>
       <View style={styles.topRow}>
-        <Text style={[styles.category, { color: p.accent }]}>
+        <Animated.Text
+          sharedTransitionTag={`fac-cat-${facility.facilityId}`}
+          style={[styles.category, { color: p.accent }]}>
           {CATEGORY_LABEL[facility.category]}
-        </Text>
+        </Animated.Text>
         <View style={styles.topBadges}>
           <ConfidenceBadge confidence={confidence} size="sm" />
           <PetAllowedBadge allowed={facility.petAllowed} />
@@ -51,12 +53,12 @@ export function FacilityCard({ facility }: { facility: Facility }) {
         {facility.name}
       </Animated.Text>
       {grade.level !== null && (
-        <View style={styles.pawRow}>
+        <Animated.View sharedTransitionTag={`fac-paw-${facility.facilityId}`} style={styles.pawRow}>
           <PawBadge grade={grade} size="sm" showLabel={false} />
           <Text style={[styles.pawLabel, { color: p.accent }]}>
             {grade.label} · 리뷰 {grade.count}
           </Text>
-        </View>
+        </Animated.View>
       )}
       <Text style={[styles.address, { color: p.muted }]} numberOfLines={1}>
         {facility.address}

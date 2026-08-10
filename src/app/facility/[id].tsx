@@ -166,20 +166,22 @@ export default function FacilityDetailScreen() {
     <Screen>
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={[styles.category, { color: p.accent }]}>
+          {/* 카드에서 이어지는 shared element — 카테고리·이름·발자국 3개가 함께 흐른다 */}
+          <Animated.Text
+            sharedTransitionTag={`fac-cat-${facility.facilityId}`}
+            style={[styles.category, { color: p.accent }]}>
             {CATEGORY_LABEL[facility.category]}
-          </Text>
+          </Animated.Text>
           <PetAllowedBadge allowed={facility.petAllowed} />
         </View>
-        {/* 카드에서 이어지는 shared element (같은 태그) */}
         <Animated.Text
           sharedTransitionTag={`fac-name-${facility.facilityId}`}
           style={[styles.name, { color: p.ink }]}>
           {facility.name}
         </Animated.Text>
-        <View style={styles.pawRow}>
+        <Animated.View sharedTransitionTag={`fac-paw-${facility.facilityId}`} style={styles.pawRow}>
           <PawBadge grade={pawGradeOf(reviewsOf(facility.facilityId))} />
-        </View>
+        </Animated.View>
         <View style={styles.metaRow}>
           <Ionicons name="location" size={14} color={p.muted} />
           <Text style={[styles.meta, { color: p.muted }]}>
