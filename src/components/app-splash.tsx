@@ -1,94 +1,116 @@
+import { Image } from 'expo-image';
 import { useEffect } from 'react';
-import { StyleSheet, type TextStyle } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
+  interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withRepeat,
+  withSpring,
   withTiming,
-  type SharedValue,
 } from 'react-native-reanimated';
 
+import { Radius } from '@/constants/theme';
+
 /**
- * 앱 실행 인트로: 흰 배경에서 동물들과 '프리펫스'가 토독토독 뛰다가
- * 통째로 사라지며 홈으로 넘어간다.
+ * 앱 실행 인트로: 가운데 실사 강아지·고양이 사진이 뜨고,
+ * '프리펫스' 네 글자가 왼쪽에서 한 글자씩 튀어 들어와 가운데에 자리잡은 뒤
+ * 통째로 사라지며 다음 화면으로 넘어간다.
  */
 const LETTERS = ['프', '리', '펫', '스'];
-const ANIMALS = ['🐶', '🐱', '🐹', '🦜'];
+const PETS = require('../../assets/images/splash-pets.jpg');
+
+const LETTER_START = 620; // 사진이 자리잡은 뒤 글자 시작
+const LETTER_STAGGER = 155; // 글자 사이 간격
 
 export function AppSplash({ onDone }: { onDone: () => void }) {
-  const bounce = useSharedValue(0);
-  const gone = useSharedValue(0);
+  const intro = useSharedValue(0); // 사진 등장
+  const gone = useSharedValue(0); // 전체 페이드아웃
 
   useEffect(() => {
-    // 0→1을 반복하며 각 글자가 위상차를 두고 통통 뛴다
-    bounce.value = withRepeat(withTiming(1, { duration: 1000, easing: Easing.linear }), -1, false);
-    // 잠깐 뛰놀다가 페이드아웃 → onDone
+    intro.value = withTiming(1, { duration: 520, easing: Easing.out(Easing.cubic) });
+    // 글자가 다 들어오고 잠깐 머문 뒤 사라진다
+    const hold = LETTER_START + LETTERS.length * LETTER_STAGGER + 900;
     gone.value = withDelay(
-      1750,
-      withTiming(1, { duration: 440, easing: Easing.in(Easing.cubic) }, (finished) => {
+      hold,
+      withTiming(1, { duration: 460, easing: Easing.in(Easing.cubic) }, (finished) => {
         if (finished) runOnJS(onDone)();
       }),
     );
-  }, [bounce, gone, onDone]);
+  }, [intro, gone, onDone]);
 
   const wrapStyle = useAnimatedStyle(() => ({
     opacity: 1 - gone.value,
-    transform: [{ scale: 1 - gone.value * 0.08 }],
+    transform: [{ scale: 1 - gone.value * 0.06 }],
+  }));
+  const photoStyle = useAnimatedStyle(() => ({
+    opacity: intro.value,
+    transform: [{ scale: interpolate(intro.value, [0, 1], [0.9, 1]) }],
   }));
 
   return (
     <Animated.View style={[StyleSheet.absoluteFill, styles.wrap, wrapStyle]}>
-      <Animated.View style={styles.row}>
-        {ANIMALS.map((a, i) => (
-          <Hop key={a} bounce={bounce} index={i} style={styles.animal}>
-            {a}
-          </Hop>
-        ))}
+      <Animated.View style={[styles.photoCard, photoStyle]}>
+        <Image source={PETS} style={styles.photo} contentFit="cover" transition={200} />
       </Animated.View>
-      <Animated.View style={styles.row}>
+
+      <View style={styles.row}>
         {LETTERS.map((c, i) => (
-          <Hop key={c + i} bounce={bounce} index={i + 0.5} style={styles.letter}>
+          <Letter key={c + i} index={i}>
             {c}
-          </Hop>
+          </Letter>
         ))}
-      </Animated.View>
+      </View>
     </Animated.View>
   );
 }
 
-/** 위상차(index)를 두고 반쪽 사인파로 통통 뛰는 글자/이모지 */
-function Hop({
-  children,
-  bounce,
-  index,
-  style,
-}: {
-  children: string;
-  bounce: SharedValue<number>;
-  index: number;
-  style: TextStyle;
-}) {
-  const s = useAnimatedStyle(() => {
-    const ph = (bounce.value + index * 0.14) % 1;
-    const hop = Math.max(0, Math.sin(ph * Math.PI));
-    return { transform: [{ translateY: -18 * hop }, { scale: 1 + 0.1 * hop }] };
-  });
-  return <Animated.Text style={[style, s]}>{children}</Animated.Text>;
+/** 왼쪽에서 회전하며 튀어 들어와 스프링 바운스로 자리잡는 글자 */
+function Letter({ children, index }: { children: string; index: number }) {
+  const p = useSharedValue(0);
+
+  useEffect(() => {
+    p.value = withDelay(
+      LETTER_START + index * LETTER_STAGGER,
+      withSpring(1, { damping: 8, stiffness: 130, mass: 0.7 }),
+    );
+  }, [p, index]);
+
+  const s = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0, 0.25, 1], [0, 1, 1]),
+    transform: [
+      { translateX: interpolate(p.value, [0, 1], [-64, 0]) },
+      { rotate: `${interpolate(p.value, [0, 1], [-32, 0])}deg` },
+    ],
+  }));
+
+  return <Animated.Text style={[styles.letter, s]}>{children}</Animated.Text>;
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFF7FB',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 14,
+    gap: 26,
     zIndex: 100,
     pointerEvents: 'none',
   },
-  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
-  animal: { fontSize: 30 },
+  photoCard: {
+    width: 216,
+    height: 216,
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    backgroundColor: '#F3E4EC',
+    shadowColor: '#E86397',
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  photo: { width: '100%', height: '100%' },
+  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
   letter: { color: '#E86397', fontSize: 46, fontWeight: '900', letterSpacing: -1 },
 });
