@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppLogo } from '@/components/app-logo';
 import { SocialButtons } from '@/components/social-buttons';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
@@ -49,9 +50,7 @@ export default function SignupScreen() {
           showsVerticalScrollIndicator={false}>
           <View style={styles.inner}>
             <View style={styles.head}>
-              <View style={[styles.logo, { backgroundColor: p.accentSoft }]}>
-                <Ionicons name="paw" size={24} color={p.accent} />
-              </View>
+              <AppLogo size={52} />
               <Text style={[styles.title, { color: p.ink }]}>회원가입</Text>
               <Text style={[styles.sub, { color: p.muted }]}>
                 이메일로 시작하거나 소셜 계정으로 간편하게 가입하세요.

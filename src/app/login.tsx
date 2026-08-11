@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppLogo } from '@/components/app-logo';
 import { LoginScene } from '@/components/login-scene';
 import { SocialButtons } from '@/components/social-buttons';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -43,9 +44,7 @@ export default function LoginScreen() {
 
             {/* 브랜드 */}
             <View style={styles.brand}>
-              <View style={[styles.logo, { backgroundColor: p.accentSoft }]}>
-                <Ionicons name="paw" size={30} color={p.accent} />
-              </View>
+              <AppLogo size={68} />
               <Text style={[styles.wordmark, { color: p.ink }]}>프리펫스</Text>
               <Text style={[styles.tagline, { color: p.muted }]}>
                 반려동물과 어디를 가든, 문 앞에서 거부당하지 않게.
