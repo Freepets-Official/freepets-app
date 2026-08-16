@@ -23,7 +23,8 @@ function useAuthGate() {
 
   useEffect(() => {
     const seg = segments[0];
-    const onAuth = seg === 'login' || seg === 'signup';
+    // verify-email도 가입 흐름의 일부라 미인증 상태에서 접근을 허용한다
+    const onAuth = seg === 'login' || seg === 'signup' || seg === 'verify-email';
     const onPicker = seg === 'profile-select';
 
     if (!session.authed) {
@@ -51,6 +52,7 @@ function RootNavigator() {
       {/* 인증 게이트 화면은 replace로 갈아끼우므로 슬라이드보다 페이드가 자연스럽다 */}
       <Stack.Screen name="login" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="signup" options={{ headerShown: false, animation: 'fade' }} />
+      <Stack.Screen name="verify-email" options={{ headerShown: false, animation: 'slide_from_right' }} />
       <Stack.Screen name="profile-select" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="owner-dashboard" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'fade' }} />

@@ -33,10 +33,10 @@ export default function SignupScreen() {
   const matchOk = pw2.length > 0 && pw === pw2;
   const canSubmit = emailOk && pwOk && matchOk && agree;
 
-  // 데모: 가입 = 소비자 계정 생성 + 자동 로그인. 사업자 프로필은 앱 안에서 매장 등록 시 생긴다.
+  // 이메일 가입은 인증 코드 확인을 거친다 → 인증 화면으로. (자동 로그인은 인증 성공 후)
   const submit = () => {
     if (!canSubmit) return;
-    login(email.trim());
+    router.push({ pathname: '/verify-email', params: { email: email.trim() } });
   };
 
   return (
