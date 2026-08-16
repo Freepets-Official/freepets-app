@@ -37,7 +37,12 @@ export default function HomeScreen() {
   const vax = upcomingVaccinations();
 
   return (
-    <Screen eyebrow={greeting()} title="반려동물 여권" subtitle="아이마다 좋아한 장소를 한눈에 확인하세요.">
+    <Screen
+      eyebrow={greeting()}
+      title="반려동물 여권"
+      subtitle="아이마다 좋아한 장소를 한눈에 확인하세요."
+      // 데모: 당기면 발자국 연출 후 마무리. 백엔드 연동 시 실제 데이터 새로고침으로 교체.
+      onRefresh={() => new Promise((r) => setTimeout(r, 800))}>
       {/* 가려던 곳(판별받은 시설)에 거부가 뜨면 홈에서 먼저 알린다 */}
       {alerts.length > 0 && (
         <View style={styles.alertWrap}>

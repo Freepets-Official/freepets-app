@@ -1,10 +1,13 @@
-import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PullPaws } from '@/components/pull-paws';
 import { useTabChrome } from '@/components/tab-bar';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
+
+const PULL_THRESHOLD = 64;
 
 interface ScreenProps {
   children: ReactNode;
@@ -12,19 +15,54 @@ interface ScreenProps {
   title?: string;
   eyebrow?: string;
   subtitle?: string;
+  /** 넘기면 당겨서 새로고침(발자국) 활성화. 데모는 연출용, 백엔드 연동 시 실 새로고침. */
+  onRefresh?: () => void | Promise<void>;
 }
 
-export function Screen({ children, title, eyebrow, subtitle }: ScreenProps) {
+export function Screen({ children, title, eyebrow, subtitle, onRefresh }: ScreenProps) {
   const p = usePalette();
   const chrome = useTabChrome();
+  const [pull, setPull] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    chrome?.onScroll();
+    if (!onRefresh || refreshing) return;
+    const y = e.nativeEvent.contentOffset.y;
+    const next = y < 0 ? Math.min(-y, PULL_THRESHOLD + 24) : 0;
+    setPull((prev) => (prev === next ? prev : next)); // 같은 값이면 리렌더 생략
+  };
+
+  const handleEndDrag = () => {
+    if (!onRefresh || refreshing) return;
+    if (pull >= PULL_THRESHOLD) {
+      setRefreshing(true);
+      setPull(PULL_THRESHOLD);
+      Promise.resolve(onRefresh()).finally(() =>
+        setTimeout(() => {
+          setRefreshing(false);
+          setPull(0);
+        }, 700),
+      );
+    } else {
+      setPull(0);
+    }
+  };
+
   return (
     <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
+      {onRefresh && (pull > 0 || refreshing) ? (
+        <View style={styles.pullArea}>
+          <PullPaws progress={pull / PULL_THRESHOLD} refreshing={refreshing} />
+        </View>
+      ) : null}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        scrollEventThrottle={64}
-        onScroll={chrome ? () => chrome.onScroll() : undefined}
+        scrollEventThrottle={16}
+        onScroll={handleScroll}
+        onScrollEndDrag={handleEndDrag}
         keyboardShouldPersistTaps="handled">
         <View style={styles.inner}>
           {(title || eyebrow) && (
@@ -43,6 +81,8 @@ export function Screen({ children, title, eyebrow, subtitle }: ScreenProps) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  // 당겨서 새로고침 발자국이 콘텐츠 상단 뒤에서 보이도록
+  pullArea: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center', paddingTop: Spacing.md, zIndex: 1 },
   scroll: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 104 },
   inner: {
