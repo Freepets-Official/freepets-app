@@ -27,6 +27,8 @@ import {
   ymd,
   type PetCheck,
 } from '@/data/types';
+import { PawBurst } from '@/components/paw-burst';
+import { StampIn } from '@/components/stamp-in';
 import { haptic } from '@/lib/haptics';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
@@ -373,9 +375,9 @@ export default function FacilityDetailScreen() {
 
       {check && tone && (
         <>
-          <Animated.View
-            entering={FadeInDown.duration(320)}
-            style={[styles.resultCard, { backgroundColor: tone.soft, borderColor: tone.color }]}>
+          <StampIn style={[styles.resultCard, { backgroundColor: tone.soft, borderColor: tone.color }]}>
+            {/* 가능·조건부면 발자국 버스트로 축하 */}
+            {check.overall !== 'DENIED' && <PawBurst color={tone.color} />}
             <View style={styles.resultTop}>
               <Text style={[styles.resultTitle, { color: tone.color }]}>{overallTitle}</Text>
               <ResultBadge result={check.overall} />
@@ -415,7 +417,7 @@ export default function FacilityDetailScreen() {
                 );
               })}
             </View>
-          </Animated.View>
+          </StampIn>
 
           {check.checklist.length > 0 && (
             <Animated.View
