@@ -29,7 +29,7 @@ export default function SignupScreen() {
   const [agree, setAgree] = useState(false);
 
   const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
-  const pwOk = pw.length >= 6;
+  const pwOk = pw.length >= 8;
   const matchOk = pw2.length > 0 && pw === pw2;
   const canSubmit = emailOk && pwOk && matchOk && agree;
 
@@ -70,9 +70,9 @@ export default function SignupScreen() {
                 icon="lock-closed-outline"
                 value={pw}
                 onChangeText={setPw}
-                placeholder="비밀번호 (6자 이상)"
+                placeholder="비밀번호 (8자 이상)"
                 secureTextEntry
-                hint={pw.length > 0 && !pwOk ? '6자 이상 입력해주세요' : undefined}
+                hint={pw.length > 0 && !pwOk ? '8자 이상 입력해주세요' : undefined}
               />
               <Field
                 icon="lock-closed-outline"
