@@ -12,7 +12,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Radius } from '@/constants/theme';
 
 /**
  * 앱 실행 인트로: 가운데 실사 강아지·고양이 사진이 뜨고,
@@ -20,7 +19,7 @@ import { Radius } from '@/constants/theme';
  * 통째로 사라지며 다음 화면으로 넘어간다.
  */
 const LETTERS = ['프', '리', '펫', '스'];
-const PETS = require('../../assets/images/splash-pets.jpg');
+const PETS = require('../../assets/images/splash-art.png');
 
 const LETTER_START = 620; // 사진이 자리잡은 뒤 글자 시작
 const LETTER_STAGGER = 155; // 글자 사이 간격
@@ -53,7 +52,7 @@ export function AppSplash({ onDone }: { onDone: () => void }) {
   return (
     <Animated.View style={[StyleSheet.absoluteFill, styles.wrap, wrapStyle]}>
       <Animated.View style={[styles.photoCard, photoStyle]}>
-        <Image source={PETS} style={styles.photo} contentFit="cover" transition={200} />
+        <Image source={PETS} style={styles.photo} contentFit="contain" transition={200} />
       </Animated.View>
 
       <View style={styles.row}>
@@ -98,17 +97,10 @@ const styles = StyleSheet.create({
     zIndex: 100,
     pointerEvents: 'none',
   },
+  // 테두리·배경 없이 그림만 — 흰 배경에 동화된다
   photoCard: {
-    width: 216,
-    height: 216,
-    borderRadius: Radius.xl,
-    overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000000',
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    width: 240,
+    height: 240,
   },
   photo: { width: '100%', height: '100%' },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
