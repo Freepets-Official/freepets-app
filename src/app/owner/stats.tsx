@@ -3,6 +3,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CountUp } from '@/components/count-up';
 import { PawBadge } from '@/components/paw-badge';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { FACILITIES } from '@/data/mock';
@@ -67,11 +68,11 @@ export default function StatsScreen() {
             </View>
             <View style={[styles.kpi, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
               <Text style={[styles.kpiLabel, { color: p.muted }]}>리뷰</Text>
-              <Text style={[styles.kpiValue, { color: p.ink }]}>{grade.count}건</Text>
+              <CountUp style={[styles.kpiValue, { color: p.ink }]} value={grade.count} suffix="건" />
             </View>
             <View style={[styles.kpi, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
               <Text style={[styles.kpiLabel, { color: p.muted }]}>이번 주 판별</Text>
-              <Text style={[styles.kpiValue, { color: p.ink }]}>{checkCount}회</Text>
+              <CountUp style={[styles.kpiValue, { color: p.ink }]} value={checkCount} suffix="회" />
             </View>
           </View>
 
@@ -94,7 +95,7 @@ export default function StatsScreen() {
                       ]}
                     />
                   </View>
-                  <Text style={[styles.barValue, { color: p.muted }]}>{b.value.toFixed(1)}</Text>
+                  <CountUp style={[styles.barValue, { color: p.muted }]} value={b.value} decimals={1} />
                 </View>
               ))
             )}

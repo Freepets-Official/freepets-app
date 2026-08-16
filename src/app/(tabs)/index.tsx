@@ -19,6 +19,16 @@ function formatDate(iso: string): string {
   ).padStart(2, '0')}`;
 }
 
+/** 시간대별 인사 — 홈을 열 때마다 조금씩 다른 온기를 준다 */
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 6) return '편안한 밤이에요 🌙';
+  if (h < 11) return '좋은 아침이에요 🐾';
+  if (h < 17) return '좋은 오후예요 🐾';
+  if (h < 21) return '좋은 저녁이에요 🐾';
+  return '편안한 밤이에요 🌙';
+}
+
 export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
@@ -27,7 +37,7 @@ export default function HomeScreen() {
   const vax = upcomingVaccinations();
 
   return (
-    <Screen eyebrow="우리 아이들" title="반려동물 여권" subtitle="아이마다 좋아한 장소를 한눈에 확인하세요.">
+    <Screen eyebrow={greeting()} title="반려동물 여권" subtitle="아이마다 좋아한 장소를 한눈에 확인하세요.">
       {/* 가려던 곳(판별받은 시설)에 거부가 뜨면 홈에서 먼저 알린다 */}
       {alerts.length > 0 && (
         <View style={styles.alertWrap}>
