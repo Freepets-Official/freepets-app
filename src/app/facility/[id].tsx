@@ -27,6 +27,7 @@ import {
   ymd,
   type PetCheck,
 } from '@/data/types';
+import { haptic } from '@/lib/haptics';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -103,6 +104,9 @@ export default function FacilityDetailScreen() {
       setCheck(result);
       setDone(new Set());
       setLoading(false);
+      // 판별 결과에 맞는 햅틱 — 불가면 경고, 그 외 성공
+      if (result?.overall === 'DENIED') haptic.warning();
+      else if (result) haptic.success();
       // 여행 자동 기록(설정 허용 시) — 판별받고 방문하려는 곳을 캘린더 여행 일정으로 남긴다
       if (result && result.overall !== 'DENIED' && settings.autoTravelLog) {
         const title = `${facility.name} 방문`;

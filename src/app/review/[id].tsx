@@ -8,6 +8,7 @@ import { StarInput } from '@/components/star-rating';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import { FACILITIES } from '@/data/mock';
 import { PET_KIND_LABEL, REVIEW_TAG_LABEL, type ReviewTag } from '@/data/types';
+import { haptic } from '@/lib/haptics';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -65,6 +66,7 @@ export default function ReviewWriteScreen() {
       content: content.trim() || null,
       tags,
     });
+    haptic.success();
     router.back();
   };
 
