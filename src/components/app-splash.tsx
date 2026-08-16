@@ -91,7 +91,7 @@ function Letter({ children, index }: { children: string; index: number }) {
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: '#FFF7FB',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 26,
@@ -103,12 +103,12 @@ const styles = StyleSheet.create({
     height: 216,
     borderRadius: Radius.xl,
     overflow: 'hidden',
-    backgroundColor: '#F3E4EC',
-    shadowColor: '#E86397',
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   photo: { width: '100%', height: '100%' },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },

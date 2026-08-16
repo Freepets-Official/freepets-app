@@ -17,7 +17,14 @@ export function AppLogo({ size = 64 }: { size?: number }) {
     <View
       style={[
         styles.box,
-        { width: size, height: size, borderRadius: radius, backgroundColor: p.accentSoft },
+        {
+          width: size,
+          height: size,
+          borderRadius: radius,
+          backgroundColor: '#FFFFFF',
+          borderWidth: 1,
+          borderColor: p.line,
+        },
       ]}>
       <Image source={LOGO} style={{ width: size * 0.86, height: size * 0.86 }} contentFit="contain" />
     </View>
