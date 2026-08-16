@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { PetAllowedBadge } from '@/components/badge';
+import { PressableScale } from '@/components/pressable-scale';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { DenialAlert } from '@/components/denial-alert';
 import { PawBadge } from '@/components/paw-badge';
@@ -25,15 +26,11 @@ export function FacilityCard({ facility }: { facility: Facility }) {
   facility.requirements.forEach((r) => conditions.push(REQUIREMENT_LABEL[r]));
 
   return (
-    <Pressable
+    <PressableScale
       onPress={() =>
         router.push({ pathname: '/facility/[id]', params: { id: String(facility.facilityId) } })
       }
-      style={({ pressed }) => [
-        styles.card,
-        CardShadow,
-        { backgroundColor: p.card, borderColor: p.line, opacity: pressed ? 0.92 : 1 },
-      ]}>
+      style={[styles.card, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
       <View style={styles.topRow}>
         <Animated.Text
           sharedTransitionTag={`fac-cat-${facility.facilityId}`}
@@ -81,7 +78,7 @@ export function FacilityCard({ facility }: { facility: Facility }) {
           </Text>
         )}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
