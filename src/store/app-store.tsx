@@ -286,8 +286,12 @@ interface AppStore {
   session: Session;
   /** 이 계정이 가진 프로필들 — 소비자는 항상, 사업자는 매장을 등록했을 때 생긴다 */
   availableProfiles: ProfileKind[];
-  /** 데모 로그인 — 프로필이 하나면 자동 진입, 둘이면 프로필 선택으로 */
+  /** (소셜 데모용) 세션만 설정 — 프로필이 하나면 자동 진입, 둘이면 프로필 선택으로 */
   login: (email: string) => void;
+  /** 백엔드 로그인 성공 시 — 토큰 저장 + 세션 설정 */
+  authenticate: (email: string, tokens: { accessToken: string; refreshToken: string }) => void;
+  /** 현재 액세스 토큰(인증 헤더용). 미로그인이면 null */
+  accessToken: string | null;
   logout: () => void;
   /** 프로필 선택(넷플릭스식) — 고른 프로필로 화면 세트가 바뀐다 */
   selectProfile: (kind: ProfileKind) => void;
@@ -315,6 +319,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [promotions, setPromotions] = useState<Record<number, Promotion>>({});
   const [benefits, setBenefits] = useState<Record<number, Benefit[]>>({});
   const [session, setSession] = useState<Session>({ authed: false, email: null, activeProfile: null });
+  // 백엔드 인증 토큰(메모리 보관). 영속 저장(SecureStore)은 후속 과제.
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const refreshTokenRef = useRef<string | null>(null);
   const [account, setAccount] = useState<Account>({ nickname: '나', avatarUri: null });
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(INITIAL_CAL_EVENTS);
   // 약 복용 기록 — "eventId:YYYY-MM-DD" 집합
@@ -746,7 +753,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     });
   }, [businessRegs]);
 
+  const authenticate = useCallback(
+    (email: string, tokens: { accessToken: string; refreshToken: string }) => {
+      setAccessToken(tokens.accessToken);
+      refreshTokenRef.current = tokens.refreshToken;
+      setSession({
+        authed: true,
+        email,
+        activeProfile: Object.keys(businessRegs).length > 0 ? null : 'consumer',
+      });
+    },
+    [businessRegs],
+  );
+
   const logout = useCallback(() => {
+    setAccessToken(null);
+    refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
   }, []);
 
@@ -820,6 +842,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       session,
       availableProfiles,
       login,
+      authenticate,
+      accessToken,
       logout,
       selectProfile,
       switchProfile,
@@ -882,6 +906,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       session,
       availableProfiles,
       login,
+      authenticate,
+      accessToken,
       logout,
       selectProfile,
       switchProfile,

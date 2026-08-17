@@ -7,7 +7,17 @@
     "icon": "./assets/images/icon.png",
     "scheme": "freepets",
     "userInterfaceStyle": "light",
-    "ios": {},
+    "ios": {
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSExceptionDomains": {
+            "54.116.37.26": {
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            }
+          }
+        }
+      }
+    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
@@ -15,6 +25,7 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "usesCleartextTraffic": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
