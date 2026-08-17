@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -264,32 +265,68 @@ function StackCard({
 }
 
 /** 여권 카드 내용(테두리 카드 안에 들어가는 본문) — 원형 프로필 + 좋아한 곳 TOP 3 */
+/**
+ * 반려동물 레벨(게임 요소) — 방문/판별 활동으로 XP를 쌓는다.
+ * ⚠️ 임시 공식(placeholder). 정식 레벨/보상 체계 정해지면 교체.
+ */
+function petProgress(xpRaw: number) {
+  const STEP = 40;
+  const level = 1 + Math.floor(xpRaw / STEP);
+  const into = xpRaw % STEP;
+  const title = level >= 6 ? '여행 마스터' : level >= 4 ? '여행 탐험가' : level >= 2 ? '여행 새싹' : '첫 발자국';
+  return { level, into, step: STEP, ratio: into / STEP, title };
+}
+
 function PetCardBody({ pet }: { pet: Pet }) {
   const p = usePalette();
   const router = useRouter();
-  const { topPlacesForPet } = useAppStore();
+  const { topPlacesForPet, satisfactions, checks } = useAppStore();
   const top = topPlacesForPet(pet.petId, 3);
 
   const medal = ['🥇', '🥈', '🥉'];
 
+  // 활동 기반 XP(임시): 만족도 남긴 곳 ×12 + 판별 함께한 횟수 ×6
+  const visits = satisfactions.filter((s) => s.petId === pet.petId).length;
+  const judged = checks.filter((c) => c.verdicts.some((v) => v.petId === pet.petId)).length;
+  const { level, into, step, ratio, title } = petProgress(visits * 12 + judged * 6);
+
   return (
     <>
-      <View style={styles.idRow}>
-        <View style={[styles.avatarRing, { borderColor: p.accentSoft }]}>
-          <PetAvatar pet={pet} size={56} />
-        </View>
-        <View style={styles.idText}>
-          <Text style={[styles.petName, { color: p.ink }]}>{pet.name}</Text>
-          <View style={[styles.passTag, { backgroundColor: p.accentSoft }]}>
-            <Ionicons name="paw" size={11} color={p.accent} />
-            <Text style={[styles.passTagText, { color: p.accent }]}>프리펫스</Text>
+      {/* 게임 캐릭터 네임플레이트 — 그라디언트 배너 */}
+      <LinearGradient
+        colors={[p.accent, p.accentDark]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.banner}>
+        <View style={styles.portrait}>
+          <View style={styles.portraitRing}>
+            <PetAvatar pet={pet} size={54} />
+          </View>
+          <View style={styles.levelBadge}>
+            <Text style={[styles.levelText, { color: p.accentDark }]}>Lv.{level}</Text>
           </View>
         </View>
-      </View>
+        <View style={styles.bannerInfo}>
+          <Text style={styles.gameName} numberOfLines={1}>
+            {pet.name}
+          </Text>
+          <View style={styles.rankChip}>
+            <Text style={styles.rankEmoji}>🏆</Text>
+            <Text style={styles.rankText}>{title}</Text>
+          </View>
+          <View style={styles.xpRow}>
+            <View style={styles.xpTrack}>
+              <View style={[styles.xpFill, { width: `${Math.max(6, ratio * 100)}%` }]} />
+            </View>
+            <Text style={styles.xpText}>
+              {into}/{step} XP
+            </Text>
+          </View>
+        </View>
+      </LinearGradient>
 
-      <View style={[styles.divider, { backgroundColor: p.line }]} />
-
-      <Text style={[styles.favTitle, { color: p.muted }]}>이 아이가 좋아한 곳 TOP 3</Text>
+      <View style={styles.bodyPad}>
+        <Text style={[styles.favTitle, { color: p.muted }]}>이 아이가 좋아한 곳 TOP 3</Text>
 
       {top.length === 0 ? (
         <Text style={[styles.favEmpty, { color: p.muted }]}>
@@ -329,6 +366,7 @@ function PetCardBody({ pet }: { pet: Pet }) {
           })}
         </View>
       )}
+      </View>
     </>
   );
 }
@@ -384,33 +422,75 @@ const styles = StyleSheet.create({
   },
   denialTitle: { fontSize: 14.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
   denialBody: { fontSize: 12.5, lineHeight: 18, color: 'rgba(255,255,255,0.92)' },
+  // 게임 프로필 카드 — 그라디언트 네임플레이트 + 발광 테두리
   card: {
     borderRadius: Radius.xl,
     borderWidth: 2,
-    padding: Spacing.xl,
-    gap: Spacing.md,
+    overflow: 'hidden',
+    // 액센트 글로우 (게임 카드 느낌)
+    shadowColor: '#E86397',
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
   stackItem: { position: 'absolute', top: 0, left: 0, right: 0 },
-  stackCard: { height: STACK_CARD_H, overflow: 'hidden' },
-  idRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.lg },
-  avatarRing: {
+  stackCard: { height: STACK_CARD_H },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+  },
+  portrait: { width: 60, height: 60 },
+  portraitRing: {
+    width: 60,
+    height: 60,
     borderRadius: Radius.full,
     borderWidth: 3,
-    padding: 2,
+    borderColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
-  idText: { gap: 6 },
-  petName: { fontSize: 22, fontWeight: '900', letterSpacing: -0.6 },
-  passTag: {
+  levelBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.full,
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  levelText: { fontSize: 11, fontWeight: '900', letterSpacing: -0.2 },
+  bannerInfo: { flex: 1, gap: 5 },
+  gameName: { fontSize: 21, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 },
+  rankChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.22)',
     borderRadius: Radius.full,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
   },
-  passTagText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
-  divider: { height: 1 },
+  rankEmoji: { fontSize: 11 },
+  rankText: { fontSize: 11.5, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.2 },
+  xpRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  xpTrack: {
+    flex: 1,
+    height: 7,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    overflow: 'hidden',
+  },
+  xpFill: { height: '100%', borderRadius: Radius.full, backgroundColor: '#FFFFFF' },
+  xpText: { fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.95)', fontVariant: ['tabular-nums'] },
+  bodyPad: { padding: Spacing.xl, gap: Spacing.md },
   favTitle: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
   favEmpty: { fontSize: 13, lineHeight: 20 },
   favList: { gap: Spacing.sm },
