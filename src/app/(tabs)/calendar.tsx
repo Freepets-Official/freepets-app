@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
+    paddingTop: Spacing.xl,
     paddingBottom: Spacing.sm,
   },
   eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },

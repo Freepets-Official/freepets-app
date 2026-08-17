@@ -23,7 +23,10 @@ export default function SettingsScreen() {
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
   return (
-    <Screen eyebrow="설정" title="설정">
+    <Screen
+      eyebrow="프리펫스"
+      title="설정"
+      subtitle="계정·알림·화면을 원하는 대로 맞춰요.">
       {/* 계정 */}
       <Group title="계정">
         {hasOwnerProfile && (
