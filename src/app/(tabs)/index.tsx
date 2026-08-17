@@ -1,6 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { ResultBadge } from '@/components/badge';
 import { PetAvatar } from '@/components/pet-avatar';
@@ -43,7 +51,7 @@ export default function HomeScreen() {
       subtitle="아이마다 좋아한 장소를 한눈에 확인하세요."
       // 데모: 당기면 발자국 연출 후 마무리. 백엔드 연동 시 실제 데이터 새로고침으로 교체.
       onRefresh={() => new Promise((r) => setTimeout(r, 800))}>
-      {/* 가려던 곳(판별받은 시설)에 거부가 뜨면 홈에서 먼저 알린다 */}
+      {/* 가려던 곳(판별받은 시설)에 거부가 뜨면 홈에서 먼저 알린다 — 가장 눈에 띄게 */}
       {alerts.length > 0 && (
         <View style={styles.alertWrap}>
           {alerts.map(({ facility, report }) => (
@@ -53,22 +61,22 @@ export default function HomeScreen() {
                 router.push({ pathname: '/facility/[id]', params: { id: String(facility.facilityId) } })
               }
               style={({ pressed }) => [
-                styles.alertCard,
-                { backgroundColor: pressed ? p.dangerSoft : p.card, borderColor: p.danger },
+                styles.denialCard,
+                CardShadow,
+                { backgroundColor: p.danger, opacity: pressed ? 0.92 : 1 },
               ]}>
-              <View style={[styles.alertIcon, { backgroundColor: p.dangerSoft }]}>
-                <Ionicons name="notifications" size={18} color={p.danger} />
-              </View>
+              <PulseBell />
               <View style={styles.alertText}>
-                <Text style={[styles.alertTitle, { color: p.danger }]}>
-                  가려던 곳에 거부가 떴어요
-                </Text>
-                <Text style={[styles.alertBody, { color: p.ink }]} numberOfLines={2}>
+                <View style={styles.denialTitleRow}>
+                  <Text style={styles.denialLabel}>실시간 거부</Text>
+                  <Text style={styles.denialTitle}>가려던 곳에 거부가 떴어요</Text>
+                </View>
+                <Text style={styles.denialBody} numberOfLines={2}>
                   {facility.name} · {report.createdAt ? sinceText(report.createdAt) : ''}
                   {report.reason ? ` · ${DENIAL_REASON_LABEL[report.reason]}` : ''} — 방문 전 확인하세요
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={p.danger} />
+              <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
             </Pressable>
           ))}
         </View>
@@ -114,8 +122,12 @@ export default function HomeScreen() {
             내 반려동물 탭에서{'\n'}아이를 먼저 등록해 주세요.
           </Text>
         </View>
+      ) : pets.length === 1 ? (
+        <View style={[styles.card, CardShadow, { borderColor: p.accent, backgroundColor: p.card }]}>
+          <PetCardBody pet={pets[0]} />
+        </View>
       ) : (
-        pets.map((pet) => <PetPassport key={pet.petId} pet={pet} />)
+        <PetStack pets={pets} />
       )}
 
       {checks.length > 0 && (
@@ -154,8 +166,105 @@ export default function HomeScreen() {
   );
 }
 
-/** 신분증(여권) 형태의 반려동물 카드 — 핑크 테두리, 원형 프로필, 좋아한 곳 TOP 3 */
-function PetPassport({ pet }: { pet: Pet }) {
+/** 거부 알림의 통통 뛰는 벨 — 시선을 끈다 */
+function PulseBell() {
+  const p = usePalette();
+  const s = useSharedValue(0);
+  useEffect(() => {
+    s.value = withRepeat(withTiming(1, { duration: 850 }), -1, true);
+  }, [s]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 + 0.14 * s.value }] }));
+  return (
+    <Animated.View style={[styles.denialIcon, style]}>
+      <Ionicons name="notifications" size={18} color={p.danger} />
+    </Animated.View>
+  );
+}
+
+const STACK_CARD_H = 280;
+const STACK_PEEK = 72;
+const STACK_SPRING = { damping: 16, stiffness: 180, mass: 0.7 };
+
+/** 반려동물 카드 스택 — 겹쳐 쌓고, 뒤 카드를 탭하면 셔플하듯 앞으로 나온다 */
+function PetStack({ pets }: { pets: Pet[] }) {
+  const [order, setOrder] = useState<number[]>(() => pets.map((pt) => pt.petId));
+  // pets가 바뀌면(추가/삭제) order 동기화 — 있는 것만 유지 + 새로 생긴 것 뒤에 추가
+  const ids = pets.map((pt) => pt.petId).join(',');
+  useEffect(() => {
+    setOrder((prev) => {
+      const now = pets.map((pt) => pt.petId);
+      const kept = prev.filter((id) => now.includes(id));
+      const added = now.filter((id) => !kept.includes(id));
+      return [...kept, ...added];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids]);
+
+  const bringFront = (id: number) => setOrder((prev) => [id, ...prev.filter((x) => x !== id)]);
+  const height = STACK_CARD_H + (pets.length - 1) * STACK_PEEK;
+
+  return (
+    <View style={{ height }}>
+      {pets.map((pet) => (
+        <StackCard
+          key={pet.petId}
+          pet={pet}
+          pos={order.indexOf(pet.petId)}
+          total={pets.length}
+          onFront={() => bringFront(pet.petId)}
+        />
+      ))}
+    </View>
+  );
+}
+
+function StackCard({
+  pet,
+  pos,
+  total,
+  onFront,
+}: {
+  pet: Pet;
+  pos: number;
+  total: number;
+  onFront: () => void;
+}) {
+  const p = usePalette();
+  // 뒤 카드는 위로 살짝 올라가 헤더만 보이고(peek), 앞 카드가 그 위를 덮는다
+  const tY = useSharedValue((total - 1 - pos) * STACK_PEEK);
+  const sc = useSharedValue(1 - pos * 0.03);
+
+  useEffect(() => {
+    tY.value = withSpring((total - 1 - pos) * STACK_PEEK, STACK_SPRING);
+    sc.value = withSpring(Math.max(0.9, 1 - pos * 0.03), STACK_SPRING);
+  }, [pos, total, tY, sc]);
+
+  const anim = useAnimatedStyle(() => ({
+    transform: [{ translateY: tY.value }, { scale: sc.value }],
+    opacity: 1 - Math.min(pos, 3) * 0.06,
+  }));
+
+  const isFront = pos === 0;
+
+  return (
+    <Animated.View style={[styles.stackItem, { zIndex: total - pos }, anim]}>
+      <View style={[styles.card, styles.stackCard, CardShadow, { borderColor: p.accent, backgroundColor: p.card }]}>
+        {isFront ? (
+          <PetCardBody pet={pet} />
+        ) : (
+          <Pressable onPress={onFront} style={styles.flex}>
+            <View pointerEvents="none">
+              <PetCardBody pet={pet} />
+            </View>
+          </Pressable>
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
+/** 여권 카드 내용(테두리 카드 안에 들어가는 본문) — 원형 프로필 + 좋아한 곳 TOP 3 */
+function PetCardBody({ pet }: { pet: Pet }) {
   const p = usePalette();
   const router = useRouter();
   const { topPlacesForPet } = useAppStore();
@@ -164,7 +273,7 @@ function PetPassport({ pet }: { pet: Pet }) {
   const medal = ['🥇', '🥈', '🥉'];
 
   return (
-    <View style={[styles.card, CardShadow, { borderColor: p.accent, backgroundColor: p.card }]}>
+    <>
       <View style={styles.idRow}>
         <View style={[styles.avatarRing, { borderColor: p.accentSoft }]}>
           <PetAvatar pet={pet} size={56} />
@@ -220,11 +329,12 @@ function PetPassport({ pet }: { pet: Pet }) {
           })}
         </View>
       )}
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   alertWrap: { gap: Spacing.sm },
   alertCard: {
     flexDirection: 'row',
@@ -244,12 +354,44 @@ const styles = StyleSheet.create({
   alertText: { flex: 1, gap: 2 },
   alertTitle: { fontSize: 14, fontWeight: '800', letterSpacing: -0.3 },
   alertBody: { fontSize: 12.5, lineHeight: 18 },
+  // 거부 알림 — 빨강 채운 카드로 가장 눈에 띄게
+  denialCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+  },
+  denialIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.md,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  denialTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  denialLabel: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#B91C1C',
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.full,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    overflow: 'hidden',
+    letterSpacing: 0.2,
+  },
+  denialTitle: { fontSize: 14.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
+  denialBody: { fontSize: 12.5, lineHeight: 18, color: 'rgba(255,255,255,0.92)' },
   card: {
     borderRadius: Radius.xl,
     borderWidth: 2,
     padding: Spacing.xl,
     gap: Spacing.md,
   },
+  stackItem: { position: 'absolute', top: 0, left: 0, right: 0 },
+  stackCard: { height: STACK_CARD_H, overflow: 'hidden' },
   idRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.lg },
   avatarRing: {
     borderRadius: Radius.full,
