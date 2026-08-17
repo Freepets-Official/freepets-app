@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { ResultBadge } from '@/components/badge';
-import { BorderBeam } from '@/components/border-beam';
+import { GameCardFx } from '@/components/game-card-fx';
 import { PetAvatar } from '@/components/pet-avatar';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
@@ -127,7 +127,7 @@ export default function HomeScreen() {
       ) : pets.length === 1 ? (
         <View style={[styles.card, CardShadow, { borderColor: p.accent, backgroundColor: p.card }]}>
           <PetCardBody pet={pets[0]} />
-          <BorderBeam />
+          <GameCardFx />
         </View>
       ) : (
         <PetStack pets={pets} />
@@ -255,7 +255,7 @@ function StackCard({
         {isFront ? (
           <>
             <PetCardBody pet={pet} />
-            <BorderBeam />
+            <GameCardFx />
           </>
         ) : (
           <Pressable onPress={onFront} style={styles.flex}>
