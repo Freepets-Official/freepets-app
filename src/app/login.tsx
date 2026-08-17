@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link } from 'expo-router';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,17 +18,34 @@ import { AppLogo } from '@/components/app-logo';
 import { LoginScene } from '@/components/login-scene';
 import { SocialButtons } from '@/components/social-buttons';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { ApiError, authApi } from '@/lib/api';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
 export default function LoginScreen() {
   const p = usePalette();
-  const { login } = useAppStore();
+  const { login, authenticate } = useAppStore();
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // 데모: 실제 인증은 백엔드. 여기선 입력값(또는 데모 계정)으로 세션만 연다
-  const submit = () => login(email.trim() || 'guest@freepets.app');
+  const canSubmit = email.trim().length > 0 && pw.length > 0 && !loading;
+
+  // 실제 백엔드 로그인 — 성공 시 토큰 저장 + 세션 진입
+  const submit = async () => {
+    if (!canSubmit) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const tokens = await authApi.login(email.trim(), pw);
+      authenticate(email.trim(), tokens);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '로그인에 실패했어요.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
@@ -77,13 +95,22 @@ export default function LoginScreen() {
                 />
               </View>
 
+              {error ? <Text style={[styles.error, { color: p.danger }]}>{error}</Text> : null}
+
               <Pressable
                 onPress={submit}
+                disabled={!canSubmit}
                 style={({ pressed }) => [
                   styles.primary,
-                  { backgroundColor: p.accent, opacity: pressed ? 0.9 : 1 },
+                  { backgroundColor: canSubmit ? p.accent : p.line, opacity: pressed && canSubmit ? 0.9 : 1 },
                 ]}>
-                <Text style={[styles.primaryLabel, { color: p.onAccent }]}>로그인</Text>
+                {loading ? (
+                  <ActivityIndicator color={p.onAccent} />
+                ) : (
+                  <Text style={[styles.primaryLabel, { color: canSubmit ? p.onAccent : p.muted }]}>
+                    로그인
+                  </Text>
+                )}
               </Pressable>
 
               <Pressable style={styles.forgot}>
@@ -149,6 +176,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   primaryLabel: { fontSize: 16, fontWeight: '800' },
+  error: { fontSize: 13, fontWeight: '600', textAlign: 'center', marginBottom: 2 },
   forgot: { alignItems: 'center', paddingVertical: 4 },
   forgotText: { fontSize: 13, fontWeight: '600' },
   divider: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },

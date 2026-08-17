@@ -2,7 +2,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -16,27 +18,53 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppLogo } from '@/components/app-logo';
 import { SocialButtons } from '@/components/social-buttons';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { ApiError, authApi } from '@/lib/api';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
 export default function SignupScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { login } = useAppStore();
+  const { login, authenticate } = useAppStore();
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [agree, setAgree] = useState(false);
+  // 닉네임은 폼이 아니라 '가입하기' 직후 모달에서 받는다
+  const [nickModal, setNickModal] = useState(false);
+  const [nickname, setNickname] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
   const pwOk = pw.length >= 8;
   const matchOk = pw2.length > 0 && pw === pw2;
-  const canSubmit = emailOk && pwOk && matchOk && agree;
+  const formOk = emailOk && pwOk && matchOk && agree;
+  const nickOk = nickname.trim().length >= 2 && nickname.trim().length <= 20;
 
-  // 이메일 가입은 인증 코드 확인을 거친다 → 인증 화면으로. (자동 로그인은 인증 성공 후)
-  const submit = () => {
-    if (!canSubmit) return;
-    router.push({ pathname: '/verify-email', params: { email: email.trim() } });
+  // 이메일·비번 입력 후 '가입하기' → 닉네임 모달을 연다
+  const openNick = () => {
+    if (!formOk) return;
+    setError(null);
+    setNickname('');
+    setNickModal(true);
+  };
+
+  // 모달에서 닉네임 확정 → 백엔드 가입 → 곧바로 로그인해 토큰 발급 → 세션 진입.
+  // (백엔드에 이메일 인증이 아직 없어 verify-email 화면은 건너뛴다. 추가되면 그때 연결.)
+  const finishSignup = async () => {
+    if (!nickOk || loading) return;
+    setError(null);
+    setLoading(true);
+    try {
+      await authApi.signup(email.trim(), pw, nickname.trim());
+      const tokens = await authApi.login(email.trim(), pw);
+      authenticate(email.trim(), tokens);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '가입에 실패했어요.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -97,14 +125,18 @@ export default function SignupScreen() {
                 </Text>
               </Pressable>
 
+              {error && !nickModal ? (
+                <Text style={[styles.error, { color: p.danger }]}>{error}</Text>
+              ) : null}
+
               <Pressable
-                onPress={submit}
-                disabled={!canSubmit}
+                onPress={openNick}
+                disabled={!formOk}
                 style={({ pressed }) => [
                   styles.primary,
-                  { backgroundColor: canSubmit ? p.accent : p.line, opacity: pressed && canSubmit ? 0.9 : 1 },
+                  { backgroundColor: formOk ? p.accent : p.line, opacity: pressed && formOk ? 0.9 : 1 },
                 ]}>
-                <Text style={[styles.primaryLabel, { color: canSubmit ? p.onAccent : p.muted }]}>
+                <Text style={[styles.primaryLabel, { color: formOk ? p.onAccent : p.muted }]}>
                   가입하기
                 </Text>
               </Pressable>
@@ -127,6 +159,65 @@ export default function SignupScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* 닉네임 만들기 모달 — 가입 마지막 단계 */}
+      <Modal visible={nickModal} transparent animationType="fade" onRequestClose={() => setNickModal(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalWrap}>
+          <View style={[styles.modalCard, { backgroundColor: p.card }]}>
+            <View style={styles.modalHead}>
+              <AppLogo size={44} />
+              <Text style={[styles.modalTitle, { color: p.ink }]}>어떻게 불러드릴까요?</Text>
+              <Text style={[styles.modalSub, { color: p.muted }]}>
+                앱에서 보여질 닉네임을 정해주세요. 언제든 바꿀 수 있어요.
+              </Text>
+            </View>
+
+            <View style={[styles.field, { backgroundColor: p.surface, borderColor: error ? p.danger : p.line }]}>
+              <Ionicons name="paw-outline" size={18} color={p.muted} />
+              <TextInput
+                value={nickname}
+                onChangeText={(t) => {
+                  setError(null);
+                  setNickname(t);
+                }}
+                placeholder="닉네임 (2~20자)"
+                placeholderTextColor={p.muted}
+                autoCapitalize="none"
+                maxLength={20}
+                autoFocus
+                style={[styles.input, { color: p.ink }]}
+              />
+            </View>
+
+            {error ? <Text style={[styles.error, { color: p.danger }]}>{error}</Text> : null}
+
+            <Pressable
+              onPress={finishSignup}
+              disabled={!nickOk || loading}
+              style={({ pressed }) => [
+                styles.primary,
+                {
+                  backgroundColor: nickOk && !loading ? p.accent : p.line,
+                  opacity: pressed && nickOk && !loading ? 0.9 : 1,
+                },
+              ]}>
+              {loading ? (
+                <ActivityIndicator color={p.onAccent} />
+              ) : (
+                <Text style={[styles.primaryLabel, { color: nickOk ? p.onAccent : p.muted }]}>
+                  프리펫스 시작하기
+                </Text>
+              )}
+            </Pressable>
+
+            <Pressable onPress={() => setNickModal(false)} disabled={loading} style={styles.modalCancel}>
+              <Text style={[styles.modalCancelText, { color: p.muted }]}>뒤로</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -194,6 +285,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   primaryLabel: { fontSize: 16, fontWeight: '800' },
+  error: { fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: 2 },
+  modalWrap: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', paddingHorizontal: Spacing.xl },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    borderRadius: Radius.xl,
+    padding: Spacing.xl,
+    gap: Spacing.md,
+  },
+  modalHead: { alignItems: 'center', gap: 8, marginBottom: 2 },
+  modalTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
+  modalSub: { fontSize: 13, textAlign: 'center', lineHeight: 19, paddingHorizontal: 8 },
+  modalCancel: { alignItems: 'center', paddingVertical: 6 },
+  modalCancelText: { fontSize: 14, fontWeight: '700' },
   divider: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   line: { flex: 1, height: 1 },
   dividerText: { fontSize: 12, fontWeight: '700' },
