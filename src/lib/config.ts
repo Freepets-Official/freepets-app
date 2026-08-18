@@ -7,4 +7,4 @@
  *
  * 값은 `.env`(로컬)·Vercel 환경변수(배포)에서 온다. 없으면 아래 기본값 사용.
  */
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://54.116.37.26:8080';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://54.116.37.26';
