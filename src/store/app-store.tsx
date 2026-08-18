@@ -29,6 +29,8 @@ export interface AppSettings {
   notifMarketing: boolean;
   /** 캘린더: 동반 여행 일정 자동 기록 (사용자 허용 시) */
   autoTravelLog: boolean;
+  /** 앱 잠금 — 실행/복귀 시 생체인증 요구 (네이티브만) */
+  appLock: boolean;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -40,6 +42,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   notifNearby: true,
   notifMarketing: false,
   autoTravelLog: true,
+  appLock: false,
 };
 
 /**

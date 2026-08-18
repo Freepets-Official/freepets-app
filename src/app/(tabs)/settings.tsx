@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter } from 'expo-router';
 import { useState, type ComponentProps, type ReactNode } from 'react';
-import { Linking, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Linking, Modal, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Chip } from '@/components/chip';
 import { Screen } from '@/components/screen';
@@ -21,6 +22,21 @@ export default function SettingsScreen() {
   const hasOwnerProfile = availableProfiles.includes('owner');
   const [cacheCleared, setCacheCleared] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+
+  // 앱 잠금 켤 때: 생체인증 등록 여부 확인 후 활성화 (네이티브만)
+  const toggleAppLock = async (v: boolean) => {
+    if (!v) {
+      updateSettings({ appLock: false });
+      return;
+    }
+    const hardware = await LocalAuthentication.hasHardwareAsync();
+    const enrolled = await LocalAuthentication.isEnrolledAsync();
+    if (!hardware || !enrolled) {
+      Alert.alert('생체인증을 사용할 수 없어요', '기기 설정에서 Face ID·지문을 먼저 등록해주세요.');
+      return;
+    }
+    updateSettings({ appLock: true });
+  };
 
   return (
     <Screen
@@ -153,6 +169,20 @@ export default function SettingsScreen() {
           last
         />
       </Group>
+
+      {/* 보안 — 생체인증 지원 기기(네이티브)에서만 */}
+      {Platform.OS !== 'web' && (
+        <Group title="보안">
+          <ToggleRow
+            icon="finger-print"
+            label="앱 잠금 · 생체인증"
+            sub="앱을 열거나 되돌아올 때 Face ID·지문으로 잠금 해제"
+            value={settings.appLock}
+            onChange={toggleAppLock}
+            last
+          />
+        </Group>
+      )}
 
       {/* 일반 */}
       <Group title="일반">

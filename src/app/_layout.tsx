@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
 import { AppSplash } from '@/components/app-splash';
+import { BiometricGate } from '@/components/biometric-gate';
 import { PawTouches } from '@/components/paw-touches';
 import { Palette } from '@/constants/theme';
 import { AppStoreProvider, useAppStore } from '@/store/app-store';
@@ -120,9 +121,11 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={navTheme}>
       <AppStoreProvider>
-        <PawTouches>
-          <RootNavigator />
-        </PawTouches>
+        <BiometricGate>
+          <PawTouches>
+            <RootNavigator />
+          </PawTouches>
+        </BiometricGate>
         <StatusBar style="dark" />
         {!splashDone && <AppSplash onDone={() => setSplashDone(true)} />}
       </AppStoreProvider>
