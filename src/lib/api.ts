@@ -73,7 +73,7 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
   if (!json || typeof json.isSuccess !== 'boolean') {
     // 업로드 용량 초과는 nginx가 앱 envelope가 아닌 413(HTML)로 막는다 → 친화 메시지로 변환
     if (res.status === 413) {
-      throw new ApiError('사진 용량이 너무 커요. 10MB 이하로 올려주세요.', 'PAYLOAD_TOO_LARGE', 413);
+      throw new ApiError('사진 용량이 너무 커요. 20MB 이하로 올려주세요.', 'PAYLOAD_TOO_LARGE', 413);
     }
     throw new ApiError(`서버 응답 오류 (${res.status})`, undefined, res.status);
   }
