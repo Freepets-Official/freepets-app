@@ -21,6 +21,14 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
   const fresh = freshnessText(confirmedAt);
   const isConfirmed = confidence === 'CONFIRMED';
 
+  // 딱 3상태로만 안내한다 (그 이상은 헷갈림):
+  //  1) 불가        — 확인해봐도 함께 입장 불가 → 액션 없음
+  //  2) 확정(가능)   — 추가 확인 없이 방문 OK → 액션 없음
+  //  3) 확인 필요    — 아직 확정 전 → 어디서 확인하는지(전화·사업자) 안내
+  const denied = facility.petAllowed === false;
+  const confirmedOk = isConfirmed && facility.petAllowed === true;
+  const needsCheck = !denied && !confirmedOk;
+
   const callAndConfirm = () => {
     if (facility.phone) Linking.openURL(`tel:${facility.phone.replace(/-/g, '')}`);
     confirmFacility(facility.facilityId);
@@ -37,17 +45,19 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
       </View>
 
       <Text style={[styles.explain, { color: p.ink }]}>
-        {isConfirmed
-          ? '최근 확인된 정보예요. 안심하고 방문하세요.'
-          : // 거부 제보로 하향된 경우는 "정보가 없다"가 아니라 "있던 정보가 틀렸다"는 뜻이다
-            source === 'DENIAL_REPORT'
-            ? '현장에서 거부당한 제보가 접수돼 신뢰도를 낮췄어요. 등록된 조건을 그대로 믿지 마세요.'
-            : '아직 확정되지 않은 정보예요. 방문 전 시설에 확인하는 걸 권장해요.'}
+        {denied
+          ? '동반 불가 시설이에요. 확인해봐도 함께 입장은 어려워요. (추가 확인 불필요)'
+          : confirmedOk
+            ? '확인된 정보예요. 추가 확인 없이 방문하셔도 돼요.'
+            : // 거부 제보로 하향된 경우는 "정보가 없다"가 아니라 "있던 정보가 틀렸다"는 뜻이다
+              source === 'DENIAL_REPORT'
+              ? '현장에서 거부당한 제보가 접수돼 신뢰도를 낮췄어요. 등록된 조건을 그대로 믿지 말고 아래에서 확인하세요.'
+              : '아직 확정된 정보가 아니에요. 방문 전 아래에서 확인하는 걸 권장해요.'}
       </Text>
 
-      {!isConfirmed && (
+      {needsCheck && (
         <View style={styles.actions}>
-          <Text style={[styles.actionsTitle, { color: p.muted }]}>이 정보 더 확실하게</Text>
+          <Text style={[styles.actionsTitle, { color: p.muted }]}>어디서 확인하나요</Text>
 
           {facility.phone && (
             <Pressable

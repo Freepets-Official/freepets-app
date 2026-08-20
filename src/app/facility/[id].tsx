@@ -165,7 +165,7 @@ export default function FacilityDetailScreen() {
   const facilityConfidence = facility ? confidenceOf(facility).confidence : 'UNVERIFIED';
   const confidenceMessage =
     facilityConfidence === 'CONFIRMED'
-      ? '최근 확인된 정보라 안심해도 돼요'
+      ? '확인된 정보예요'
       : '아직 확정 전 · 방문 전 확인을 권장해요';
 
   return (
