@@ -1,8 +1,8 @@
 export type Category = 'TOUR' | 'STAY' | 'CAFE' | 'LEISURE' | 'SHOPPING' | 'RESTAURANT';
 export type BreedSize = 'SMALL' | 'MEDIUM' | 'LARGE';
 
-/** 동물 종류 — 개·고양이 외에도 키우므로 등록 시 선택한다 */
-export type PetKind = 'DOG' | 'CAT' | 'BIRD' | 'RABBIT' | 'REPTILE' | 'SMALL_MAMMAL' | 'OTHER';
+/** 동물 종류 — 개·고양이 외에도 키우므로 등록 시 선택한다. 서버 kind enum과 1:1(BIRD↔PARROT, SMALL_MAMMAL↔SMALL_ANIMAL). */
+export type PetKind = 'DOG' | 'CAT' | 'BIRD' | 'RABBIT' | 'REPTILE' | 'SMALL_MAMMAL';
 
 export const PET_KIND_LABEL: Record<PetKind, string> = {
   DOG: '강아지',
@@ -11,7 +11,6 @@ export const PET_KIND_LABEL: Record<PetKind, string> = {
   RABBIT: '토끼',
   REPTILE: '파충류',
   SMALL_MAMMAL: '소동물',
-  OTHER: '기타',
 };
 
 /**
@@ -28,7 +27,6 @@ export const KIND_TIPS: Record<PetKind, string[]> = {
   RABBIT: ['이동장 필수', '온도·스트레스 관리'],
   REPTILE: ['이동장·보온 준비', '탈출 방지', '종에 따라 사전 문의 권장'],
   SMALL_MAMMAL: ['이동장 필수', '온도·스트레스 관리'],
-  OTHER: ['시설에 동반 가능 여부를 먼저 확인하세요'],
 };
 export type CheckResult = 'ALLOWED' | 'CONDITIONAL' | 'DENIED';
 export type Requirement =

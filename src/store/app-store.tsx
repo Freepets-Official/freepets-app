@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { judgeGroup } from '@/data/judge';
+import { petsApi, setAuthToken } from '@/lib/api';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, INITIAL_SATISFACTIONS, REVIEWS } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, vaccinationDday } from '@/data/types';
 import type {
@@ -336,16 +337,52 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const nextReviewId = useRef(900000);
   const nextReportId = useRef(INITIAL_REPORTS.length + 1);
 
+  // 최신 pets를 콜백에서 읽기 위한 미러(수정 시 기존 값 + patch 병합용)
+  const petsRef = useRef<Pet[]>(pets);
+  petsRef.current = pets;
+
+  // 서버에서 내 반려동물을 불러와 로컬 상태를 채운다.
+  // __DEV__에선 dev 토큰으로 항상 조회되고, 실서비스에선 로그인 후 조회된다.
+  // 실패(미인증·네트워크)하면 조용히 목데이터를 유지해 데모가 깨지지 않게 한다.
+  useEffect(() => {
+    let alive = true;
+    petsApi
+      .list()
+      .then((serverPets) => {
+        if (alive) setPets(serverPets);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [session.authed]);
+
+  // 등록: 낙관적으로 임시 id로 먼저 넣고, 서버가 준 진짜 petId로 교체. 실패하면 롤백.
   const addPet = useCallback((input: Omit<Pet, 'petId'>) => {
-    setPets((prev) => [...prev, { ...input, petId: nextPetId.current++ }]);
+    const tempId = -nextPetId.current++; // 음수 임시 id — 서버 양수 id와 충돌 방지
+    setPets((prev) => [...prev, { ...input, petId: tempId }]);
+    petsApi
+      .create(input)
+      .then((r) => {
+        setPets((prev) => prev.map((p) => (p.petId === tempId ? { ...p, petId: r.petId } : p)));
+      })
+      .catch(() => {
+        setPets((prev) => prev.filter((p) => p.petId !== tempId));
+      });
   }, []);
 
   const removePet = useCallback((petId: number) => {
     setPets((prev) => prev.filter((p) => p.petId !== petId));
+    if (petId > 0) petsApi.remove(petId).catch(() => {}); // 서버에 있는 것만 삭제 요청
   }, []);
 
   const updatePet = useCallback((petId: number, patch: Partial<Omit<Pet, 'petId'>>) => {
     setPets((prev) => prev.map((p) => (p.petId === petId ? { ...p, ...patch } : p)));
+    const existing = petsRef.current.find((p) => p.petId === petId);
+    if (existing && petId > 0) {
+      const { petId: _omit, ...full } = { ...existing, ...patch };
+      petsApi.update(petId, full).catch(() => {});
+    }
   }, []);
 
   const upcomingVaccinations = useCallback(() => {
@@ -759,6 +796,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const authenticate = useCallback(
     (email: string, tokens: { accessToken: string; refreshToken: string }) => {
       setAccessToken(tokens.accessToken);
+      setAuthToken(tokens.accessToken); // 보호 API 호출에 쓰이도록 api 레이어에도 넣는다
       refreshTokenRef.current = tokens.refreshToken;
       setSession({
         authed: true,
@@ -771,6 +809,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     setAccessToken(null);
+    setAuthToken(null);
     refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
   }, []);
