@@ -33,8 +33,9 @@ export function PetAllowedBadge({ allowed }: { allowed: boolean | null }) {
   // 동반 불가: 빨강 채운 배경 + 흰 볼드 글씨 (초록 vs 빨강 강한 대비)
   if (allowed === false)
     return <Badge label="동반 불가" color={p.onAccent} background={p.dangerSolid} />;
-  // 동반 가능 여부 자체를 모르는 상태 — 회색 '미확인'보다 명확한 앰버 '정보 부족'으로
-  return <Badge label="정보 부족" color={p.warn} background={p.warnSoft} outline />;
+  // 동반 가능 여부를 아직 모르는 상태 — 회색 '미확인'보다 행동을 유도하는 앰버 '확인 필요'로.
+  // 무엇을·어디서 확인하는지는 시설 상세(ConfidencePanel)에서 안내한다.
+  return <Badge label="확인 필요" color={p.warn} background={p.warnSoft} outline />;
 }
 
 export function ResultBadge({ result }: { result: CheckResult }) {

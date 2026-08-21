@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -125,7 +125,7 @@ export default function HomeScreen() {
           </Text>
         </View>
       ) : pets.length === 1 ? (
-        <View style={[styles.card, CardShadow, { borderColor: p.accent, backgroundColor: p.card }]}>
+        <View style={[styles.card, { borderColor: p.line, backgroundColor: p.card }]}>
           <PetCardBody pet={pets[0]} />
           <GameCardFx />
         </View>
@@ -187,6 +187,8 @@ function PulseBell() {
 const STACK_CARD_H = 280;
 const STACK_PEEK = 72;
 const STACK_SPRING = { damping: 16, stiffness: 180, mass: 0.7 };
+// 틸트가 원위치로 돌아올 때의 스프링 — 살짝 출렁이며 손을 떼는 느낌
+const TILT_SPRING = { damping: 12, stiffness: 140, mass: 0.6 };
 
 /** 반려동물 카드 스택 — 겹쳐 쌓고, 뒤 카드를 탭하면 셔플하듯 앞으로 나온다 */
 function PetStack({ pets }: { pets: Pet[] }) {
@@ -249,9 +251,41 @@ function StackCard({
 
   const isFront = pos === 0;
 
+  // 홀로그램 카드 틸트 — 앞 카드 위에서 포인터/손가락을 움직이면 그쪽으로 3D로 기운다.
+  // 유리 광택이 각도에 따라 다르게 걸려 실제 홀로그램 카드를 만지는 느낌을 준다.
+  const rx = useSharedValue(0);
+  const ry = useSharedValue(0);
+  const dim = useRef({ w: 1, h: 1 });
+  const tilt = useAnimatedStyle(() => ({
+    transform: [{ perspective: 900 }, { rotateX: `${rx.value}deg` }, { rotateY: `${ry.value}deg` }],
+  }));
+  // 웹은 offsetX/Y, 네이티브는 locationX/Y — 있는 쪽을 쓴다 (플랫폼별 필드가 달라 any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const onMove = (e: any) => {
+    const ne = e.nativeEvent as Record<string, number>;
+    const ox = ne.offsetX ?? ne.locationX;
+    const oy = ne.offsetY ?? ne.locationY;
+    if (!Number.isFinite(ox) || !Number.isFinite(oy)) return;
+    const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+    const nx = (ox / dim.current.w) * 2 - 1; // -1..1
+    const ny = (oy / dim.current.h) * 2 - 1;
+    ry.value = withTiming(clamp(nx) * 9, { duration: 80 });
+    rx.value = withTiming(clamp(-ny) * 9, { duration: 80 });
+  };
+  const resetTilt = () => {
+    rx.value = withSpring(0, TILT_SPRING);
+    ry.value = withSpring(0, TILT_SPRING);
+  };
+
   return (
     <Animated.View style={[styles.stackItem, { zIndex: total - pos }, anim]}>
-      <View style={[styles.card, styles.stackCard, CardShadow, { borderColor: p.accent, backgroundColor: p.card }]}>
+      <Animated.View
+        style={[styles.card, styles.stackCard, { borderColor: p.line, backgroundColor: p.card }, isFront && tilt]}
+        onLayout={isFront ? (e) => { dim.current = { w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height }; } : undefined}
+        onPointerMove={isFront ? onMove : undefined}
+        onPointerLeave={isFront ? resetTilt : undefined}
+        onPointerUp={isFront ? resetTilt : undefined}
+        onPointerCancel={isFront ? resetTilt : undefined}>
         {isFront ? (
           <>
             <PetCardBody pet={pet} />
@@ -264,7 +298,7 @@ function StackCard({
             </View>
           </Pressable>
         )}
-      </View>
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -304,12 +338,22 @@ function PetCardBody({ pet }: { pet: Pet }) {
         end={{ x: 1, y: 1 }}
         style={styles.banner}>
         <View style={styles.portrait}>
-          <View style={styles.portraitRing}>
-            <PetAvatar pet={pet} size={54} />
-          </View>
-          <View style={styles.levelBadge}>
+          {/* 글래스 림 — 좌상단이 밝게 빛나는 유리·금속 질감 링 */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0.7)']}
+            start={{ x: 0.1, y: 0 }}
+            end={{ x: 0.9, y: 1 }}
+            style={styles.portraitRing}>
+            <PetAvatar pet={pet} size={52} />
+          </LinearGradient>
+          {/* 레벨 칩 — 금속·글래스 하이라이트 */}
+          <LinearGradient
+            colors={['#FFFFFF', '#E8EBF1']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.levelBadge}>
             <Text style={[styles.levelText, { color: p.accentDark }]}>Lv.{level}</Text>
-          </View>
+          </LinearGradient>
         </View>
         <View style={styles.bannerInfo}>
           <Text style={styles.gameName} numberOfLines={1}>
@@ -427,17 +471,17 @@ const styles = StyleSheet.create({
   },
   denialTitle: { fontSize: 14.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
   denialBody: { fontSize: 12.5, lineHeight: 18, color: 'rgba(255,255,255,0.92)' },
-  // 게임 프로필 카드 — 그라디언트 네임플레이트 + 발광 테두리
+  // 프리미엄 수집형 카드 — 그라디언트 네임플레이트 + 얇은 테두리 + 깊은 플로팅 그림자
   card: {
     borderRadius: Radius.xl,
-    borderWidth: 2,
+    borderWidth: 1,
     overflow: 'hidden',
-    // 액센트 글로우 (게임 카드 느낌)
+    // 깊고 부드러운 플로팅 그림자(살짝 핑크 톤) — 카드가 떠 있는 입체감
     shadowColor: '#E86397',
-    shadowOpacity: 0.22,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
+    shadowOpacity: 0.16,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 12,
   },
   stackItem: { position: 'absolute', top: 0, left: 0, right: 0 },
   stackCard: { height: STACK_CARD_H },
@@ -453,22 +497,30 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: Radius.full,
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    // 유리 디스크가 살짝 떠 보이게
+    shadowColor: '#5B2130',
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
   },
   levelBadge: {
     position: 'absolute',
     bottom: -4,
     right: -6,
-    backgroundColor: '#FFFFFF',
     borderRadius: Radius.full,
     paddingHorizontal: 7,
     paddingVertical: 1.5,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)',
+    // 금속 칩이 도드라지게
+    shadowColor: '#5B2130',
+    shadowOpacity: 0.22,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1.5 },
   },
   levelText: { fontSize: 11, fontWeight: '900', letterSpacing: -0.2 },
   bannerInfo: { flex: 1, gap: 5 },
