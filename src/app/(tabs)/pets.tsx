@@ -116,8 +116,13 @@ export default function PetsScreen() {
 
   const submit = () => {
     const w = Number(weight);
+    // 오늘(로컬 기준) — 접종일 과거/미래 검증에 쓴다
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     if (!name.trim()) return setError('이름을 입력해 주세요');
+    if (name.trim().length > 50) return setError('이름은 50자 이하로 입력해 주세요');
     if (!species.trim()) return setError('품종을 입력해 주세요');
+    if (species.trim().length > 100) return setError('품종은 100자 이하로 입력해 주세요');
     // 체중은 개·고양이만 필수(판별에 쓰임). 그 외 종은 비워도 된다
     if (sizeMatters && (!weight.trim() || Number.isNaN(w) || w <= 0)) {
       return setError('체중을 숫자로 입력해 주세요 (kg)');
@@ -130,16 +135,23 @@ export default function PetsScreen() {
     if (vaccinated && dateInput && !/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
       return setError('접종 날짜를 YYYY-MM-DD 형식으로 입력해 주세요 (예: 2026-03-15)');
     }
+    if (vaccinated && dateInput && dateInput > today) {
+      return setError('접종일은 오늘까지의 날짜만 입력할 수 있어요');
+    }
     const nextInput = nextVaccinationDate.trim();
     if (nextInput && !/^\d{4}-\d{2}-\d{2}$/.test(nextInput)) {
       return setError('다음 접종 예정일을 YYYY-MM-DD 형식으로 입력해 주세요');
+    }
+    if (nextInput && nextInput < today) {
+      return setError('다음 접종 예정일은 오늘 이후 날짜로 입력해 주세요');
     }
 
     const payload = {
       name: name.trim(),
       kind,
       species: species.trim(),
-      weight: weight.trim() ? w : 0,
+      // 서버는 소수 둘째 자리까지 — 반올림해 보낸다
+      weight: weight.trim() ? Math.round(w * 100) / 100 : 0,
       breedSize: sizeMatters ? breedSize : 'SMALL',
       vaccinated,
       vaccinationDate: vaccinated && dateInput ? dateInput : null,
@@ -177,6 +189,7 @@ export default function PetsScreen() {
         onChangeText={setName}
         placeholder="이름 (예: 몽이)"
         placeholderTextColor={p.muted}
+        maxLength={50}
         style={[styles.input, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
       />
 
@@ -198,6 +211,7 @@ export default function PetsScreen() {
         onChangeText={setSpecies}
         placeholder="품종 (예: 말티즈, 앵무새)"
         placeholderTextColor={p.muted}
+        maxLength={100}
         style={[styles.input, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
       />
       <TextInput
