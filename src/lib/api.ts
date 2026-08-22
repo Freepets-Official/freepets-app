@@ -44,7 +44,7 @@ function currentToken(): string | null {
   return null;
 }
 
-type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 /**
  * 공통 요청기. auth:true면 Authorization: Bearer 헤더를 붙인다.
@@ -184,4 +184,27 @@ export const petsApi = {
     toPet(await request<ServerPet>('PUT', `/api/v1/pets/${petId}`, { body: await toForm(input), auth: true })),
   /** 삭제. */
   remove: (petId: number) => request<{ petId: number }>('DELETE', `/api/v1/pets/${petId}`, { auth: true }),
+};
+
+// ─────────────────────────── 마이페이지(account) ───────────────────────────
+// GET  /users/account → { nickname, avatarUri }
+// PATCH /users/account (multipart) → nickname(필수) + avatar(선택 파일). 이메일은 응답에 없음.
+type ServerAccount = { nickname: string; avatarUri: string | null };
+
+export const accountApi = {
+  /** 내 회원정보 조회. */
+  get: () => request<ServerAccount>('GET', '/api/v1/users/account', { auth: true }),
+  /**
+   * 회원정보 수정(multipart PATCH). nickname은 매번 필수.
+   * photoUri가 새로 고른 로컬 이미지면 avatar 파일로 첨부, http URL·null이면 미첨부(기존 유지).
+   */
+  update: async (nickname: string, photoUri: string | null): Promise<ServerAccount> => {
+    const fd = new FormData();
+    fd.append('nickname', nickname);
+    if (photoUri && !/^https?:/.test(photoUri)) {
+      const blob = await (await fetch(photoUri)).blob();
+      fd.append('avatar', blob, 'avatar.jpg');
+    }
+    return request<ServerAccount>('PATCH', '/api/v1/users/account', { body: fd, auth: true });
+  },
 };

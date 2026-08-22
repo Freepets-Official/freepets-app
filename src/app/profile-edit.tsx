@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -26,14 +27,27 @@ export default function ProfileEditScreen() {
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.7,
+      quality: 1,
     });
-    if (!result.canceled && result.assets[0]) setAvatarUri(result.assets[0].uri);
+    if (result.canceled || !result.assets[0]) return;
+    // 업로드 전 최대 1024px 리사이즈 + jpeg 변환(용량↓·HEIC 정규화) — 반려동물 사진과 동일 처리
+    try {
+      const out = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 1024 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      setAvatarUri(out.uri);
+    } catch {
+      setAvatarUri(result.assets[0].uri);
+    }
   };
 
   const save = () => {
-    if (!nickname.trim()) return setError('닉네임을 입력해 주세요');
-    updateAccount({ nickname: nickname.trim(), avatarUri });
+    const nick = nickname.trim();
+    // 서버 제약: 닉네임 2~20자 (PATCH에 매번 필수)
+    if (nick.length < 2 || nick.length > 20) return setError('닉네임은 2~20자로 입력해 주세요');
+    updateAccount({ nickname: nick, avatarUri });
     router.back();
   };
 

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { judgeGroup } from '@/data/judge';
-import { petsApi, setAuthToken } from '@/lib/api';
+import { accountApi, petsApi, setAuthToken } from '@/lib/api';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, INITIAL_SATISFACTIONS, REVIEWS } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, vaccinationDday } from '@/data/types';
 import type {
@@ -822,8 +822,33 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setSession((s) => ({ ...s, activeProfile: null }));
   }, []);
 
+  // 최신 account를 콜백에서 읽기 위한 미러(PATCH에 닉네임을 항상 실어야 함)
+  const accountRef = useRef<Account>(account);
+  accountRef.current = account;
+
+  // 서버에서 내 회원정보(닉네임·아바타)를 불러와 채운다. 실패 시 조용히 기본값 유지(데모 안전).
+  useEffect(() => {
+    let alive = true;
+    accountApi
+      .get()
+      .then((a) => {
+        if (alive) setAccount({ nickname: a.nickname, avatarUri: a.avatarUri });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [session.authed]);
+
+  // 수정: 낙관적으로 로컬 반영 후 서버 PATCH. 서버가 준 최종값(아바타 URL 등)으로 다시 맞춘다.
   const updateAccount = useCallback((patch: Partial<Account>) => {
     setAccount((prev) => ({ ...prev, ...patch }));
+    const nickname = patch.nickname ?? accountRef.current.nickname;
+    const photoUri = patch.avatarUri ?? accountRef.current.avatarUri;
+    accountApi
+      .update(nickname, photoUri)
+      .then((a) => setAccount({ nickname: a.nickname, avatarUri: a.avatarUri }))
+      .catch(() => {});
   }, []);
 
   const value = useMemo(
