@@ -37,7 +37,7 @@ export default function SignupScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
-  const pwOk = pw.length >= 8;
+  const pwOk = pw.length >= 8 && pw.length <= 64;
   const matchOk = pw2.length > 0 && pw === pw2;
   const formOk = emailOk && pwOk && matchOk && agree;
   const nickOk = nickname.trim().length >= 2 && nickname.trim().length <= 20;
@@ -98,9 +98,10 @@ export default function SignupScreen() {
                 icon="lock-closed-outline"
                 value={pw}
                 onChangeText={setPw}
-                placeholder="비밀번호 (8자 이상)"
+                placeholder="비밀번호 (8~64자)"
                 secureTextEntry
-                hint={pw.length > 0 && !pwOk ? '8자 이상 입력해주세요' : undefined}
+                maxLength={64}
+                hint={pw.length > 0 && !pwOk ? '8~64자로 입력해주세요' : undefined}
               />
               <Field
                 icon="lock-closed-outline"
@@ -108,6 +109,7 @@ export default function SignupScreen() {
                 onChangeText={setPw2}
                 placeholder="비밀번호 확인"
                 secureTextEntry
+                maxLength={64}
                 hint={pw2.length > 0 && !matchOk ? '비밀번호가 일치하지 않아요' : undefined}
               />
 
