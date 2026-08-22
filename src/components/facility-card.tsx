@@ -5,7 +5,6 @@ import Animated from 'react-native-reanimated';
 
 import { PetAllowedBadge } from '@/components/badge';
 import { PressableScale } from '@/components/pressable-scale';
-import { ConfidenceBadge } from '@/components/confidence-badge';
 import { DenialAlert } from '@/components/denial-alert';
 import { PawBadge } from '@/components/paw-badge';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
@@ -17,9 +16,8 @@ import { useAppStore } from '@/store/app-store';
 export function FacilityCard({ facility }: { facility: Facility }) {
   const p = usePalette();
   const router = useRouter();
-  const { reviewsOf, confidenceOf } = useAppStore();
+  const { reviewsOf } = useAppStore();
   const grade = pawGradeOf(reviewsOf(facility.facilityId));
-  const confidence = confidenceOf(facility).confidence;
 
   const conditions: string[] = [];
   if (facility.maxWeight !== null) conditions.push(`~${facility.maxWeight}kg`);
@@ -37,10 +35,7 @@ export function FacilityCard({ facility }: { facility: Facility }) {
           style={[styles.category, { color: p.accent }]}>
           {CATEGORY_LABEL[facility.category]}
         </Animated.Text>
-        <View style={styles.topBadges}>
-          <ConfidenceBadge confidence={confidence} size="sm" />
-          <PetAllowedBadge allowed={facility.petAllowed} />
-        </View>
+        <PetAllowedBadge allowed={facility.petAllowed} />
       </View>
 
       {/* 카드→상세 shared element — 이름이 그대로 이어지며 커진다(네이티브 전용) */}
@@ -96,7 +91,6 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     marginBottom: 4,
   },
-  topBadges: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   category: {
     fontSize: 11.5,
     fontWeight: '800',

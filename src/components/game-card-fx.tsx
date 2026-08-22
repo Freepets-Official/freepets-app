@@ -12,23 +12,17 @@ import Animated, {
 } from 'react-native-reanimated';
 
 /**
- * 게임 홀로그램 카드 효과(증강현실 느낌) — 카드 위에 얹는 오버레이.
- *  ① 무지갯빛 홀로그램 시(sheen)가 대각선으로 천천히 훑고 지나간다.
- *  ② 네 모서리에 AR HUD 스캔 프레임(코너 브래킷).
- * 터치는 통과(pointerEvents none).
+ * 프리미엄 홀로그램 포일 오버레이 — 수집형 카드(가챠)처럼 카드 위에 얹는다.
+ *  ① 좌상단 유리 광택(정적 하이라이트)으로 입체·고급 질감.
+ *  ② 무지갯빛 홀로그램 시(sheen)가 대각선으로 아주 천천히 훑고 지나간다.
+ * 예전의 각진 AR 코너 브래킷은 제거했다(장난감 느낌). 터치는 통과(pointerEvents none).
  */
-const CORNER = '#FFD36E'; // 골드 — 핑크 배너·흰 본문 어디서든 읽힘
-
-export function GameCardFx({ radius = 6 }: { radius?: number }) {
+export function GameCardFx() {
   const [w, setW] = useState(0);
   const t = useSharedValue(0);
 
   useEffect(() => {
-    t.value = withRepeat(
-      withTiming(1, { duration: 4200, easing: Easing.inOut(Easing.quad) }),
-      -1,
-      false,
-    );
+    t.value = withRepeat(withTiming(1, { duration: 5200, easing: Easing.inOut(Easing.sin) }), -1, false);
     return () => cancelAnimation(t);
   }, [t]);
 
@@ -38,21 +32,30 @@ export function GameCardFx({ radius = 6 }: { radius?: number }) {
   };
 
   const sheen = useAnimatedStyle(() => ({
-    transform: [{ translateX: interpolate(t.value, [0, 1], [-w * 1.2, w * 1.2]) }, { rotate: '18deg' }],
+    transform: [{ translateX: interpolate(t.value, [0, 1], [-w * 1.3, w * 1.3]) }, { rotate: '20deg' }],
   }));
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={onLayout}>
-      {/* 홀로그램 시 — 카드 안으로 클립 */}
+      {/* 유리 광택 — 좌상단이 밝고 우하단으로 사라지는 정적 하이라이트(입체 유리 질감) */}
+      <LinearGradient
+        colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0.65, y: 0.6 }}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* 홀로그램 시 — 카드 안으로 클립, 무지갯빛으로 천천히 훑는다 */}
       {w > 0 ? (
         <View style={styles.clip}>
-          <Animated.View style={[styles.band, { width: w * 0.55 }, sheen]}>
+          <Animated.View style={[styles.band, { width: w * 0.7 }, sheen]}>
             <LinearGradient
               colors={[
                 'rgba(255,255,255,0)',
-                'rgba(130,200,255,0.16)',
-                'rgba(255,255,255,0.26)',
-                'rgba(255,190,240,0.18)',
+                'rgba(120,220,255,0.10)',
+                'rgba(190,170,255,0.16)',
+                'rgba(255,255,255,0.30)',
+                'rgba(255,200,150,0.14)',
                 'rgba(255,255,255,0)',
               ]}
               start={{ x: 0, y: 0 }}
@@ -62,26 +65,11 @@ export function GameCardFx({ radius = 6 }: { radius?: number }) {
           </Animated.View>
         </View>
       ) : null}
-
-      {/* AR HUD 코너 브래킷 */}
-      <View style={[styles.corner, styles.tl, { borderTopLeftRadius: radius }]} />
-      <View style={[styles.corner, styles.tr, { borderTopRightRadius: radius }]} />
-      <View style={[styles.corner, styles.bl, { borderBottomLeftRadius: radius }]} />
-      <View style={[styles.corner, styles.br, { borderBottomRightRadius: radius }]} />
     </View>
   );
 }
 
-const C = 18; // 코너 브래킷 길이
-const T = 2.5; // 두께
-const INSET = 7;
-
 const styles = StyleSheet.create({
   clip: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' },
-  band: { position: 'absolute', top: -50, bottom: -50 },
-  corner: { position: 'absolute', width: C, height: C, borderColor: CORNER },
-  tl: { top: INSET, left: INSET, borderTopWidth: T, borderLeftWidth: T },
-  tr: { top: INSET, right: INSET, borderTopWidth: T, borderRightWidth: T },
-  bl: { bottom: INSET, left: INSET, borderBottomWidth: T, borderLeftWidth: T },
-  br: { bottom: INSET, right: INSET, borderBottomWidth: T, borderRightWidth: T },
+  band: { position: 'absolute', top: -60, bottom: -60 },
 });

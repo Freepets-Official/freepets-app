@@ -8,3 +8,9 @@
  * 값은 `.env`(로컬)·Vercel 환경변수(배포)에서 온다. 없으면 아래 기본값 사용.
  */
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://54.116.37.26';
+
+/**
+ * 개발용 10년 테스트 토큰. 로그인 흐름이 붙기 전까지 보호 API를 이 토큰으로 호출한다.
+ * ⚠️ 개발 편의 전용 — `authedFetch`에서 `__DEV__`일 때만 사용하고, 운영 빌드엔 실리지 않는다.
+ */
+export const DEV_TOKEN = process.env.EXPO_PUBLIC_DEV_TOKEN ?? null;

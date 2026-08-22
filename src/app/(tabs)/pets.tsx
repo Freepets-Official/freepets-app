@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
@@ -66,9 +67,21 @@ export default function PetsScreen() {
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.7,
+      quality: 1, // 원본으로 받고 압축은 아래 변환 단계에서
     });
-    if (!result.canceled && result.assets[0]) setPhotoUri(result.assets[0].uri);
+    if (result.canceled || !result.assets[0]) return;
+    // 업로드 전 최대 1024px 리사이즈 + jpeg 변환.
+    // 용량을 크게 줄여 nginx 10MB 한도(413)를 사실상 안 넘고, iOS HEIC도 jpeg로 정규화한다.
+    try {
+      const out = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 1024 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      setPhotoUri(out.uri);
+    } catch {
+      setPhotoUri(result.assets[0].uri); // 변환 실패 시 원본이라도 사용
+    }
   };
 
   const resetForm = () => {
