@@ -241,6 +241,11 @@ interface AppStore {
   /** 그 아이가 좋아한 곳 TOP N (만족도 높은 순) */
   topPlacesForPet: (petId: number, n?: number) => { facility: Facility; score: number }[];
 
+  /** 시설 조회 — 서버 검색결과 캐시 우선, 없으면 목데이터 */
+  facilityById: (id: number) => Facility | undefined;
+  /** 서버에서 받은 시설을 상세 조회용 캐시에 등록 */
+  registerFacilities: (fs: Facility[]) => void;
+
   settings: AppSettings;
   updateSettings: (patch: Partial<AppSettings>) => void;
 
@@ -588,6 +593,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [satisfactions],
   );
 
+  // 서버 검색으로 받은 시설을 상세 조회용으로 캐시한다(탐색 목록에서 탭 → 상세에서 재조회).
+  const facilityCache = useRef<Map<number, Facility>>(new Map());
+  const registerFacilities = useCallback((fs: Facility[]) => {
+    fs.forEach((f) => facilityCache.current.set(f.facilityId, f));
+  }, []);
+  const facilityById = useCallback(
+    (id: number): Facility | undefined =>
+      facilityCache.current.get(id) ?? FACILITIES.find((f) => f.facilityId === id),
+    [],
+  );
+
   const updateSettings = useCallback((patch: Partial<AppSettings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
@@ -880,6 +896,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       satisfactionOf,
       setSatisfaction,
       topPlacesForPet,
+      facilityById,
+      registerFacilities,
       settings,
       updateSettings,
       userConfirmedIds,
@@ -944,6 +962,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       satisfactionOf,
       setSatisfaction,
       topPlacesForPet,
+      facilityById,
+      registerFacilities,
       settings,
       updateSettings,
       userConfirmedIds,

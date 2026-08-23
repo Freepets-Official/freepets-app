@@ -48,9 +48,11 @@ export default function FacilityDetailScreen() {
     settings,
     calendarEvents,
     addCalendarEvent,
+    facilityById,
   } = useAppStore();
 
-  const base = FACILITIES.find((f) => f.facilityId === Number(id));
+  // 서버 검색결과 캐시 우선, 없으면 목데이터
+  const base = facilityById(Number(id));
   // 사업자가 확정한 조건이 있으면 그 값으로 표시한다 (판별은 runCheck가 내부에서 같은 override를 적용) (F5)
   const facility = base ? effectiveFacility(base) : undefined;
 
