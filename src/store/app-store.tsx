@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { judgeGroup } from '@/data/judge';
-import { accountApi, petsApi, reviewsApi, setAuthToken } from '@/lib/api';
-import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, INITIAL_SATISFACTIONS, REVIEWS } from '@/data/mock';
+import { accountApi, petsApi, reviewsApi, satisfactionApi, setAuthToken } from '@/lib/api';
+import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, vaccinationDday } from '@/data/types';
 import type {
   CalendarEvent,
@@ -16,6 +16,7 @@ import type {
   Requirement,
   Review,
   ReviewTag,
+  TopPlace,
 } from '@/data/types';
 
 export interface AppSettings {
@@ -246,9 +247,12 @@ interface AppStore {
   /** 반려동물 개인 만족도 (사업자 리뷰와 분리, 본인만 조회) */
   satisfactions: PetSatisfaction[];
   satisfactionOf: (petId: number, facilityId: number) => number | null;
+  /** 슬라이더 값 변경 — 로컬은 즉시, 서버 POST(upsert)는 드래그가 멈춘 뒤 디바운스 */
   setSatisfaction: (petId: number, facilityId: number, score: number) => void;
-  /** 그 아이가 좋아한 곳 TOP N (만족도 높은 순) */
-  topPlacesForPet: (petId: number, n?: number) => { facility: Facility; score: number }[];
+  /** 이 시설에 대한 내 반려동물 만족도를 서버에서 불러온다 (시설 상세 진입 시) */
+  loadFacilitySatisfactions: (facilityId: number) => Promise<void>;
+  /** 그 아이가 좋아한 곳 TOP N (만족도 높은 순) — 서버 계산값 */
+  topPlacesForPet: (petId: number, n?: number) => TopPlace[];
 
   /** 시설 조회 — 서버 검색결과 캐시 우선, 없으면 목데이터 */
   facilityById: (id: number) => Facility | undefined;
@@ -330,7 +334,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [reviewErrors, setReviewErrors] = useState<Set<number>>(new Set());
   const [reports, setReports] = useState<Report[]>(INITIAL_REPORTS);
   const [reportedReviewIds, setReportedReviewIds] = useState<Set<number>>(new Set());
-  const [satisfactions, setSatisfactions] = useState<PetSatisfaction[]>(INITIAL_SATISFACTIONS);
+  // 시설 상세 진입 시 그 시설분을 서버에서 채운다(실서비스엔 목 시드가 없다).
+  const [satisfactions, setSatisfactions] = useState<PetSatisfaction[]>([]);
+  // 반려동물별 좋아한 곳 TOP3 (홈) — 서버가 시설명·카테고리까지 계산해 내려준다
+  const [topPlaces, setTopPlaces] = useState<Record<number, TopPlace[]>>({});
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [userConfirmedIds, setUserConfirmedIds] = useState<Set<number>>(new Set());
   // 씨드 거부 제보도 신뢰도에 반영돼 있어야 앱을 켜자마자 하향된 상태로 보인다
@@ -609,23 +616,75 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [satisfactions],
   );
 
-  const setSatisfaction = useCallback((petId: number, facilityId: number, score: number) => {
-    setSatisfactions((prev) => {
-      const rest = prev.filter((s) => !(s.petId === petId && s.facilityId === facilityId));
-      return [...rest, { petId, facilityId, score }];
-    });
+  // 시설 상세 진입 시 그 시설에 대한 내 반려동물 만족도를 서버에서 채운다.
+  const loadFacilitySatisfactions = useCallback(async (facilityId: number) => {
+    try {
+      const items = await satisfactionApi.ofFacility(facilityId);
+      setSatisfactions((prev) => {
+        // 이 시설분은 서버 값으로 교체하고, 기록된(recorded) 것만 로컬에 남긴다
+        const rest = prev.filter((s) => s.facilityId !== facilityId);
+        const recorded = items
+          .filter((it) => it.recorded && it.score !== null)
+          .map((it) => ({ petId: it.petId, facilityId, score: it.score as number }));
+        return [...rest, ...recorded];
+      });
+    } catch {
+      // 실패해도 조용히 — 슬라이더는 '기록 전'으로 보인다
+    }
   }, []);
 
-  const topPlacesForPet = useCallback(
-    (petId: number, n = 3) =>
-      satisfactions
-        .filter((s) => s.petId === petId)
-        .map((s) => ({ facility: FACILITIES.find((f) => f.facilityId === s.facilityId)!, score: s.score }))
-        .filter((x) => x.facility)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, n),
-    [satisfactions],
+  const loadTopPlaces = useCallback(async () => {
+    try {
+      const pets = await satisfactionApi.topPlaces();
+      const map: Record<number, TopPlace[]> = {};
+      pets.forEach((pet) => {
+        map[pet.petId] = pet.topFacilities.map((f) => ({
+          facility: { facilityId: f.facilityId, name: f.name, category: f.category },
+          score: f.score,
+        }));
+      });
+      setTopPlaces(map);
+    } catch {
+      // 실패 시 기존 캐시 유지
+    }
+  }, []);
+
+  // 슬라이더는 드래그 중 값이 연속으로 바뀐다 → 로컬은 즉시 반영하고, 서버 upsert는
+  // 마지막 변경 뒤 600ms 디바운스로 한 번만 보낸다(요청 폭주 방지).
+  const satTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const setSatisfaction = useCallback(
+    (petId: number, facilityId: number, score: number) => {
+      setSatisfactions((prev) => {
+        const rest = prev.filter((s) => !(s.petId === petId && s.facilityId === facilityId));
+        return [...rest, { petId, facilityId, score }];
+      });
+      const key = `${petId}:${facilityId}`;
+      const timers = satTimers.current;
+      const existing = timers.get(key);
+      if (existing) clearTimeout(existing);
+      timers.set(
+        key,
+        setTimeout(() => {
+          timers.delete(key);
+          satisfactionApi
+            .set(facilityId, petId, score)
+            .then(() => loadTopPlaces()) // 기록이 바뀌면 홈 TOP3도 갱신
+            .catch(() => {});
+        }, 600),
+      );
+    },
+    [loadTopPlaces],
   );
+
+  const topPlacesForPet = useCallback(
+    (petId: number, n = 3) => (topPlaces[petId] ?? []).slice(0, n),
+    [topPlaces],
+  );
+
+  // 홈 "좋아한 곳 TOP3"를 로그인 시 서버에서 미리 받아둔다(반려동물 카드 스택 → 한 번에).
+  useEffect(() => {
+    loadTopPlaces();
+  }, [session.authed, loadTopPlaces]);
 
   // 서버 검색으로 받은 시설을 상세 조회용으로 캐시한다(탐색 목록에서 탭 → 상세에서 재조회).
   const facilityCache = useRef<Map<number, Facility>>(new Map());
@@ -932,6 +991,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       satisfactions,
       satisfactionOf,
       setSatisfaction,
+      loadFacilitySatisfactions,
       topPlacesForPet,
       facilityById,
       registerFacilities,
@@ -1001,6 +1061,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       satisfactions,
       satisfactionOf,
       setSatisfaction,
+      loadFacilitySatisfactions,
       topPlacesForPet,
       facilityById,
       registerFacilities,

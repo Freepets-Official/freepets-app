@@ -47,6 +47,7 @@ export default function FacilityDetailScreen() {
     reviewDataOf,
     reviewErrorOf,
     loadReviews,
+    loadFacilitySatisfactions,
     canReview,
     confidenceOf,
     effectiveFacility,
@@ -88,12 +89,15 @@ export default function FacilityDetailScreen() {
       .slice(0, 3);
   }, [facility]);
 
-  // 시설 상세에 들어오면 친화도 리뷰를 서버에서 불러온다 (실패 시 store가 목데이터로 폴백)
+  // 시설 상세에 들어오면 친화도 리뷰 + 우리 아이 만족도를 서버에서 불러온다.
   useEffect(() => {
-    if (facility) loadReviews(facility.facilityId);
+    if (facility) {
+      loadReviews(facility.facilityId);
+      loadFacilitySatisfactions(facility.facilityId);
+    }
     // facility 객체는 매 렌더 새로 만들어지므로 id만 의존성으로 둔다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facility?.facilityId, loadReviews]);
+  }, [facility?.facilityId, loadReviews, loadFacilitySatisfactions]);
 
   const reviewData = facility ? reviewDataOf(facility.facilityId) : undefined;
   const reviewError = facility ? reviewErrorOf(facility.facilityId) : false;

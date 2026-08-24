@@ -406,3 +406,52 @@ export const reviewsApi = {
       auth: true,
     }),
 };
+
+// ─────────────────────────── 개인 만족도(satisfaction) ───────────────────────────
+// 사업자 리뷰와 분리된 본인 전용 값(0.0~10.0). 반려동물+시설 조합당 1건(upsert).
+// GET  /facilities/{fid}/pets/satisfactions  — 이 시설에 대한 내 반려동물 전체(기록 전 포함)
+// GET  /pets/satisfactions                   — 반려동물별 좋아한 곳 TOP3 (홈)
+// POST /facilities/{fid}/pets/{petId}/satisfaction  — 기록/수정(upsert)
+export type FacilitySatisfaction = { petId: number; petName: string; score: number | null; recorded: boolean };
+export type PetTopPlaces = {
+  petId: number;
+  topFacilities: { facilityId: number; name: string; category: Category; score: number }[];
+};
+
+type ServerTopPet = {
+  petId: number;
+  petName: string;
+  topFacilities: { facilityId: number; facilityName: string; category: string; score: number }[];
+};
+
+export const satisfactionApi = {
+  /** 이 시설에 대한 내 반려동물 전체 만족도(기록 전이면 score:null, recorded:false). */
+  ofFacility: async (facilityId: number): Promise<FacilitySatisfaction[]> => {
+    const r = await request<{ items: FacilitySatisfaction[] }>(
+      'GET',
+      `/api/v1/facilities/${facilityId}/pets/satisfactions`,
+      { auth: true },
+    );
+    return r.items ?? [];
+  },
+  /** 반려동물별 좋아한 곳 TOP3 (홈). category는 앱 6종으로 매핑해 돌려준다. */
+  topPlaces: async (): Promise<PetTopPlaces[]> => {
+    const r = await request<{ pets: ServerTopPet[] }>('GET', '/api/v1/pets/satisfactions', { auth: true });
+    return (r.pets ?? []).map((pet) => ({
+      petId: pet.petId,
+      topFacilities: (pet.topFacilities ?? []).map((f) => ({
+        facilityId: f.facilityId,
+        name: f.facilityName,
+        category: CATEGORY_FROM_SERVER[f.category] ?? 'TOUR',
+        score: f.score,
+      })),
+    }));
+  },
+  /** 기록/수정(upsert). score 0.0~10.0. */
+  set: (facilityId: number, petId: number, score: number) =>
+    request<{ petId: number; facilityId: number; score: number }>(
+      'POST',
+      `/api/v1/facilities/${facilityId}/pets/${petId}/satisfaction`,
+      { body: { score }, auth: true },
+    ),
+};
