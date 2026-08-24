@@ -1,18 +1,18 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Chip } from '@/components/chip';
 import { FacilityCard } from '@/components/facility-card';
-import { LocationBanner } from '@/components/location-banner';
 import { RankingView } from '@/components/ranking-view';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
 import { Radius, Spacing } from '@/constants/theme';
-import { FACILITIES } from '@/data/mock';
-import { CATEGORY_LABEL, type Category } from '@/data/types';
+import { CATEGORY_LABEL, type Category, type Facility } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
+import { facilitiesApi } from '@/lib/api';
+import { getCurrentLocation, type Coords } from '@/lib/location';
 import { useAppStore } from '@/store/app-store';
 
 const CATEGORIES = Object.keys(CATEGORY_LABEL) as Category[];
@@ -40,20 +40,59 @@ const HEADER: Record<Mode, { eyebrow: string; title: string; subtitle: string }>
 export default function ExploreScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { settings } = useAppStore();
+  const { settings, registerFacilities } = useAppStore();
   const [mode, setMode] = useState<Mode>('nearby');
   const [keyword, setKeyword] = useState('');
   const [category, setCategory] = useState<Category | null>(null);
 
-  const facilities = useMemo(() => {
-    const q = keyword.trim();
-    return FACILITIES.filter((f) => {
-      if (settings.hideDenied && f.petAllowed === false) return false;
-      if (category && f.category !== category) return false;
-      if (q && !f.name.includes(q) && !f.address.includes(q)) return false;
-      return true;
-    }).sort((a, b) => a.distanceM - b.distanceM);
-  }, [keyword, category, settings.hideDenied]);
+  // 실제 GPS로 내 위치를 잡고, 관광공사 시설을 거리순으로 검색한다.
+  const [coords, setCoords] = useState<Coords | null>(null);
+  const [locState, setLocState] = useState<'loading' | 'denied' | 'ok'>('loading');
+  const [items, setItems] = useState<Facility[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  const locate = () => {
+    setLocState('loading');
+    getCurrentLocation().then((c) => {
+      setCoords(c);
+      setLocState(c ? 'ok' : 'denied');
+    });
+  };
+  useEffect(locate, []);
+
+  // 좌표·검색어·카테고리·반경이 바뀌면 재검색(입력 타이핑은 400ms 디바운스)
+  useEffect(() => {
+    if (!coords) return;
+    const t = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await facilitiesApi.search({
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          keyword: keyword.trim() || undefined,
+          category: category ?? undefined,
+          radiusM: settings.searchRadiusKm * 1000,
+          size: 30,
+        });
+        setItems(res.items);
+        setTotal(res.total);
+        registerFacilities(res.items);
+      } catch {
+        setItems([]);
+        setTotal(0);
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [coords, keyword, category, settings.searchRadiusKm, registerFacilities]);
+
+  // '동반 불가 숨기기' 설정은 클라이언트에서 거른다(서버 필터는 단일값이라)
+  const facilities = useMemo(
+    () => items.filter((f) => !(settings.hideDenied && f.petAllowed === false)),
+    [items, settings.hideDenied],
+  );
 
   return (
     <Screen {...HEADER[mode]}>
@@ -136,24 +175,44 @@ export default function ExploreScreen() {
             <Ionicons name="chevron-forward" size={18} color={p.accent} />
           </Pressable>
 
-          {/* 위치 권한 요청 (UX만 — 실거리 정렬은 API 연동 후) */}
-          <LocationBanner />
+          <SectionTitle
+            title="내 주변 시설"
+            caption={locState === 'ok' ? `${total.toLocaleString()}곳 · 내 위치 기준` : '내 위치 기준'}
+          />
 
-          <SectionTitle title="내 주변 시설" caption={`${facilities.length}곳 · 강릉역 기준`} />
-
-          <View style={styles.list}>
-            {facilities.map((f) => (
-              <FacilityCard key={f.facilityId} facility={f} />
-            ))}
-            {facilities.length === 0 && (
-              <View style={styles.empty}>
-                <Ionicons name="search" size={30} color={p.muted} />
-                <Text style={[styles.emptyText, { color: p.muted }]}>
-                  조건에 맞는 시설이 없어요.{'\n'}검색어나 카테고리를 바꿔 보세요.
-                </Text>
-              </View>
-            )}
-          </View>
+          {locState === 'denied' ? (
+            <View style={styles.empty}>
+              <Ionicons name="location-outline" size={30} color={p.muted} />
+              <Text style={[styles.emptyText, { color: p.muted }]}>
+                내 주변 시설을 보려면 위치 권한이 필요해요.
+              </Text>
+              <Pressable
+                onPress={locate}
+                style={({ pressed }) => [styles.retry, { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : 'transparent' }]}>
+                <Ionicons name="navigate" size={15} color={p.accent} />
+                <Text style={[styles.retryText, { color: p.accent }]}>위치 다시 시도</Text>
+              </Pressable>
+            </View>
+          ) : locState === 'loading' || (loading && items.length === 0) ? (
+            <View style={styles.empty}>
+              <ActivityIndicator color={p.accent} />
+              <Text style={[styles.emptyText, { color: p.muted }]}>내 주변 시설을 찾고 있어요…</Text>
+            </View>
+          ) : (
+            <View style={styles.list}>
+              {facilities.map((f) => (
+                <FacilityCard key={f.facilityId} facility={f} />
+              ))}
+              {facilities.length === 0 && (
+                <View style={styles.empty}>
+                  <Ionicons name="search" size={30} color={p.muted} />
+                  <Text style={[styles.emptyText, { color: p.muted }]}>
+                    조건에 맞는 시설이 없어요.{'\n'}검색어·카테고리·반경(설정)을 바꿔 보세요.
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
         </>
       )}
     </Screen>
@@ -210,4 +269,15 @@ const styles = StyleSheet.create({
   courseBody: { fontSize: 12, lineHeight: 17 },
   empty: { alignItems: 'center', gap: Spacing.md, paddingVertical: 56 },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  retry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: Radius.full,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    marginTop: 4,
+  },
+  retryText: { fontSize: 13.5, fontWeight: '800' },
 });

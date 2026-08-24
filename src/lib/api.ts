@@ -1,4 +1,4 @@
-import type { Pet } from '@/data/types';
+import type { Category, Facility, Pet, Requirement } from '@/data/types';
 
 import { API_URL, DEV_TOKEN } from './config';
 
@@ -206,5 +206,78 @@ export const accountApi = {
       fd.append('avatar', blob, 'avatar.jpg');
     }
     return request<ServerAccount>('PATCH', '/api/v1/users/account', { body: fd, auth: true });
+  },
+};
+
+// ─────────────────────────── 시설(facilities) ───────────────────────────
+// POST /facilities/search — 내 주변·키워드 검색 공용. 데이터 출처: 한국관광공사 국문 관광정보(약 4.8만건).
+// 서버 category는 8종(TOUR/CULTURE/FESTIVAL/LEISURE/STAY/SHOPPING/RESTAURANT/CAFE) — 앱 6종으로 매핑.
+export type FacilitySearchParams = {
+  latitude: number;
+  longitude: number;
+  keyword?: string;
+  category?: Category;
+  petAllowed?: 'ALLOWED' | 'DENIED' | 'PENDING';
+  radiusM?: number;
+  page?: number;
+  size?: number;
+};
+
+type ServerFacility = {
+  facilityId: number;
+  name: string;
+  category: string;
+  address: string | null;
+  distanceM: number;
+  petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING';
+  maxWeight: number | null;
+  requirements: string[];
+  petScore: number | null;
+  rating: string | null;
+  reviewCnt: number;
+};
+
+const CATEGORY_FROM_SERVER: Record<string, Category> = {
+  TOUR: 'TOUR',
+  CULTURE: 'TOUR', // 문화시설 → 관광지로 흡수
+  FESTIVAL: 'LEISURE', // 축제 → 레포츠로 흡수
+  LEISURE: 'LEISURE',
+  STAY: 'STAY',
+  SHOPPING: 'SHOPPING',
+  RESTAURANT: 'RESTAURANT',
+  CAFE: 'CAFE',
+};
+const KNOWN_REQS: Requirement[] = ['LEASH', 'CAGE', 'MUZZLE', 'VACCINATION', 'SMALL_ONLY', 'OUTDOOR_ONLY'];
+
+/** 서버 시설 → 앱 Facility. 검색 응답엔 없는 필드(원문·전화·신뢰도)는 기본값으로 채운다. */
+function toFacility(s: ServerFacility): Facility {
+  return {
+    facilityId: s.facilityId,
+    name: s.name,
+    category: CATEGORY_FROM_SERVER[s.category] ?? 'TOUR',
+    address: s.address ?? '',
+    phone: null,
+    distanceM: s.distanceM,
+    petAllowed: s.petAllowed === 'ALLOWED' ? true : s.petAllowed === 'DENIED' ? false : null,
+    petConditionRaw: null, // 검색 응답엔 원문이 없다(상세 API 나오면 채움)
+    maxWeight: s.maxWeight,
+    requirements: (s.requirements ?? []).filter((r): r is Requirement => (KNOWN_REQS as string[]).includes(r)),
+    sido: '',
+    sigungu: '',
+    // 관광공사 원문 기반이라 아직 '확인 필요'(확정 전). 사업자·전화·제보로 갱신됨.
+    confidence: 'ESTIMATED',
+    confidenceSource: 'PARSED',
+    confirmedAt: null,
+  };
+}
+
+export const facilitiesApi = {
+  /** 시설 목록 검색(거리순). result.items → Facility[], result.total과 함께 반환. */
+  search: async (params: FacilitySearchParams): Promise<{ items: Facility[]; total: number }> => {
+    const r = await request<{ items: ServerFacility[]; total: number }>('POST', '/api/v1/facilities/search', {
+      body: params,
+      auth: true,
+    });
+    return { items: (r.items ?? []).map(toFacility), total: r.total ?? 0 };
   },
 };
