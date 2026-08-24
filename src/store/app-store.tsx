@@ -1,14 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { judgeGroup } from '@/data/judge';
-import { accountApi, petsApi, setAuthToken } from '@/lib/api';
+import { accountApi, petsApi, reviewsApi, setAuthToken } from '@/lib/api';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, INITIAL_SATISFACTIONS, REVIEWS } from '@/data/mock';
-import { eventOccursOn, nextVaccinationOf, vaccinationDday } from '@/data/types';
+import { aggregateReviews, eventOccursOn, nextVaccinationOf, vaccinationDday } from '@/data/types';
 import type {
   CalendarEvent,
   Confidence,
   ConfidenceSource,
   Facility,
+  FacilityReviewData,
   Pet,
   PetCheck,
   PetSatisfaction,
@@ -204,9 +205,15 @@ interface AppStore {
   upcomingVaccinations: () => { pet: Pet; dday: number; date: string }[];
 
   reviews: Review[];
+  /** 목데이터 기반 리뷰 (랭킹·카드·사업자 화면 — 해당 엔드포인트 미배포) */
   reviewsOf: (facilityId: number) => Review[];
-  addReview: (input: NewReview) => void;
-  removeReview: (reviewId: number) => void;
+  /** 시설 상세 친화도 탭용 — 서버 집계(등급·평균·태그·목록). 미로드면 undefined */
+  reviewDataOf: (facilityId: number) => FacilityReviewData | undefined;
+  /** 시설 리뷰를 서버에서 불러와 캐시한다. 실패(데모 시설 등)하면 목데이터로 폴백 */
+  loadReviews: (facilityId: number) => Promise<void>;
+  /** 리뷰 작성/수정(upsert). 자격·소유 오류는 ApiError로 던진다 */
+  addReview: (input: NewReview) => Promise<void>;
+  removeReview: (reviewId: number, facilityId: number) => Promise<void>;
   /** 해당 시설에 판별 이력이 있어야 리뷰 작성 자격이 생긴다 */
   canReview: (facilityId: number) => boolean;
   myReviewFor: (facilityId: number) => Review | undefined;
@@ -230,9 +237,9 @@ interface AppStore {
   /** 내가 이 시설에 보낸 현장 거부 제보 */
   myDenialOf: (facilityId: number) => Report | undefined;
 
-  /** 신고된 리뷰 id — 등급 산정에서만 제외되고 화면에는 계속 표시된다 */
+  /** (목 폴백용) 신고된 리뷰 id — 데모 시설에서 등급 산정 제외 표시에 쓴다 */
   reportedReviewIds: Set<number>;
-  reportReview: (reviewId: number, reason: ReviewReportReason) => void;
+  reportReview: (reviewId: number, reason: ReviewReportReason, facilityId?: number) => void;
 
   /** 반려동물 개인 만족도 (사업자 리뷰와 분리, 본인만 조회) */
   satisfactions: PetSatisfaction[];
@@ -315,6 +322,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [pets, setPets] = useState<Pet[]>(INITIAL_PETS);
   const [checks, setChecks] = useState<PetCheck[]>(INITIAL_CHECKS);
   const [reviews, setReviews] = useState<Review[]>(REVIEWS);
+  // 시설별 서버 리뷰 집계 캐시 (친화도 탭). 시설 상세 진입 시 loadReviews로 채운다.
+  const [reviewData, setReviewData] = useState<Record<number, FacilityReviewData>>({});
   const [reports, setReports] = useState<Report[]>(INITIAL_REPORTS);
   const [reportedReviewIds, setReportedReviewIds] = useState<Set<number>>(new Set());
   const [satisfactions, setSatisfactions] = useState<PetSatisfaction[]>(INITIAL_SATISFACTIONS);
@@ -339,7 +348,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const nextBenefitId = useRef(1);
   const nextPetId = useRef(INITIAL_PETS.length + 1);
   const nextCheckId = useRef(INITIAL_CHECKS.length + 1);
-  const nextReviewId = useRef(900000);
   const nextReportId = useRef(INITIAL_REPORTS.length + 1);
 
   // 최신 pets를 콜백에서 읽기 위한 미러(수정 시 기존 값 + patch 병합용)
@@ -440,6 +448,32 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [reviews],
   );
 
+  // 서버에서 시설 리뷰 집계를 불러와 캐시한다. 데모 시설(서버 DB에 없음)이면 목데이터로 폴백.
+  const loadReviews = useCallback(
+    async (facilityId: number) => {
+      try {
+        const data = await reviewsApi.list(facilityId);
+        setReviewData((prev) => ({ ...prev, [facilityId]: data }));
+      } catch {
+        const mock = reviews.filter((r) => r.facilityId === facilityId);
+        setReviewData((prev) => ({
+          ...prev,
+          [facilityId]: {
+            ...aggregateReviews(mock),
+            reviews: mock,
+            pageInfo: { page: 0, size: mock.length, totalElements: mock.length, hasNext: false },
+          },
+        }));
+      }
+    },
+    [reviews],
+  );
+
+  const reviewDataOf = useCallback(
+    (facilityId: number) => reviewData[facilityId],
+    [reviewData],
+  );
+
   const canReview = useCallback(
     (facilityId: number) => checks.some((c) => c.facilityId === facilityId),
     [checks],
@@ -451,39 +485,30 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [reviews],
   );
 
+  // 작성/수정(upsert) — 서버가 자격(REVIEW4001)·소유(PET4002)를 검사하므로 오류는 그대로 던져 화면에서 처리.
   const addReview = useCallback(
-    (input: NewReview) => {
-      const chosen = pets.filter((p) => input.petIds.includes(p.petId));
-      // 공개(opt-in)한 경우에만 품종·몸무게를 스냅샷으로 저장한다 (펫 삭제돼도 남게)
-      const petInfos = input.showPetInfo
-        ? chosen.map((p) => ({ kind: p.kind, species: p.species, weight: p.weight }))
-        : [];
-      const review: Review = {
-        reviewId: nextReviewId.current++,
-        facilityId: input.facilityId,
-        userId: MY_USER_ID,
-        nickname: account.nickname,
-        petName: chosen[0]?.name ?? null,
-        pets: petInfos,
+    async (input: NewReview) => {
+      await reviewsApi.create(input.facilityId, {
+        petIds: input.petIds,
+        showPetInfo: input.showPetInfo,
         ratingSpace: input.ratingSpace,
         ratingStaff: input.ratingStaff,
         ratingAmenity: input.ratingAmenity,
-        content: input.content,
+        content: input.content ?? '',
         tags: input.tags,
-        visitedAt: new Date().toISOString().slice(0, 10),
-      };
-      // 시설당 1인 1리뷰 — 기존 내 리뷰가 있으면 교체한다
-      setReviews((prev) => [
-        review,
-        ...prev.filter((r) => !(r.facilityId === input.facilityId && r.userId === MY_USER_ID)),
-      ]);
+      });
+      await loadReviews(input.facilityId);
     },
-    [pets, account.nickname],
+    [loadReviews],
   );
 
-  const removeReview = useCallback((reviewId: number) => {
-    setReviews((prev) => prev.filter((r) => r.reviewId !== reviewId));
-  }, []);
+  const removeReview = useCallback(
+    async (reviewId: number, facilityId: number) => {
+      await reviewsApi.remove(reviewId).catch(() => {});
+      await loadReviews(facilityId);
+    },
+    [loadReviews],
+  );
 
   const addReport = useCallback(
     (
@@ -559,15 +584,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [reports],
   );
 
-  const reportReview = useCallback((reviewId: number, _reason: ReviewReportReason) => {
-    // 데모: 신고 즉시 등급 산정에서만 제외한다. 실제로는 신고자 신뢰도를 반영한
-    // 가중 합계가 3.0을 넘을 때만 제외되고, 숨김·삭제는 관리자 확인 후에 이뤄진다.
-    setReportedReviewIds((prev) => {
-      const next = new Set(prev);
-      next.add(reviewId);
-      return next;
-    });
-  }, []);
+  const reportReview = useCallback(
+    (reviewId: number, reason: ReviewReportReason, facilityId?: number) => {
+      // 목 폴백(데모) 시설은 로컬로 즉시 등급 산정 제외 표시.
+      setReportedReviewIds((prev) => new Set(prev).add(reviewId));
+      // 실서버: 신고 접수 후 목록을 새로고침해 reportedByMe를 반영한다.
+      // (서버는 신고해도 바로 제외하지 않고 관리자 승인 후 등급에서 뺀다 — docs/04 4-2)
+      reviewsApi.report(reviewId, reason).catch(() => {});
+      if (facilityId !== undefined) loadReviews(facilityId);
+    },
+    [loadReviews],
+  );
 
   const satisfactionOf = useCallback(
     (petId: number, facilityId: number) =>
@@ -879,6 +906,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       upcomingVaccinations,
       reviews,
       reviewsOf,
+      reviewDataOf,
+      loadReviews,
       addReview,
       removeReview,
       canReview,
@@ -945,6 +974,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       upcomingVaccinations,
       reviews,
       reviewsOf,
+      reviewDataOf,
+      loadReviews,
       addReview,
       removeReview,
       canReview,

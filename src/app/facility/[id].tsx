@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
@@ -22,9 +22,10 @@ import {
   AI_JUDGEABLE_KINDS,
   CATEGORY_LABEL,
   KIND_TIPS,
+  PAW_MIN_REVIEWS,
   PET_KIND_LABEL,
-  pawGradeOf,
   ymd,
+  type PawGrade,
   type PetCheck,
 } from '@/data/types';
 import { PawBurst } from '@/components/paw-burst';
@@ -33,6 +34,9 @@ import { haptic } from '@/lib/haptics';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
+/** 리뷰 로딩 전/집계 미도달 시 헤더 발자국 배지의 기본값 */
+const EMPTY_GRADE: PawGrade = { level: null, label: null, score: null, count: 0, needMore: PAW_MIN_REVIEWS };
+
 export default function FacilityDetailScreen() {
   const p = usePalette();
   const router = useRouter();
@@ -40,7 +44,8 @@ export default function FacilityDetailScreen() {
   const {
     pets,
     runCheck,
-    reviewsOf,
+    reviewDataOf,
+    loadReviews,
     canReview,
     confidenceOf,
     effectiveFacility,
@@ -81,6 +86,15 @@ export default function FacilityDetailScreen() {
       .sort((a, b) => a.distanceM - b.distanceM)
       .slice(0, 3);
   }, [facility]);
+
+  // 시설 상세에 들어오면 친화도 리뷰를 서버에서 불러온다 (실패 시 store가 목데이터로 폴백)
+  useEffect(() => {
+    if (facility) loadReviews(facility.facilityId);
+    // facility 객체는 매 렌더 새로 만들어지므로 id만 의존성으로 둔다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [facility?.facilityId, loadReviews]);
+
+  const reviewData = facility ? reviewDataOf(facility.facilityId) : undefined;
 
   if (!facility) {
     return (
@@ -188,7 +202,7 @@ export default function FacilityDetailScreen() {
           {facility.name}
         </Animated.Text>
         <Animated.View sharedTransitionTag={`fac-paw-${facility.facilityId}`} style={styles.pawRow}>
-          <PawBadge grade={pawGradeOf(reviewsOf(facility.facilityId))} />
+          <PawBadge grade={reviewData?.grade ?? EMPTY_GRADE} />
         </Animated.View>
         <View style={styles.metaRow}>
           <Ionicons name="location" size={14} color={p.muted} />
@@ -522,7 +536,8 @@ export default function FacilityDetailScreen() {
 
       {tab === 'review' && (
         <ReviewSection
-          reviews={reviewsOf(facility.facilityId)}
+          facilityId={facility.facilityId}
+          data={reviewData}
           canWrite={canReview(facility.facilityId)}
           onWrite={() => {
             if (!canReview(facility.facilityId)) return;

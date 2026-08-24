@@ -7,11 +7,11 @@ import { SectionTitle } from '@/components/section-title';
 import { StarsDisplay } from '@/components/star-rating';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import {
+  PAW_MIN_REVIEWS,
   PET_KIND_LABEL,
   REVIEW_TAG_LABEL,
-  pawGradeOf,
+  type FacilityReviewData,
   type Review,
-  type ReviewTag,
 } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import {
@@ -22,30 +22,20 @@ import {
 
 const REASONS = Object.keys(REVIEW_REPORT_REASON_LABEL) as ReviewReportReason[];
 
-function avg(rs: Review[], pick: (r: Review) => number): number {
-  return rs.length ? rs.reduce((s, r) => s + pick(r), 0) / rs.length : 0;
-}
-
 /** 카드용 한 줄 요약 — "말티즈 3.4kg, 골든리트리버 28kg" (넘치면 …로 잘림) */
 function petSummary(r: Review): string {
   return r.pets.map((pi) => `${pi.species}${pi.weight > 0 ? ` ${pi.weight}kg` : ''}`).join(', ');
 }
 
-function topTags(rs: Review[], limit = 4): { tag: ReviewTag; count: number }[] {
-  const counts = new Map<ReviewTag, number>();
-  rs.forEach((r) => r.tags.forEach((t) => counts.set(t, (counts.get(t) ?? 0) + 1)));
-  return [...counts.entries()]
-    .map(([tag, count]) => ({ tag, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, limit);
-}
-
 export function ReviewSection({
-  reviews,
+  facilityId,
+  data,
   canWrite,
   onWrite,
 }: {
-  reviews: Review[];
+  facilityId: number;
+  /** 서버 집계(등급·평균·태그·목록). 로딩 중이면 undefined */
+  data: FacilityReviewData | undefined;
   canWrite: boolean;
   onWrite: () => void;
 }) {
@@ -54,21 +44,22 @@ export function ReviewSection({
   const [reportTarget, setReportTarget] = useState<Review | null>(null);
   const [detailTarget, setDetailTarget] = useState<Review | null>(null);
 
-  // 신고된 리뷰는 등급 산정에서만 빠지고 목록에는 그대로 남는다 (docs/04 4-2)
-  const scored = reviews.filter((r) => !reportedReviewIds.has(r.reviewId));
-  const grade = pawGradeOf(scored);
-  const tags = topTags(scored);
+  // 등급·항목평균·상위태그는 서버가 시설 전체 리뷰 기준으로 집계해 내려준다 (페이지 무관).
+  const grade = data?.grade ?? { level: null, label: null, score: null, count: 0, needMore: PAW_MIN_REVIEWS };
+  const averages = data?.categoryAverages ?? { space: 0, staff: 0, amenity: 0 };
+  const tags = data?.topTags ?? [];
+  const reviews = data?.reviews ?? [];
   const written = reviews.filter((r) => r.content);
 
   const rows: { label: string; value: number }[] = [
-    { label: '공간 여유', value: avg(scored, (r) => r.ratingSpace) },
-    { label: '직원 친절도', value: avg(scored, (r) => r.ratingStaff) },
-    { label: '편의시설', value: avg(scored, (r) => r.ratingAmenity) },
+    { label: '공간 여유', value: averages.space },
+    { label: '직원 친절도', value: averages.staff },
+    { label: '편의시설', value: averages.amenity },
   ];
 
   return (
     <>
-      <SectionTitle title="반려동물 친화도" caption={`리뷰 ${scored.length}건`} />
+      <SectionTitle title="반려동물 친화도" caption={`리뷰 ${grade.count}건`} />
 
       <View style={[styles.summary, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
         <View style={styles.gradeRow}>
@@ -128,7 +119,7 @@ export function ReviewSection({
       </Pressable>
 
       {written.slice(0, 3).map((r) => {
-        const reported = reportedReviewIds.has(r.reviewId);
+        const reported = r.reportedByMe ?? reportedReviewIds.has(r.reviewId);
         return (
           <Pressable
             key={r.reviewId}
@@ -169,7 +160,7 @@ export function ReviewSection({
                 <Pressable
                   onPress={(e) => {
                     e.stopPropagation();
-                    removeReview(r.reviewId);
+                    removeReview(r.reviewId, facilityId);
                   }}
                   hitSlop={8}>
                   <Text style={[styles.reportLink, { color: p.danger }]}>삭제</Text>
@@ -211,7 +202,7 @@ export function ReviewSection({
               <Pressable
                 key={reason}
                 onPress={() => {
-                  if (reportTarget) reportReview(reportTarget.reviewId, reason);
+                  if (reportTarget) reportReview(reportTarget.reviewId, reason, facilityId);
                   setReportTarget(null);
                 }}
                 style={({ pressed }) => [
