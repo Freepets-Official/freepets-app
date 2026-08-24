@@ -267,6 +267,12 @@ export interface PetSatisfaction {
   score: number;
 }
 
+/** 홈 "좋아한 곳 TOP3" 항목 — 서버가 시설명·카테고리까지 계산해 내려준다 */
+export interface TopPlace {
+  facility: { facilityId: number; name: string; category: Category };
+  score: number;
+}
+
 export function satisfactionMood(score: number): { emoji: string; label: string; key: string } {
   if (score >= 8.5) return { emoji: '😻', label: '아주 좋아했어요', key: 'love' };
   if (score >= 6.5) return { emoji: '😸', label: '좋아했어요', key: 'like' };
