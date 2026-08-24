@@ -365,6 +365,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const petsRef = useRef<Pet[]>(pets);
   petsRef.current = pets;
 
+  // 서버 검색·홈 TOP3 등으로 알게 된 시설을 상세 조회용으로 캐시한다.
+  // (아래 registerFacilities/facilityById가 쓰고, loadTopPlaces도 최소 정보로 채운다)
+  const facilityCache = useRef<Map<number, Facility>>(new Map());
+
   // 서버에서 내 반려동물을 불러와 로컬 상태를 채운다.
   // __DEV__에선 dev 토큰으로 항상 조회되고, 실서비스에선 로그인 후 조회된다.
   // 실패(미인증·네트워크)하면 조용히 목데이터를 유지해 데모가 깨지지 않게 한다.
@@ -642,6 +646,29 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           facility: { facilityId: f.facilityId, name: f.name, category: f.category },
           score: f.score,
         }));
+        // TOP3 시설은 실제 서버 시설이라 검색 캐시엔 없을 수 있다. 상세 화면이 열리도록
+        // 이름·카테고리만 담은 최소 시설을 등록한다(검색으로 받은 완전한 정보는 덮지 않음).
+        // 시설 상세 조회 API가 배포되면 상세에서 원문·조건까지 다시 채우면 된다.
+        pet.topFacilities.forEach((f) => {
+          if (facilityCache.current.has(f.facilityId)) return;
+          facilityCache.current.set(f.facilityId, {
+            facilityId: f.facilityId,
+            name: f.name,
+            category: f.category,
+            address: '',
+            phone: null,
+            distanceM: 0,
+            petAllowed: null,
+            petConditionRaw: null,
+            maxWeight: null,
+            requirements: [],
+            sido: '',
+            sigungu: '',
+            confidence: 'ESTIMATED',
+            confidenceSource: 'PARSED',
+            confirmedAt: null,
+          });
+        });
       });
       setTopPlaces(map);
     } catch {
@@ -687,7 +714,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, [session.authed, loadTopPlaces]);
 
   // 서버 검색으로 받은 시설을 상세 조회용으로 캐시한다(탐색 목록에서 탭 → 상세에서 재조회).
-  const facilityCache = useRef<Map<number, Facility>>(new Map());
   const registerFacilities = useCallback((fs: Facility[]) => {
     fs.forEach((f) => facilityCache.current.set(f.facilityId, f));
   }, []);
