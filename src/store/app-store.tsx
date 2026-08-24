@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { judgeGroup } from '@/data/judge';
 import { accountApi, petsApi, reviewsApi, setAuthToken } from '@/lib/api';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, INITIAL_SATISFACTIONS, REVIEWS } from '@/data/mock';
-import { aggregateReviews, eventOccursOn, nextVaccinationOf, vaccinationDday } from '@/data/types';
+import { eventOccursOn, nextVaccinationOf, vaccinationDday } from '@/data/types';
 import type {
   CalendarEvent,
   Confidence,
@@ -209,7 +209,9 @@ interface AppStore {
   reviewsOf: (facilityId: number) => Review[];
   /** 시설 상세 친화도 탭용 — 서버 집계(등급·평균·태그·목록). 미로드면 undefined */
   reviewDataOf: (facilityId: number) => FacilityReviewData | undefined;
-  /** 시설 리뷰를 서버에서 불러와 캐시한다. 실패(데모 시설 등)하면 목데이터로 폴백 */
+  /** 이 시설 리뷰 로드가 실패했는지 (목으로 감추지 않고 에러 UI 표시용) */
+  reviewErrorOf: (facilityId: number) => boolean;
+  /** 시설 리뷰를 서버에서 불러와 캐시한다. 실패하면 목이 아니라 에러로 표시 */
   loadReviews: (facilityId: number) => Promise<void>;
   /** 리뷰 작성/수정(upsert). 자격·소유 오류는 ApiError로 던진다 */
   addReview: (input: NewReview) => Promise<void>;
@@ -324,6 +326,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>(REVIEWS);
   // 시설별 서버 리뷰 집계 캐시 (친화도 탭). 시설 상세 진입 시 loadReviews로 채운다.
   const [reviewData, setReviewData] = useState<Record<number, FacilityReviewData>>({});
+  // 리뷰 로드에 실패한 시설 — 목으로 감추지 않고 에러 UI로 보여준다
+  const [reviewErrors, setReviewErrors] = useState<Set<number>>(new Set());
   const [reports, setReports] = useState<Report[]>(INITIAL_REPORTS);
   const [reportedReviewIds, setReportedReviewIds] = useState<Set<number>>(new Set());
   const [satisfactions, setSatisfactions] = useState<PetSatisfaction[]>(INITIAL_SATISFACTIONS);
@@ -448,30 +452,33 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [reviews],
   );
 
-  // 서버에서 시설 리뷰 집계를 불러와 캐시한다. 데모 시설(서버 DB에 없음)이면 목데이터로 폴백.
-  const loadReviews = useCallback(
-    async (facilityId: number) => {
-      try {
-        const data = await reviewsApi.list(facilityId);
-        setReviewData((prev) => ({ ...prev, [facilityId]: data }));
-      } catch {
-        const mock = reviews.filter((r) => r.facilityId === facilityId);
-        setReviewData((prev) => ({
-          ...prev,
-          [facilityId]: {
-            ...aggregateReviews(mock),
-            reviews: mock,
-            pageInfo: { page: 0, size: mock.length, totalElements: mock.length, hasNext: false },
-          },
-        }));
-      }
-    },
-    [reviews],
-  );
+  // 서버에서 시설 리뷰 집계를 불러와 캐시한다.
+  // 실패하면 '목데이터'로 감추지 않고 에러로 표시한다 — 실서비스엔 목이 없어야 하고,
+  // 서버 장애가 가짜 데이터에 가려지면 사용자가 문제를 인지할 수 없기 때문이다.
+  const loadReviews = useCallback(async (facilityId: number) => {
+    // 재시도 시 이전 에러를 지워 로딩 상태로 되돌린다
+    setReviewErrors((prev) => {
+      if (!prev.has(facilityId)) return prev;
+      const next = new Set(prev);
+      next.delete(facilityId);
+      return next;
+    });
+    try {
+      const data = await reviewsApi.list(facilityId);
+      setReviewData((prev) => ({ ...prev, [facilityId]: data }));
+    } catch {
+      setReviewErrors((prev) => new Set(prev).add(facilityId));
+    }
+  }, []);
 
   const reviewDataOf = useCallback(
     (facilityId: number) => reviewData[facilityId],
     [reviewData],
+  );
+
+  const reviewErrorOf = useCallback(
+    (facilityId: number) => reviewErrors.has(facilityId),
+    [reviewErrors],
   );
 
   const canReview = useCallback(
@@ -907,6 +914,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reviews,
       reviewsOf,
       reviewDataOf,
+      reviewErrorOf,
       loadReviews,
       addReview,
       removeReview,
@@ -975,6 +983,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reviews,
       reviewsOf,
       reviewDataOf,
+      reviewErrorOf,
       loadReviews,
       addReview,
       removeReview,

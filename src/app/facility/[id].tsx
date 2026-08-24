@@ -45,6 +45,7 @@ export default function FacilityDetailScreen() {
     pets,
     runCheck,
     reviewDataOf,
+    reviewErrorOf,
     loadReviews,
     canReview,
     confidenceOf,
@@ -95,6 +96,7 @@ export default function FacilityDetailScreen() {
   }, [facility?.facilityId, loadReviews]);
 
   const reviewData = facility ? reviewDataOf(facility.facilityId) : undefined;
+  const reviewError = facility ? reviewErrorOf(facility.facilityId) : false;
 
   if (!facility) {
     return (
@@ -538,6 +540,8 @@ export default function FacilityDetailScreen() {
         <ReviewSection
           facilityId={facility.facilityId}
           data={reviewData}
+          error={reviewError}
+          onRetry={() => loadReviews(facility.facilityId)}
           canWrite={canReview(facility.facilityId)}
           onWrite={() => {
             if (!canReview(facility.facilityId)) return;

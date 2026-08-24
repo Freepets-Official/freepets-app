@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PawBadge } from '@/components/paw-badge';
 import { SectionTitle } from '@/components/section-title';
@@ -30,12 +30,17 @@ function petSummary(r: Review): string {
 export function ReviewSection({
   facilityId,
   data,
+  error,
+  onRetry,
   canWrite,
   onWrite,
 }: {
   facilityId: number;
   /** 서버 집계(등급·평균·태그·목록). 로딩 중이면 undefined */
   data: FacilityReviewData | undefined;
+  /** 리뷰 로드 실패 여부 — 목으로 감추지 않고 에러 상태로 보여준다 */
+  error: boolean;
+  onRetry: () => void;
   canWrite: boolean;
   onWrite: () => void;
 }) {
@@ -43,6 +48,41 @@ export function ReviewSection({
   const { reportedReviewIds, reportReview, myUserId, removeReview } = useAppStore();
   const [reportTarget, setReportTarget] = useState<Review | null>(null);
   const [detailTarget, setDetailTarget] = useState<Review | null>(null);
+
+  // 로드 실패 → 목데이터로 감추지 않고 "불러오지 못했어요 + 다시 시도"를 보여준다.
+  if (error && !data) {
+    return (
+      <>
+        <SectionTitle title="반려동물 친화도" caption="" />
+        <View style={[styles.stateCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
+          <Ionicons name="cloud-offline-outline" size={30} color={p.muted} />
+          <Text style={[styles.stateText, { color: p.ink }]}>리뷰를 불러오지 못했어요</Text>
+          <Text style={[styles.stateSub, { color: p.muted }]}>잠시 후 다시 시도해 주세요.</Text>
+          <Pressable
+            onPress={onRetry}
+            style={({ pressed }) => [
+              styles.retry,
+              { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : 'transparent' },
+            ]}>
+            <Ionicons name="refresh" size={15} color={p.accent} />
+            <Text style={[styles.retryText, { color: p.accent }]}>다시 시도</Text>
+          </Pressable>
+        </View>
+      </>
+    );
+  }
+
+  // 아직 로딩 중(첫 요청 진행) — 목이 없으므로 스피너만
+  if (!data) {
+    return (
+      <>
+        <SectionTitle title="반려동물 친화도" caption="" />
+        <View style={styles.loading}>
+          <ActivityIndicator color={p.accent} />
+        </View>
+      </>
+    );
+  }
 
   // 등급·항목평균·상위태그는 서버가 시설 전체 리뷰 기준으로 집계해 내려준다 (페이지 무관).
   const grade = data?.grade ?? { level: null, label: null, score: null, count: 0, needMore: PAW_MIN_REVIEWS };
@@ -366,4 +406,25 @@ const styles = StyleSheet.create({
   reasonText: { fontSize: 14, fontWeight: '700' },
   cancel: { alignItems: 'center', paddingVertical: Spacing.md, marginTop: 4 },
   cancelText: { fontSize: 14, fontWeight: '700' },
+  loading: { alignItems: 'center', paddingVertical: 48 },
+  stateCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: Spacing.xl,
+    alignItems: 'center',
+    gap: 6,
+  },
+  stateText: { fontSize: 15, fontWeight: '800', marginTop: 4 },
+  stateSub: { fontSize: 12.5, lineHeight: 18, textAlign: 'center' },
+  retry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: Radius.full,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    marginTop: 8,
+  },
+  retryText: { fontSize: 13.5, fontWeight: '800' },
 });

@@ -207,42 +207,13 @@ export function pawGradeOf(reviews: Review[]): PawGrade {
   };
 }
 
-/** 시설 친화도 집계 — 발자국 등급 + 항목별 평균 + 상위 태그 */
-export interface ReviewAggregate {
+/** 시설 상세 친화도 탭에 필요한 전체 묶음 (집계 + 페이지 목록) — 서버 응답과 같은 모양 */
+export interface FacilityReviewData {
   grade: PawGrade;
   categoryAverages: { space: number; staff: number; amenity: number };
   topTags: { tag: ReviewTag; count: number }[];
-}
-
-/** 시설 상세 친화도 탭에 필요한 전체 묶음 (집계 + 페이지 목록) — 서버 응답과 같은 모양 */
-export interface FacilityReviewData extends ReviewAggregate {
   reviews: Review[];
   pageInfo: { page: number; size: number; totalElements: number; hasNext: boolean };
-}
-
-/**
- * 리뷰 배열에서 친화도 집계를 계산한다.
- * 서버가 같은 값을 내려주므로 실서버 경로에선 안 쓰고, 목 폴백(데모 시설)에서만 쓴다.
- */
-export function aggregateReviews(reviews: Review[]): ReviewAggregate {
-  const n = reviews.length;
-  const avg = (pick: (r: Review) => number) =>
-    n ? reviews.reduce((s, r) => s + pick(r), 0) / n : 0;
-  const counts = new Map<ReviewTag, number>();
-  reviews.forEach((r) => r.tags.forEach((t) => counts.set(t, (counts.get(t) ?? 0) + 1)));
-  const topTags = [...counts.entries()]
-    .map(([tag, count]) => ({ tag, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 4);
-  return {
-    grade: pawGradeOf(reviews),
-    categoryAverages: {
-      space: avg((r) => r.ratingSpace),
-      staff: avg((r) => r.ratingStaff),
-      amenity: avg((r) => r.ratingAmenity),
-    },
-    topTags,
-  };
 }
 
 export interface Pet {
