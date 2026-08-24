@@ -1,17 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PawBadge } from '@/components/paw-badge';
 import { SectionTitle } from '@/components/section-title';
 import { StarsDisplay } from '@/components/star-rating';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import {
+  PAW_MIN_REVIEWS,
   PET_KIND_LABEL,
   REVIEW_TAG_LABEL,
-  pawGradeOf,
+  type FacilityReviewData,
   type Review,
-  type ReviewTag,
 } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import {
@@ -22,30 +22,25 @@ import {
 
 const REASONS = Object.keys(REVIEW_REPORT_REASON_LABEL) as ReviewReportReason[];
 
-function avg(rs: Review[], pick: (r: Review) => number): number {
-  return rs.length ? rs.reduce((s, r) => s + pick(r), 0) / rs.length : 0;
-}
-
 /** 카드용 한 줄 요약 — "말티즈 3.4kg, 골든리트리버 28kg" (넘치면 …로 잘림) */
 function petSummary(r: Review): string {
   return r.pets.map((pi) => `${pi.species}${pi.weight > 0 ? ` ${pi.weight}kg` : ''}`).join(', ');
 }
 
-function topTags(rs: Review[], limit = 4): { tag: ReviewTag; count: number }[] {
-  const counts = new Map<ReviewTag, number>();
-  rs.forEach((r) => r.tags.forEach((t) => counts.set(t, (counts.get(t) ?? 0) + 1)));
-  return [...counts.entries()]
-    .map(([tag, count]) => ({ tag, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, limit);
-}
-
 export function ReviewSection({
-  reviews,
+  facilityId,
+  data,
+  error,
+  onRetry,
   canWrite,
   onWrite,
 }: {
-  reviews: Review[];
+  facilityId: number;
+  /** 서버 집계(등급·평균·태그·목록). 로딩 중이면 undefined */
+  data: FacilityReviewData | undefined;
+  /** 리뷰 로드 실패 여부 — 목으로 감추지 않고 에러 상태로 보여준다 */
+  error: boolean;
+  onRetry: () => void;
   canWrite: boolean;
   onWrite: () => void;
 }) {
@@ -54,21 +49,57 @@ export function ReviewSection({
   const [reportTarget, setReportTarget] = useState<Review | null>(null);
   const [detailTarget, setDetailTarget] = useState<Review | null>(null);
 
-  // 신고된 리뷰는 등급 산정에서만 빠지고 목록에는 그대로 남는다 (docs/04 4-2)
-  const scored = reviews.filter((r) => !reportedReviewIds.has(r.reviewId));
-  const grade = pawGradeOf(scored);
-  const tags = topTags(scored);
+  // 로드 실패 → 목데이터로 감추지 않고 "불러오지 못했어요 + 다시 시도"를 보여준다.
+  if (error && !data) {
+    return (
+      <>
+        <SectionTitle title="반려동물 친화도" caption="" />
+        <View style={[styles.stateCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
+          <Ionicons name="cloud-offline-outline" size={30} color={p.muted} />
+          <Text style={[styles.stateText, { color: p.ink }]}>리뷰를 불러오지 못했어요</Text>
+          <Text style={[styles.stateSub, { color: p.muted }]}>잠시 후 다시 시도해 주세요.</Text>
+          <Pressable
+            onPress={onRetry}
+            style={({ pressed }) => [
+              styles.retry,
+              { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : 'transparent' },
+            ]}>
+            <Ionicons name="refresh" size={15} color={p.accent} />
+            <Text style={[styles.retryText, { color: p.accent }]}>다시 시도</Text>
+          </Pressable>
+        </View>
+      </>
+    );
+  }
+
+  // 아직 로딩 중(첫 요청 진행) — 목이 없으므로 스피너만
+  if (!data) {
+    return (
+      <>
+        <SectionTitle title="반려동물 친화도" caption="" />
+        <View style={styles.loading}>
+          <ActivityIndicator color={p.accent} />
+        </View>
+      </>
+    );
+  }
+
+  // 등급·항목평균·상위태그는 서버가 시설 전체 리뷰 기준으로 집계해 내려준다 (페이지 무관).
+  const grade = data?.grade ?? { level: null, label: null, score: null, count: 0, needMore: PAW_MIN_REVIEWS };
+  const averages = data?.categoryAverages ?? { space: 0, staff: 0, amenity: 0 };
+  const tags = data?.topTags ?? [];
+  const reviews = data?.reviews ?? [];
   const written = reviews.filter((r) => r.content);
 
   const rows: { label: string; value: number }[] = [
-    { label: '공간 여유', value: avg(scored, (r) => r.ratingSpace) },
-    { label: '직원 친절도', value: avg(scored, (r) => r.ratingStaff) },
-    { label: '편의시설', value: avg(scored, (r) => r.ratingAmenity) },
+    { label: '공간 여유', value: averages.space },
+    { label: '직원 친절도', value: averages.staff },
+    { label: '편의시설', value: averages.amenity },
   ];
 
   return (
     <>
-      <SectionTitle title="반려동물 친화도" caption={`리뷰 ${scored.length}건`} />
+      <SectionTitle title="반려동물 친화도" caption={`리뷰 ${grade.count}건`} />
 
       <View style={[styles.summary, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
         <View style={styles.gradeRow}>
@@ -128,7 +159,7 @@ export function ReviewSection({
       </Pressable>
 
       {written.slice(0, 3).map((r) => {
-        const reported = reportedReviewIds.has(r.reviewId);
+        const reported = r.reportedByMe ?? reportedReviewIds.has(r.reviewId);
         return (
           <Pressable
             key={r.reviewId}
@@ -169,7 +200,7 @@ export function ReviewSection({
                 <Pressable
                   onPress={(e) => {
                     e.stopPropagation();
-                    removeReview(r.reviewId);
+                    removeReview(r.reviewId, facilityId);
                   }}
                   hitSlop={8}>
                   <Text style={[styles.reportLink, { color: p.danger }]}>삭제</Text>
@@ -211,7 +242,7 @@ export function ReviewSection({
               <Pressable
                 key={reason}
                 onPress={() => {
-                  if (reportTarget) reportReview(reportTarget.reviewId, reason);
+                  if (reportTarget) reportReview(reportTarget.reviewId, reason, facilityId);
                   setReportTarget(null);
                 }}
                 style={({ pressed }) => [
@@ -375,4 +406,25 @@ const styles = StyleSheet.create({
   reasonText: { fontSize: 14, fontWeight: '700' },
   cancel: { alignItems: 'center', paddingVertical: Spacing.md, marginTop: 4 },
   cancelText: { fontSize: 14, fontWeight: '700' },
+  loading: { alignItems: 'center', paddingVertical: 48 },
+  stateCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: Spacing.xl,
+    alignItems: 'center',
+    gap: 6,
+  },
+  stateText: { fontSize: 15, fontWeight: '800', marginTop: 4 },
+  stateSub: { fontSize: 12.5, lineHeight: 18, textAlign: 'center' },
+  retry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: Radius.full,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    marginTop: 8,
+  },
+  retryText: { fontSize: 13.5, fontWeight: '800' },
 });

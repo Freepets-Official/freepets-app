@@ -162,6 +162,8 @@ export interface Review {
   content: string | null;
   tags: ReviewTag[];
   visitedAt: string;
+  /** 내가 이 리뷰를 신고했는지 (서버 제공). 목 폴백에선 undefined */
+  reportedByMe?: boolean;
 }
 
 /** 친화도 점수(0~100). 발자국 등급의 입력값 — DB의 생성 컬럼과 같은 식 */
@@ -203,6 +205,15 @@ export function pawGradeOf(reviews: Review[]): PawGrade {
     count: reviews.length,
     needMore: tier ? 0 : Math.max(0, PAW_MIN_REVIEWS - reviews.length),
   };
+}
+
+/** 시설 상세 친화도 탭에 필요한 전체 묶음 (집계 + 페이지 목록) — 서버 응답과 같은 모양 */
+export interface FacilityReviewData {
+  grade: PawGrade;
+  categoryAverages: { space: number; staff: number; amenity: number };
+  topTags: { tag: ReviewTag; count: number }[];
+  reviews: Review[];
+  pageInfo: { page: number; size: number; totalElements: number; hasNext: boolean };
 }
 
 export interface Pet {

@@ -1,13 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { StarInput } from '@/components/star-rating';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
-import { FACILITIES } from '@/data/mock';
 import { PET_KIND_LABEL, REVIEW_TAG_LABEL, type ReviewTag } from '@/data/types';
+import { ApiError } from '@/lib/api';
 import { haptic } from '@/lib/haptics';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
@@ -18,10 +18,10 @@ export default function ReviewWriteScreen() {
   const p = usePalette();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { pets, checks, addReview } = useAppStore();
+  const { pets, checks, addReview, facilityById } = useAppStore();
 
   const facilityId = Number(id);
-  const facility = FACILITIES.find((f) => f.facilityId === facilityId);
+  const facility = facilityById(facilityId);
   const lastCheck = checks.find((c) => c.facilityId === facilityId);
   // 판별했던 아이들을 기본 선택 — 없으면 첫 아이
   const defaultPetIds = lastCheck?.petIds ?? (pets[0] ? [pets[0].petId] : []);
@@ -34,6 +34,7 @@ export default function ReviewWriteScreen() {
   const [petIds, setPetIds] = useState<number[]>(defaultPetIds);
   const [showPetInfo, setShowPetInfo] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const togglePetId = (petId: number) =>
     setPetIds((prev) => (prev.includes(petId) ? prev.filter((x) => x !== petId) : [...prev, petId]));
@@ -51,23 +52,36 @@ export default function ReviewWriteScreen() {
   const toggleTag = (t: ReviewTag) =>
     setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
-  const submit = () => {
+  const submit = async () => {
     if (!space || !staff || !amenity) {
       setError('세 항목 모두 별점을 남겨 주세요');
       return;
     }
-    addReview({
-      facilityId,
-      petIds,
-      showPetInfo,
-      ratingSpace: space,
-      ratingStaff: staff,
-      ratingAmenity: amenity,
-      content: content.trim() || null,
-      tags,
-    });
-    haptic.success();
-    router.back();
+    if (petIds.length === 0) {
+      setError('함께 방문한 반려동물을 한 마리 이상 골라 주세요');
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      await addReview({
+        facilityId,
+        petIds,
+        showPetInfo,
+        ratingSpace: space,
+        ratingStaff: staff,
+        ratingAmenity: amenity,
+        content: content.trim() || null,
+        tags,
+      });
+      haptic.success();
+      router.back();
+    } catch (e) {
+      // 서버가 자격(REVIEW4001)·소유(PET4002) 등을 검사한다 — 메시지를 그대로 노출
+      setError(e instanceof ApiError ? e.message : '리뷰 등록에 실패했어요. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -196,12 +210,19 @@ export default function ReviewWriteScreen() {
 
       <Pressable
         onPress={submit}
+        disabled={submitting}
         style={({ pressed }) => [
           styles.submit,
-          { backgroundColor: pressed ? p.accentDark : p.accent },
+          { backgroundColor: pressed ? p.accentDark : p.accent, opacity: submitting ? 0.7 : 1 },
         ]}>
-        <Ionicons name="paw" size={17} color={p.onAccent} />
-        <Text style={[styles.submitLabel, { color: p.onAccent }]}>리뷰 등록</Text>
+        {submitting ? (
+          <ActivityIndicator color={p.onAccent} />
+        ) : (
+          <>
+            <Ionicons name="paw" size={17} color={p.onAccent} />
+            <Text style={[styles.submitLabel, { color: p.onAccent }]}>리뷰 등록</Text>
+          </>
+        )}
       </Pressable>
     </Screen>
   );

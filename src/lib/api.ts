@@ -1,4 +1,15 @@
-import type { Category, Facility, Pet, Requirement } from '@/data/types';
+import type {
+  Category,
+  Facility,
+  FacilityReviewData,
+  PawGrade,
+  Pet,
+  Requirement,
+  Review,
+  ReviewPetInfo,
+  ReviewTag,
+} from '@/data/types';
+import { REVIEW_TAG_LABEL } from '@/data/types';
 
 import { API_URL, DEV_TOKEN } from './config';
 
@@ -280,4 +291,118 @@ export const facilitiesApi = {
     });
     return { items: (r.items ?? []).map(toFacility), total: r.total ?? 0 };
   },
+};
+
+// ─────────────────────────── 리뷰(reviews) ───────────────────────────
+// GET    /facilities/{id}/reviews  — 등급 집계(전체) + 페이지 목록
+// POST   /facilities/{id}/reviews  — 작성/수정(upsert, 시설당 1인 1리뷰)
+// DELETE /reviews/{id}             — 소프트 삭제(본인만)
+// POST   /reviews/{id}/report      — 신고(1인 1회)
+//
+// 서버 tags·kind는 앱 enum과 이름이 같거나(태그) 매핑(kind: PARROT↔BIRD 등)된다.
+// 등급 grade.level은 미달 시 0으로 오지만, 앱 PawBadge는 null을 "리뷰 수집 중"으로 그리므로 0→null로 맞춘다.
+type ServerReviewPet = { petId: number; kind: ServerKind; species: string; weight: number };
+type ServerReview = {
+  reviewId: number;
+  facilityId: number;
+  userId: number;
+  nickname: string;
+  showPetInfo: boolean;
+  pets: ServerReviewPet[];
+  ratingSpace: number;
+  ratingStaff: number;
+  ratingAmenity: number;
+  score100: number;
+  content: string | null;
+  tags: string[];
+  visitedAt: string;
+  reportedByMe: boolean;
+};
+type ServerReviewList = {
+  grade: { level: number; label: string; score: number; count: number; needMore: number };
+  categoryAverages: { space: number; staff: number; amenity: number };
+  topTags: { tag: string; count: number }[];
+  reviews: ServerReview[];
+  pageInfo: { page: number; size: number; totalElements: number; hasNext: boolean };
+};
+
+const KNOWN_TAGS = Object.keys(REVIEW_TAG_LABEL) as ReviewTag[];
+const isReviewTag = (t: string): t is ReviewTag => (KNOWN_TAGS as string[]).includes(t);
+
+function toReview(s: ServerReview): Review {
+  const pets: ReviewPetInfo[] = (s.pets ?? []).map((pt) => ({
+    kind: KIND_FROM_SERVER[pt.kind] ?? 'SMALL_MAMMAL',
+    species: pt.species,
+    weight: pt.weight,
+  }));
+  return {
+    reviewId: s.reviewId,
+    facilityId: s.facilityId,
+    userId: s.userId,
+    nickname: s.nickname,
+    petName: pets[0]?.species ?? null,
+    pets,
+    ratingSpace: s.ratingSpace,
+    ratingStaff: s.ratingStaff,
+    ratingAmenity: s.ratingAmenity,
+    content: s.content ?? null,
+    tags: (s.tags ?? []).filter(isReviewTag),
+    visitedAt: s.visitedAt,
+    reportedByMe: s.reportedByMe ?? false,
+  };
+}
+
+/** 서버 등급 → 앱 PawGrade. level 0(미달)은 null로 바꿔 "리뷰 수집 중"으로 표시되게 한다. */
+function toGrade(g: ServerReviewList['grade']): PawGrade {
+  const graded = g.level > 0;
+  return {
+    level: graded ? g.level : null,
+    label: graded ? g.label : null,
+    score: g.score,
+    count: g.count,
+    needMore: g.needMore,
+  };
+}
+
+export type NewReviewBody = {
+  petIds: number[];
+  showPetInfo: boolean;
+  ratingSpace: number;
+  ratingStaff: number;
+  ratingAmenity: number;
+  content: string;
+  tags: ReviewTag[];
+  visitedAt?: string;
+};
+
+export const reviewsApi = {
+  /** 시설 리뷰 목록 + 등급 집계. 등급/평균/태그는 페이지와 무관하게 시설 전체 기준. */
+  list: async (facilityId: number, page = 0, size = 10): Promise<FacilityReviewData> => {
+    const r = await request<ServerReviewList>(
+      'GET',
+      `/api/v1/facilities/${facilityId}/reviews?page=${page}&size=${size}`,
+      { auth: true },
+    );
+    return {
+      grade: toGrade(r.grade),
+      categoryAverages: r.categoryAverages ?? { space: 0, staff: 0, amenity: 0 },
+      topTags: (r.topTags ?? [])
+        .filter((t) => isReviewTag(t.tag))
+        .map((t) => ({ tag: t.tag as ReviewTag, count: t.count })),
+      reviews: (r.reviews ?? []).map(toReview),
+      pageInfo: r.pageInfo ?? { page, size, totalElements: 0, hasNext: false },
+    };
+  },
+  /** 작성/수정(upsert). 자격 없으면 REVIEW4001, 남의 펫이면 PET4002 등으로 던진다. */
+  create: (facilityId: number, body: NewReviewBody) =>
+    request<ServerReview>('POST', `/api/v1/facilities/${facilityId}/reviews`, { body, auth: true }),
+  /** 삭제(본인만, 소프트). */
+  remove: (reviewId: number) =>
+    request<{ reviewId: number }>('DELETE', `/api/v1/reviews/${reviewId}`, { auth: true }),
+  /** 신고 — reason: FALSE_INFO|SPAM|ABUSE|PRIVACY|IRRELEVANT. */
+  report: (reviewId: number, reason: string) =>
+    request<{ reviewId: number }>('POST', `/api/v1/reviews/${reviewId}/report`, {
+      body: { reason },
+      auth: true,
+    }),
 };
