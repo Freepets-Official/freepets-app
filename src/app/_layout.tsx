@@ -6,7 +6,7 @@ import { Platform } from 'react-native';
 import { AppSplash } from '@/components/app-splash';
 import { BiometricGate } from '@/components/biometric-gate';
 import { PawTouches } from '@/components/paw-touches';
-import { usePalette, useColorScheme } from '@/hooks/use-theme';
+import { AppThemeProvider, usePalette, useColorScheme } from '@/hooks/use-theme';
 import { AppStoreProvider, useAppStore } from '@/store/app-store';
 
 /**
@@ -104,10 +104,13 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
-  // 화면 모드는 스토어에 있으므로, 테마를 읽는 부분은 Provider 안(ThemedRoot)에서 처리한다.
+  // 화면 모드는 스토어에 있고, 실제 스킴 전환(자동 경계·포그라운드 재계산)은
+  // AppThemeProvider가 관리한다. 두 프로바이더 안에서 테마를 읽는다.
   return (
     <AppStoreProvider>
-      <ThemedRoot />
+      <AppThemeProvider>
+        <ThemedRoot />
+      </AppThemeProvider>
     </AppStoreProvider>
   );
 }
