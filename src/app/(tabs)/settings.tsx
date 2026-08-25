@@ -6,12 +6,19 @@ import { Alert, Linking, Modal, Platform, Pressable, StyleSheet, Switch, Text, V
 
 import { Chip } from '@/components/chip';
 import { Screen } from '@/components/screen';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
-import { usePalette } from '@/hooks/use-theme';
+import { CardShadow, Radius, Spacing, type ThemeMode } from '@/constants/theme';
+import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 const RADII = [1, 3, 5, 10];
+
+const THEME_MODES: { key: ThemeMode; label: string; desc: string; icon: IconName }[] = [
+  { key: 'light', label: '라이트', desc: '항상 밝게', icon: 'sunny-outline' },
+  { key: 'dark', label: '다크', desc: '항상 어둡게', icon: 'moon-outline' },
+  { key: 'auto', label: '자동', desc: '저녁~새벽엔 다크로', icon: 'contrast-outline' },
+];
+const THEME_MODE_LABEL: Record<ThemeMode, string> = { light: '라이트', dark: '다크', auto: '자동' };
 
 export default function SettingsScreen() {
   const p = usePalette();
@@ -22,6 +29,8 @@ export default function SettingsScreen() {
   const hasOwnerProfile = availableProfiles.includes('owner');
   const [cacheCleared, setCacheCleared] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const scheme = useColorScheme();
 
   // 앱 잠금 켤 때: 생체인증 등록 여부 확인 후 활성화 (네이티브만)
   const toggleAppLock = async (v: boolean) => {
@@ -187,7 +196,17 @@ export default function SettingsScreen() {
       {/* 일반 */}
       <Group title="일반">
         <Row icon="language-outline" label="언어" sub="한국어" />
-        <Row icon="moon-outline" label="화면 테마" sub="라이트 고정" />
+        <Row
+          icon="moon-outline"
+          label="화면 모드"
+          sub={
+            settings.themeMode === 'auto'
+              ? `자동 · 지금 ${scheme === 'dark' ? '다크' : '라이트'}`
+              : THEME_MODE_LABEL[settings.themeMode]
+          }
+          onPress={() => setThemeOpen(true)}
+          chevron
+        />
         <Row
           icon="lock-closed-outline"
           label="개인정보 · 위치 권한"
@@ -269,6 +288,50 @@ export default function SettingsScreen() {
             </Pressable>
             <Pressable onPress={() => setWithdrawOpen(false)} style={styles.cancelBtn}>
               <Text style={[styles.cancelBtnText, { color: p.muted }]}>취소</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* 화면 모드 선택 */}
+      <Modal
+        visible={themeOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setThemeOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setThemeOpen(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: p.card }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={[styles.sheetTitle, { color: p.ink }]}>화면 모드</Text>
+            <Text style={[styles.sheetBody, { color: p.muted }]}>
+              자동은 저녁(19시)부터 새벽(6시)까지 다크로 바뀌어요.
+            </Text>
+            {THEME_MODES.map((m) => {
+              const on = settings.themeMode === m.key;
+              return (
+                <Pressable
+                  key={m.key}
+                  onPress={() => {
+                    updateSettings({ themeMode: m.key });
+                    setThemeOpen(false);
+                  }}
+                  style={({ pressed }) => [
+                    styles.themeOption,
+                    {
+                      borderColor: on ? p.accent : p.line,
+                      backgroundColor: on ? p.accentSoft : pressed ? p.surface : 'transparent',
+                    },
+                  ]}>
+                  <Ionicons name={m.icon} size={20} color={on ? p.accent : p.muted} />
+                  <View style={styles.themeOptionText}>
+                    <Text style={[styles.themeOptionLabel, { color: on ? p.accent : p.ink }]}>{m.label}</Text>
+                    <Text style={[styles.themeOptionDesc, { color: p.muted }]}>{m.desc}</Text>
+                  </View>
+                  {on && <Ionicons name="checkmark-circle" size={20} color={p.accent} />}
+                </Pressable>
+              );
+            })}
+            <Pressable onPress={() => setThemeOpen(false)} style={styles.cancelBtn}>
+              <Text style={[styles.cancelBtnText, { color: p.muted }]}>닫기</Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -406,4 +469,17 @@ const styles = StyleSheet.create({
   withdrawBtnText: { fontSize: 15, fontWeight: '800' },
   cancelBtn: { alignItems: 'center', paddingVertical: Spacing.md },
   cancelBtnText: { fontSize: 14, fontWeight: '700' },
+  themeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    borderWidth: 1.5,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 13,
+    marginBottom: Spacing.sm,
+  },
+  themeOptionText: { flex: 1, gap: 1 },
+  themeOptionLabel: { fontSize: 15, fontWeight: '800' },
+  themeOptionDesc: { fontSize: 12, fontWeight: '600' },
 });
