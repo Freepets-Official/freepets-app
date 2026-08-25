@@ -372,13 +372,14 @@ export default function FacilityDetailScreen() {
                     기준 정보가 없어 자동 판별이 어려워요. 시설에 직접 확인하는 게 정확합니다.
                   </Text>
 
-                  {special.map((s) =>
-                    KIND_TIPS[s.kind].length > 0 ? (
-                      <View key={s.petId} style={styles.specialTips}>
+                  {/* 준비 팁은 마리가 아니라 종(kind) 기준 — 새 2마리여도 '새 준비'는 한 번만 */}
+                  {[...new Set(special.map((s) => s.kind))].map((kind) =>
+                    KIND_TIPS[kind].length > 0 ? (
+                      <View key={kind} style={styles.specialTips}>
                         <Text style={[styles.specialTipsLabel, { color: p.ink }]}>
-                          {PET_KIND_LABEL[s.kind]} 준비
+                          {PET_KIND_LABEL[kind]} 준비
                         </Text>
-                        {KIND_TIPS[s.kind].map((tip) => (
+                        {KIND_TIPS[kind].map((tip) => (
                           <View key={tip} style={styles.specialTipRow}>
                             <Ionicons name="checkmark" size={13} color={p.accent} />
                             <Text style={[styles.specialTipText, { color: p.muted }]}>{tip}</Text>
