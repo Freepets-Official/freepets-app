@@ -73,6 +73,9 @@ export interface Facility {
   phone: string | null;
   /** 현재 위치(데모: 강릉역) 기준 거리 */
   distanceM: number;
+  /** 위경도(선택) — 있으면 코스 동선을 nearest-neighbor로 최적화. 서버 검색 응답엔 아직 없다 */
+  latitude?: number;
+  longitude?: number;
   petAllowed: boolean | null;
   petConditionRaw: string | null;
   maxWeight: number | null;

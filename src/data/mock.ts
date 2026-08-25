@@ -9,6 +9,8 @@ import type { CalendarEvent, Facility, Pet, PetCheck, PetSatisfaction, Review, R
 export const FACILITIES: Facility[] = [
   {
     facilityId: 1,
+    latitude: 37.7713,
+    longitude: 128.947,
     name: '안목해변 솔숲 산책로',
     category: 'TOUR',
     address: '강원 강릉시 창해로14번길 20-1',
@@ -26,6 +28,8 @@ export const FACILITIES: Facility[] = [
   },
   {
     facilityId: 2,
+    latitude: 37.801,
+    longitude: 128.908,
     name: '카페 파도살롱',
     category: 'CAFE',
     address: '강원 강릉시 창해로 17',
@@ -44,6 +48,8 @@ export const FACILITIES: Facility[] = [
   },
   {
     facilityId: 3,
+    latitude: 37.7792,
+    longitude: 128.8784,
     name: '오죽헌',
     category: 'TOUR',
     address: '강원 강릉시 율곡로3139번길 24',
@@ -61,6 +67,8 @@ export const FACILITIES: Facility[] = [
   },
   {
     facilityId: 4,
+    latitude: 37.79,
+    longitude: 128.92,
     name: '스테이 솔바람 펜션',
     category: 'STAY',
     address: '강원 강릉시 사천면 진리해변길 111',
@@ -79,6 +87,8 @@ export const FACILITIES: Facility[] = [
   },
   {
     facilityId: 5,
+    latitude: 37.7955,
+    longitude: 128.899,
     name: '경포호 반려견 놀이터',
     category: 'LEISURE',
     address: '강원 강릉시 운정길 125',
@@ -96,6 +106,8 @@ export const FACILITIES: Facility[] = [
   },
   {
     facilityId: 6,
+    latitude: 37.7519,
+    longitude: 128.8965,
     name: '강릉중앙시장',
     category: 'SHOPPING',
     address: '강원 강릉시 금성로 21',
@@ -113,6 +125,8 @@ export const FACILITIES: Facility[] = [
   },
   {
     facilityId: 7,
+    latitude: 37.76,
+    longitude: 128.88,
     name: '헤이도그 애견호텔&카페',
     category: 'CAFE',
     address: '강원 강릉시 경강로 2100',
@@ -130,6 +144,8 @@ export const FACILITIES: Facility[] = [
   },
   {
     facilityId: 8,
+    latitude: 37.69,
+    longitude: 129.034,
     name: '정동진 레일바이크',
     category: 'LEISURE',
     address: '강원 강릉시 강동면 정동역길 17',
@@ -147,6 +163,8 @@ export const FACILITIES: Facility[] = [
   },
   {
     facilityId: 9,
+    latitude: 37.802,
+    longitude: 128.901,
     name: '씨마크 호텔',
     category: 'STAY',
     address: '강원 강릉시 해안로406번길 2',
@@ -164,6 +182,8 @@ export const FACILITIES: Facility[] = [
   },
   {
     facilityId: 10,
+    latitude: 37.701,
+    longitude: 128.872,
     name: '테라로사 커피공장',
     category: 'CAFE',
     address: '강원 강릉시 구정면 현천길 25',
@@ -182,6 +202,8 @@ export const FACILITIES: Facility[] = [
   {
     // F6 데모: 아직 반려동물을 안 받는 일반 음식점. 사업자가 온보딩하면 동반 가능으로 바뀐다.
     facilityId: 11,
+    latitude: 37.794,
+    longitude: 128.913,
     name: '초당순두부 본점',
     category: 'RESTAURANT',
     address: '강원 강릉시 초당순두부길 32',
@@ -200,6 +222,8 @@ export const FACILITIES: Facility[] = [
   // ── 취향 유사도 추천용: 아직 안 가본 동반 가능 시설(전 견종·목줄만) ──
   {
     facilityId: 12,
+    latitude: 37.781,
+    longitude: 128.949,
     name: '송정해변 솔바람 산책로',
     category: 'TOUR',
     address: '강원 강릉시 송정동 해안로',
@@ -217,6 +241,8 @@ export const FACILITIES: Facility[] = [
   },
   {
     facilityId: 13,
+    latitude: 37.83,
+    longitude: 128.88,
     name: '보헤미안 로스터스 강릉',
     category: 'CAFE',
     address: '강원 강릉시 사천면 해안로 1107',
@@ -234,6 +260,8 @@ export const FACILITIES: Facility[] = [
   },
   {
     facilityId: 14,
+    latitude: 37.72,
+    longitude: 128.85,
     name: '강릉 펫 글램핑',
     category: 'STAY',
     address: '강원 강릉시 성산면 대관령로',
