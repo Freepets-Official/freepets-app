@@ -22,13 +22,24 @@ const CATEGORIES = Object.keys(CATEGORY_LABEL) as Category[];
  * 원래 별도 탭이던 랭킹을 흡수한 것 — 성격이 비슷해 탭을 나누면 스크롤만 길어졌다.
  * 롤백(탭 재분리)하려면 이 토글을 걷어내고 _layout의 ranking href:null만 지우면 된다.
  */
-type Mode = 'nearby' | 'ranking';
+type Mode = 'nearby' | 'all' | 'ranking';
+
+// 전체 모드: 내 주변보다 훨씬 넓게 검색. 위치 권한이 없어도 되게 기본 중심(서울)을 둔다.
+// 백엔드가 반경을 최대 100km로 제한(200km↑는 400)하므로 그 상한을 쓴다. 진짜 전국(키워드 전역)
+// 검색은 반경 무제한/키워드 전역 API가 나오면 교체.
+const RADIUS_ALL_M = 100_000;
+const DEFAULT_CENTER = { latitude: 37.5665, longitude: 126.978 };
 
 const HEADER: Record<Mode, { eyebrow: string; title: string; subtitle: string }> = {
   nearby: {
     eyebrow: '반려동물 동반여행',
     title: '가도 될까?',
     subtitle: '시설마다 다른 출입 조건, AI가 우리 아이 기준으로 판단해 드려요.',
+  },
+  all: {
+    eyebrow: '반려동물 동반여행',
+    title: '어디든 찾아봐요',
+    subtitle: '내 주변을 넘어 넓은 범위에서, 지역·이름으로 검색해요.',
   },
   ranking: {
     eyebrow: '반려동물 동반여행',
@@ -61,32 +72,43 @@ export default function ExploreScreen() {
   };
   useEffect(locate, []);
 
-  // 좌표·검색어·카테고리·반경이 바뀌면 재검색(입력 타이핑은 400ms 디바운스)
+  // 좌표·검색어·카테고리·반경·모드가 바뀌면 재검색(입력 타이핑은 400ms 디바운스).
+  // 전체 모드는 위치 없이도 되도록 기본 중심을 쓰고 반경을 전국으로 넓힌다.
   useEffect(() => {
-    if (!coords) return;
+    if (mode === 'ranking') return;
+    const center = mode === 'all' ? coords ?? DEFAULT_CENTER : coords;
+    if (!center) return; // 내 주변인데 위치 권한이 없으면 검색하지 않는다
+    // 디바운스 타이머만 취소하면 '이미 날아간' 요청은 못 막는다. 모드·검색어를 빠르게
+    // 바꾸면 늦게 도착한 이전 응답이 현재 결과를 덮어쓸 수 있어, active 플래그로 무효화한다.
+    let active = true;
     const t = setTimeout(async () => {
       setLoading(true);
       try {
         const res = await facilitiesApi.search({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
+          latitude: center.latitude,
+          longitude: center.longitude,
           keyword: keyword.trim() || undefined,
           category: category ?? undefined,
-          radiusM: settings.searchRadiusKm * 1000,
+          radiusM: mode === 'all' ? RADIUS_ALL_M : settings.searchRadiusKm * 1000,
           size: 30,
         });
+        if (!active) return; // 그 사이 모드/조건이 바뀌었으면 이 응답은 버린다
         setItems(res.items);
         setTotal(res.total);
         registerFacilities(res.items);
       } catch {
+        if (!active) return;
         setItems([]);
         setTotal(0);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }, 400);
-    return () => clearTimeout(t);
-  }, [coords, keyword, category, settings.searchRadiusKm, registerFacilities]);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+  }, [mode, coords, keyword, category, settings.searchRadiusKm, registerFacilities]);
 
   // '동반 불가 숨기기' 설정은 클라이언트에서 거른다(서버 필터는 단일값이라)
   const facilities = useMemo(
@@ -101,6 +123,7 @@ export default function ExploreScreen() {
         {(
           [
             { key: 'nearby', icon: 'location', label: '내 주변' },
+            { key: 'all', icon: 'earth', label: '전체' },
             { key: 'ranking', icon: 'trophy', label: '발자국 랭킹' },
           ] as const
         ).map((tab) => {
@@ -176,11 +199,18 @@ export default function ExploreScreen() {
           </Pressable>
 
           <SectionTitle
-            title="내 주변 시설"
-            caption={locState === 'ok' ? `${total.toLocaleString()}곳 · 내 위치 기준` : '내 위치 기준'}
+            title={mode === 'all' ? '전체 시설' : '내 주변 시설'}
+            caption={
+              mode === 'all'
+                ? `${total.toLocaleString()}곳 · 넓은 범위`
+                : locState === 'ok'
+                  ? `${total.toLocaleString()}곳 · 내 위치 기준`
+                  : '내 위치 기준'
+            }
           />
 
-          {locState === 'denied' ? (
+          {/* 위치 권한 안내는 '내 주변'에서만 — '전체'는 위치 없이 전국을 검색한다 */}
+          {mode === 'nearby' && locState === 'denied' ? (
             <View style={styles.empty}>
               <Ionicons name="location-outline" size={30} color={p.muted} />
               <Text style={[styles.emptyText, { color: p.muted }]}>
@@ -193,10 +223,12 @@ export default function ExploreScreen() {
                 <Text style={[styles.retryText, { color: p.accent }]}>위치 다시 시도</Text>
               </Pressable>
             </View>
-          ) : locState === 'loading' || (loading && items.length === 0) ? (
+          ) : (mode === 'nearby' && locState === 'loading') || (loading && items.length === 0) ? (
             <View style={styles.empty}>
               <ActivityIndicator color={p.accent} />
-              <Text style={[styles.emptyText, { color: p.muted }]}>내 주변 시설을 찾고 있어요…</Text>
+              <Text style={[styles.emptyText, { color: p.muted }]}>
+                {mode === 'all' ? '시설을 찾고 있어요…' : '내 주변 시설을 찾고 있어요…'}
+              </Text>
             </View>
           ) : (
             <View style={styles.list}>

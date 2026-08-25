@@ -242,6 +242,30 @@ export default function FacilityDetailScreen() {
 
       <ConfidencePanel facility={facility} />
 
+      {/* 위치 — 검색 응답에 좌표가 없어 주소 기반 지도 링크로 연결한다.
+          백엔드가 lat/lng를 내려주면 인라인 지도(핀)로 교체 예정. */}
+      <View style={[styles.mapCard, { backgroundColor: p.surface, borderColor: p.line }]}>
+        <View style={styles.mapHead}>
+          <Ionicons name="location" size={16} color={p.accent} />
+          <Text style={[styles.mapLabel, { color: p.ink }]}>위치</Text>
+        </View>
+        <Text style={[styles.mapAddr, { color: p.muted }]}>
+          {facility.address || '등록된 주소 정보가 없어요.'}
+        </Text>
+        <Pressable
+          onPress={() => {
+            const q = encodeURIComponent(`${facility.name} ${facility.address ?? ''}`.trim());
+            Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`);
+          }}
+          style={({ pressed }) => [
+            styles.mapBtn,
+            { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : p.card },
+          ]}>
+          <Ionicons name="map" size={16} color={p.accent} />
+          <Text style={[styles.mapBtnText, { color: p.accent }]}>지도에서 보기</Text>
+        </Pressable>
+      </View>
+
       <OwnerPromotionSection facilityId={facility.facilityId} />
 
       {/* 판별 · 우리 아이 · 친화도 토글 — 스크롤을 줄인다 */}
@@ -653,6 +677,21 @@ const styles = StyleSheet.create({
   confLineText: { fontSize: 12.5, fontWeight: '600', flexShrink: 1 },
   rawText: { fontSize: 14.5, lineHeight: 22 },
   rawSource: { fontSize: 11.5 },
+  mapCard: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.lg, gap: 8 },
+  mapHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  mapLabel: { fontSize: 13, fontWeight: '800' },
+  mapAddr: { fontSize: 13, lineHeight: 19 },
+  mapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: Radius.full,
+    paddingVertical: 11,
+    marginTop: 2,
+  },
+  mapBtnText: { fontSize: 13.5, fontWeight: '800' },
   petRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   petChip: {
     flexDirection: 'row',
