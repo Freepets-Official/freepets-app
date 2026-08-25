@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
+import type { ThemeMode } from '@/constants/theme';
 import { judgeGroup } from '@/data/judge';
 import { accountApi, petsApi, reviewsApi, satisfactionApi, setAuthToken } from '@/lib/api';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS } from '@/data/mock';
@@ -20,6 +21,8 @@ import type {
 } from '@/data/types';
 
 export interface AppSettings {
+  /** 화면 모드 — 라이트/다크/자동(저녁~새벽 다크) */
+  themeMode: ThemeMode;
   /** 주변 검색 반경(km) */
   searchRadiusKm: number;
   /** 동반 불가 시설 숨기기 */
@@ -37,6 +40,7 @@ export interface AppSettings {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
+  themeMode: 'light',
   searchRadiusKm: 3,
   hideDenied: false,
   seasonalTips: true,
