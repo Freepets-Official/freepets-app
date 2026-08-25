@@ -78,6 +78,9 @@ export default function ExploreScreen() {
     if (mode === 'ranking') return;
     const center = mode === 'all' ? coords ?? DEFAULT_CENTER : coords;
     if (!center) return; // 내 주변인데 위치 권한이 없으면 검색하지 않는다
+    // 디바운스 타이머만 취소하면 '이미 날아간' 요청은 못 막는다. 모드·검색어를 빠르게
+    // 바꾸면 늦게 도착한 이전 응답이 현재 결과를 덮어쓸 수 있어, active 플래그로 무효화한다.
+    let active = true;
     const t = setTimeout(async () => {
       setLoading(true);
       try {
@@ -89,17 +92,22 @@ export default function ExploreScreen() {
           radiusM: mode === 'all' ? RADIUS_ALL_M : settings.searchRadiusKm * 1000,
           size: 30,
         });
+        if (!active) return; // 그 사이 모드/조건이 바뀌었으면 이 응답은 버린다
         setItems(res.items);
         setTotal(res.total);
         registerFacilities(res.items);
       } catch {
+        if (!active) return;
         setItems([]);
         setTotal(0);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }, 400);
-    return () => clearTimeout(t);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
   }, [mode, coords, keyword, category, settings.searchRadiusKm, registerFacilities]);
 
   // '동반 불가 숨기기' 설정은 클라이언트에서 거른다(서버 필터는 단일값이라)
