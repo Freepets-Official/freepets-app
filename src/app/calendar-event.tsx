@@ -15,7 +15,7 @@ import {
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
-const TYPES: CalEventType[] = ['VACCINE', 'MED', 'CHECKUP', 'TRAVEL'];
+const TYPES: CalEventType[] = ['VACCINE', 'MED', 'CHECKUP', 'TRAVEL', 'OTHER'];
 const REPEATS: CalRepeat[] = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'];
 
 export default function CalendarEventScreen() {
@@ -213,9 +213,11 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 64 },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.sm, paddingTop: Spacing.md },
   label: { fontSize: 13.5, fontWeight: '800', marginTop: Spacing.sm },
-  typeRow: { flexDirection: 'row', gap: Spacing.sm },
+  typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   typeChip: {
-    flex: 1,
+    // 한 줄에 다 못 들어가면 자연스럽게 줄바꿈(예: 3 + 2). 최소 너비로 균형을 맞춘다.
+    flexGrow: 1,
+    flexBasis: 88,
     alignItems: 'center',
     gap: 4,
     borderWidth: 1.5,

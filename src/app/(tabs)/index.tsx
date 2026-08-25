@@ -16,11 +16,11 @@ import { GameCardFx } from '@/components/game-card-fx';
 import { PetAvatar } from '@/components/pet-avatar';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { FACILITIES } from '@/data/mock';
-import { CATEGORY_LABEL, satisfactionMood, sinceText, type Pet } from '@/data/types';
+import { CATEGORY_LABEL, satisfactionMood, type Pet } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
-import { DENIAL_REASON_LABEL, useAppStore } from '@/store/app-store';
+import { useAppStore } from '@/store/app-store';
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -39,6 +39,35 @@ function greeting(): string {
   return '편안한 밤이에요 🌙';
 }
 
+/** 홈 우측 상단 알림 종 — 안 읽은 알림 수 배지. 거부가 있으면 빨강(긴급). */
+function NotificationBell({
+  count,
+  urgent,
+  onPress,
+}: {
+  count: number;
+  urgent: boolean;
+  onPress: () => void;
+}) {
+  const p = usePalette();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      style={({ pressed }) => [
+        styles.bellBtn,
+        { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
+      ]}>
+      <Ionicons name="notifications-outline" size={22} color={p.ink} />
+      {count > 0 && (
+        <View style={[styles.bellBadge, { backgroundColor: urgent ? p.danger : p.accent, borderColor: p.bg }]}>
+          <Text style={styles.bellBadgeText}>{count > 9 ? '9+' : count}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
@@ -46,77 +75,23 @@ export default function HomeScreen() {
   const alerts = plannedDenialAlerts();
   const vax = upcomingVaccinations();
 
+  // 흩어져 있던 푸시성 알림(현장 거부·접종 기한)은 우측 상단 종 버튼 → 알림 페이지로 모았다.
+  const alertCount = alerts.length + vax.length;
+
   return (
     <Screen
       eyebrow={greeting()}
       title="반려동물 여권"
       subtitle="아이마다 좋아한 장소를 한눈에 확인하세요."
+      headerRight={
+        <NotificationBell
+          count={alertCount}
+          urgent={alerts.length > 0}
+          onPress={() => router.push('/notifications')}
+        />
+      }
       // 데모: 당기면 발자국 연출 후 마무리. 백엔드 연동 시 실제 데이터 새로고침으로 교체.
       onRefresh={() => new Promise((r) => setTimeout(r, 800))}>
-      {/* 가려던 곳(판별받은 시설)에 거부가 뜨면 홈에서 먼저 알린다 — 가장 눈에 띄게 */}
-      {alerts.length > 0 && (
-        <View style={styles.alertWrap}>
-          {alerts.map(({ facility, report }) => (
-            <Pressable
-              key={facility.facilityId}
-              onPress={() =>
-                router.push({ pathname: '/facility/[id]', params: { id: String(facility.facilityId) } })
-              }
-              style={({ pressed }) => [
-                styles.denialCard,
-                CardShadow,
-                { backgroundColor: p.danger, opacity: pressed ? 0.92 : 1 },
-              ]}>
-              <PulseBell />
-              <View style={styles.alertText}>
-                <View style={styles.denialTitleRow}>
-                  <Text style={styles.denialLabel}>실시간 거부</Text>
-                  <Text style={styles.denialTitle}>가려던 곳에 거부가 떴어요</Text>
-                </View>
-                <Text style={styles.denialBody} numberOfLines={2}>
-                  {facility.name} · {report.createdAt ? sinceText(report.createdAt) : ''}
-                  {report.reason ? ` · ${DENIAL_REASON_LABEL[report.reason]}` : ''} — 방문 전 확인하세요
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
-            </Pressable>
-          ))}
-        </View>
-      )}
-
-      {/* 다가오는(또는 지난) 예방접종 — 개·고양이 부스터 리마인더 */}
-      {vax.length > 0 && (
-        <View style={styles.alertWrap}>
-          {vax.map(({ pet, dday, date }) => {
-            const overdue = dday < 0;
-            const tone = overdue ? p.danger : p.accent;
-            const toneSoft = overdue ? p.dangerSoft : p.accentSoft;
-            return (
-              <Pressable
-                key={pet.petId}
-                onPress={() => router.push('/calendar')}
-                style={({ pressed }) => [
-                  styles.alertCard,
-                  { backgroundColor: pressed ? toneSoft : p.card, borderColor: tone },
-                ]}>
-                <View style={[styles.alertIcon, { backgroundColor: toneSoft }]}>
-                  <Ionicons name="medkit" size={18} color={tone} />
-                </View>
-                <View style={styles.alertText}>
-                  <Text style={[styles.alertTitle, { color: tone }]}>
-                    {overdue ? `${pet.name} 접종 기한이 지났어요` : `${pet.name} 예방접종이 다가와요`}
-                  </Text>
-                  <Text style={[styles.alertBody, { color: p.ink }]} numberOfLines={2}>
-                    다음 접종 {date} · {overdue ? `${-dday}일 지남` : `D-${dday}`} — 캘린더에서 확인하세요
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={tone} />
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
-
       {pets.length === 0 ? (
         <View style={[styles.empty, { borderColor: p.line }]}>
           <Ionicons name="paw" size={30} color={p.accent} />
@@ -170,20 +145,6 @@ export default function HomeScreen() {
 }
 
 /** 거부 알림의 통통 뛰는 벨 — 시선을 끈다 */
-function PulseBell() {
-  const p = usePalette();
-  const s = useSharedValue(0);
-  useEffect(() => {
-    s.value = withRepeat(withTiming(1, { duration: 850 }), -1, true);
-  }, [s]);
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: 1 + 0.14 * s.value }] }));
-  return (
-    <Animated.View style={[styles.denialIcon, style]}>
-      <Ionicons name="notifications" size={18} color={p.danger} />
-    </Animated.View>
-  );
-}
-
 const STACK_CARD_H = 280;
 const STACK_PEEK = 72;
 const STACK_SPRING = { damping: 16, stiffness: 180, mass: 0.7 };
@@ -422,55 +383,27 @@ function PetCardBody({ pet }: { pet: Pet }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  alertWrap: { gap: Spacing.sm },
-  alertCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    borderWidth: 1.5,
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-  },
-  alertIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  alertText: { flex: 1, gap: 2 },
-  alertTitle: { fontSize: 14, fontWeight: '800', letterSpacing: -0.3 },
-  alertBody: { fontSize: 12.5, lineHeight: 18 },
-  // 거부 알림 — 빨강 채운 카드로 가장 눈에 띄게
-  denialCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-  },
-  denialIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.md,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  denialTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-  denialLabel: {
-    fontSize: 10.5,
-    fontWeight: '900',
-    color: '#B91C1C',
-    backgroundColor: '#FFFFFF',
+  bellBtn: {
+    width: 42,
+    height: 42,
     borderRadius: Radius.full,
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    overflow: 'hidden',
-    letterSpacing: 0.2,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  denialTitle: { fontSize: 14.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
-  denialBody: { fontSize: 12.5, lineHeight: 18, color: 'rgba(255,255,255,0.92)' },
+  bellBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  bellBadgeText: { fontSize: 10, fontWeight: '900', color: '#FFFFFF' },
   // 프리미엄 수집형 카드 — 그라디언트 네임플레이트 + 얇은 테두리 + 깊은 플로팅 그림자
   card: {
     borderRadius: Radius.xl,

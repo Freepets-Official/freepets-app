@@ -10,7 +10,8 @@ export const PET_KIND_LABEL: Record<PetKind, string> = {
   BIRD: '새',
   RABBIT: '토끼',
   REPTILE: '파충류',
-  SMALL_MAMMAL: '소동물',
+  // 소동물 포함 그 밖의 종을 아우르는 catch-all. 서버 enum은 SMALL_ANIMAL로 매핑.
+  SMALL_MAMMAL: '기타',
 };
 
 /**
@@ -333,7 +334,7 @@ export const REQUIREMENT_LABEL: Record<Requirement, string> = {
 
 /* ── 반려동물 캘린더 ─────────────────────────────────────────
  * 예방접종·약 복용·건강검진·여행 일정을 한 곳에서 관리한다. */
-export type CalEventType = 'VACCINE' | 'MED' | 'CHECKUP' | 'TRAVEL';
+export type CalEventType = 'VACCINE' | 'MED' | 'CHECKUP' | 'TRAVEL' | 'OTHER';
 export type CalRepeat = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
 export interface CalendarEvent {
@@ -361,6 +362,7 @@ export const CAL_EVENT_META: Record<
   MED: { label: '약 복용', icon: 'medical', color: '#E0952B', soft: '#FBEFD6' },
   CHECKUP: { label: '건강검진', icon: 'pulse', color: '#2BB3A3', soft: '#DBF4F0' },
   TRAVEL: { label: '여행', icon: 'airplane', color: '#4C8DF5', soft: '#E6EEFD' },
+  OTHER: { label: '기타', icon: 'ellipsis-horizontal', color: '#8A8F9C', soft: '#EEF0F3' },
 };
 
 export const CAL_REPEAT_LABEL: Record<CalRepeat, string> = {

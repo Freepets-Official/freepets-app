@@ -194,10 +194,24 @@ export default function PetsScreen() {
       />
 
       <Text style={[styles.label, { color: p.muted }]}>동물 종류</Text>
-      <View style={styles.sizeRow}>
-        {PET_KINDS.map((k) => (
-          <Chip key={k} label={PET_KIND_LABEL[k]} selected={kind === k} onPress={() => setKind(k)} />
-        ))}
+      {/* 6종을 3×2 균등 그리드로 — 한 칸만 다음 줄로 넘어가 생기던 어정쩡한 여백을 없앤다 */}
+      <View style={styles.kindGrid}>
+        {PET_KINDS.map((k) => {
+          const on = kind === k;
+          return (
+            <Pressable
+              key={k}
+              onPress={() => setKind(k)}
+              style={[
+                styles.kindChip,
+                { backgroundColor: on ? p.ink : p.surface, borderColor: on ? p.ink : p.line },
+              ]}>
+              <Text style={[styles.kindChipText, { color: on ? p.bg : p.muted }]}>
+                {PET_KIND_LABEL[k]}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
       {!AI_JUDGEABLE_KINDS.includes(kind) && (
         <Text style={[styles.kindHint, { color: p.muted }]}>
@@ -472,6 +486,17 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 13, fontWeight: '700' },
   sizeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  kindGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  kindChip: {
+    // flexBasis 30% + gap → 한 줄에 3칸, 6종이 3×2로 균등하게 채워진다
+    flexGrow: 1,
+    flexBasis: '30%',
+    alignItems: 'center',
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    paddingVertical: 9,
+  },
+  kindChipText: { fontSize: 13, fontWeight: '700' },
   kindHint: { fontSize: 12, lineHeight: 17, marginTop: -4 },
   switchRow: {
     flexDirection: 'row',

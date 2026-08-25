@@ -15,11 +15,13 @@ interface ScreenProps {
   title?: string;
   eyebrow?: string;
   subtitle?: string;
+  /** 헤더 우측 상단 액션(예: 알림 종 버튼) */
+  headerRight?: ReactNode;
   /** 넘기면 당겨서 새로고침(발자국) 활성화. 데모는 연출용, 백엔드 연동 시 실 새로고침. */
   onRefresh?: () => void | Promise<void>;
 }
 
-export function Screen({ children, title, eyebrow, subtitle, onRefresh }: ScreenProps) {
+export function Screen({ children, title, eyebrow, subtitle, headerRight, onRefresh }: ScreenProps) {
   const p = usePalette();
   const chrome = useTabChrome();
   const [pull, setPull] = useState(0);
@@ -65,11 +67,14 @@ export function Screen({ children, title, eyebrow, subtitle, onRefresh }: Screen
         onScrollEndDrag={handleEndDrag}
         keyboardShouldPersistTaps="handled">
         <View style={styles.inner}>
-          {(title || eyebrow) && (
+          {(title || eyebrow || headerRight) && (
             <View style={styles.header}>
-              {eyebrow ? <Text style={[styles.eyebrow, { color: p.accent }]}>{eyebrow}</Text> : null}
-              {title ? <Text style={[styles.title, { color: p.ink }]}>{title}</Text> : null}
-              {subtitle ? <Text style={[styles.subtitle, { color: p.muted }]}>{subtitle}</Text> : null}
+              <View style={styles.headerText}>
+                {eyebrow ? <Text style={[styles.eyebrow, { color: p.accent }]}>{eyebrow}</Text> : null}
+                {title ? <Text style={[styles.title, { color: p.ink }]}>{title}</Text> : null}
+                {subtitle ? <Text style={[styles.subtitle, { color: p.muted }]}>{subtitle}</Text> : null}
+              </View>
+              {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
             </View>
           )}
           {children}
@@ -91,7 +96,16 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     gap: Spacing.lg,
   },
-  header: { gap: 4, paddingTop: Spacing.xl, paddingBottom: Spacing.xs },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Spacing.md,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.xs,
+  },
+  headerText: { flex: 1, gap: 4 },
+  headerRight: { paddingTop: 2 },
   eyebrow: {
     fontSize: 12,
     fontWeight: '800',
