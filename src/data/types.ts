@@ -45,7 +45,15 @@ export type Requirement =
 export type Confidence = 'CONFIRMED' | 'LIKELY' | 'ESTIMATED' | 'UNVERIFIED';
 
 /** 신뢰도의 근거 */
-export type ConfidenceSource = 'OWNER' | 'CROWD' | 'PARSED' | 'USER_CALL' | 'DENIAL_REPORT' | 'NONE';
+export type ConfidenceSource =
+  | 'OWNER'
+  | 'CROWD'
+  | 'PARSED'
+  | 'USER_CALL'
+  | 'DENIAL_REPORT'
+  /** 서버가 조건을 확정(confirmedAt)했지만 확정 주체는 응답에 없다. 근거를 지어내지 않기 위한 값 */
+  | 'SERVER'
+  | 'NONE';
 
 // 사용자에겐 두 가지만 보여준다: 확정 / 확인 필요.
 // '유력·추정' 같은 애매한 중간 단계는 직관적인 '확인 필요'로 합친다(내부 ENUM은 유지).
@@ -62,6 +70,7 @@ export const CONFIDENCE_SOURCE_LABEL: Record<ConfidenceSource, string> = {
   PARSED: '관광공사 원문 기반',
   USER_CALL: '내가 전화로 확인',
   DENIAL_REPORT: '현장 거부 제보 접수',
+  SERVER: '확인 완료',
   NONE: '정보 없음',
 };
 

@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import type { ThemeMode } from '@/constants/theme';
 import { judgeGroup } from '@/data/judge';
-import { accountApi, petsApi, reviewsApi, satisfactionApi, setAuthToken } from '@/lib/api';
+import { accountApi, facilitiesApi, petsApi, reviewsApi, satisfactionApi, setAuthToken } from '@/lib/api';
+import type { Coords } from '@/lib/location';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, vaccinationDday } from '@/data/types';
 import type {
@@ -19,6 +20,25 @@ import type {
   ReviewTag,
   TopPlace,
 } from '@/data/types';
+
+/** 이름만 아는 시설의 빈 껍데기. 홈 TOP3 캐시와 상세 병합의 기본값으로 쓴다. */
+const EMPTY_FACILITY: Facility = {
+  facilityId: 0,
+  name: '',
+  category: 'TOUR',
+  address: '',
+  phone: null,
+  distanceM: 0,
+  petAllowed: null,
+  petConditionRaw: null,
+  maxWeight: null,
+  requirements: [],
+  sido: '',
+  sigungu: '',
+  confidence: 'ESTIMATED',
+  confidenceSource: 'PARSED',
+  confirmedAt: null,
+};
 
 export interface AppSettings {
   /** 화면 모드 — 라이트/다크/자동(저녁~새벽 다크) */
@@ -260,6 +280,10 @@ interface AppStore {
 
   /** 시설 조회 — 서버 검색결과 캐시 우선, 없으면 목데이터 */
   facilityById: (id: number) => Facility | undefined;
+  /** GET /facilities/{id} — 상세를 받아 캐시에 병합한다(검색을 안 거치고 들어온 시설용) */
+  loadFacility: (id: number) => Promise<void>;
+  /** 탐색이 잡은 GPS를 보관 — 상세에서 권한을 다시 묻지 않고 거리 계산에 쓴다 */
+  setLastCoords: (c: Coords | null) => void;
   /** 서버에서 받은 시설을 상세 조회용 캐시에 등록 */
   registerFacilities: (fs: Facility[]) => void;
 
@@ -372,6 +396,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 서버 검색·홈 TOP3 등으로 알게 된 시설을 상세 조회용으로 캐시한다.
   // (아래 registerFacilities/facilityById가 쓰고, loadTopPlaces도 최소 정보로 채운다)
   const facilityCache = useRef<Map<number, Facility>>(new Map());
+  // 캐시가 ref라 값이 바뀌어도 리렌더가 안 된다. 상세를 받아오면 이 숫자를 올려 화면을 다시 그린다.
+  const [facilityVersion, setFacilityVersion] = useState(0);
+  // 탐색 화면이 잡은 GPS를 보관한다. 상세에서 다시 권한을 묻지 않고 거리(distanceM)를 받기 위한 것.
+  const [lastCoords, setLastCoords] = useState<Coords | null>(null);
 
   // 서버에서 내 반려동물을 불러와 로컬 상태를 채운다.
   // __DEV__에선 dev 토큰으로 항상 조회되고, 실서비스에선 로그인 후 조회된다.
@@ -656,21 +684,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         pet.topFacilities.forEach((f) => {
           if (facilityCache.current.has(f.facilityId)) return;
           facilityCache.current.set(f.facilityId, {
+            ...EMPTY_FACILITY,
             facilityId: f.facilityId,
             name: f.name,
             category: f.category,
-            address: '',
-            phone: null,
-            distanceM: 0,
-            petAllowed: null,
-            petConditionRaw: null,
-            maxWeight: null,
-            requirements: [],
-            sido: '',
-            sigungu: '',
-            confidence: 'ESTIMATED',
-            confidenceSource: 'PARSED',
-            confirmedAt: null,
           });
         });
       });
@@ -724,8 +741,33 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const facilityById = useCallback(
     (id: number): Facility | undefined =>
       facilityCache.current.get(id) ?? FACILITIES.find((f) => f.facilityId === id),
-    [],
+    // facilityVersion은 값을 쓰지 않지만, 캐시가 ref라 이게 없으면 상세를 받아와도 화면이 다시 그려지지 않는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [facilityVersion],
   );
+
+  // GET /facilities/{id} — 검색을 안 거치고 들어온 시설(홈 TOP3·알림·딥링크)의 빈 상세를 채운다.
+  // 상세 응답엔 maxWeight·requirements가 없으므로 **덮어쓰지 않고 병합**한다. 덮으면 탐색에서
+  // 들어온 시설의 체중 제한이 사라져 판별이 통과로 뒤집힌다.
+  const loadFacility = useCallback(async (id: number) => {
+    if (!Number.isInteger(id) || id <= 0) return; // 숫자가 아니면 서버가 400이 아니라 500을 낸다
+    try {
+      const detail = await facilitiesApi.detail(id, lastCoords ?? undefined);
+      const base = facilityCache.current.get(id) ?? FACILITIES.find((f) => f.facilityId === id);
+      const merged: Facility = {
+        ...(base ?? EMPTY_FACILITY),
+        ...detail,
+        // 좌표를 못 실어 보냈으면 서버가 거리를 못 준다 → 검색으로 알던 거리를 유지
+        distanceM: detail.distanceM || base?.distanceM || 0,
+        latitude: detail.latitude ?? base?.latitude,
+        longitude: detail.longitude ?? base?.longitude,
+      };
+      facilityCache.current.set(id, merged);
+      setFacilityVersion((v) => v + 1);
+    } catch {
+      // 실패해도 조용히 — 캐시에 있던 정보로 화면은 그대로 뜬다(데모 안전)
+    }
+  }, [lastCoords]);
 
   const updateSettings = useCallback((patch: Partial<AppSettings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
@@ -1025,6 +1067,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       topPlacesForPet,
       facilityById,
       registerFacilities,
+      loadFacility,
+      setLastCoords,
       settings,
       updateSettings,
       userConfirmedIds,
@@ -1095,6 +1139,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       topPlacesForPet,
       facilityById,
       registerFacilities,
+      loadFacility,
+      setLastCoords,
       settings,
       updateSettings,
       userConfirmedIds,

@@ -56,10 +56,19 @@ export default function FacilityDetailScreen() {
     calendarEvents,
     addCalendarEvent,
     facilityById,
+    loadFacility,
   } = useAppStore();
 
   // 서버 검색결과 캐시 우선, 없으면 목데이터
   const base = facilityById(Number(id));
+
+  // 검색을 안 거치고 들어오면(홈 TOP3·거부 알림·딥링크) 캐시에 이름뿐이라 상세가 빈다.
+  // GET /facilities/{id}로 동반 조건 안내문·전화·좌표·확정 시각을 채운다.
+  // 화면은 캐시 값으로 먼저 그려지고, 응답이 오면 다시 그려진다(빈 화면·스피너 없음).
+  useEffect(() => {
+    const fid = Number(id);
+    if (Number.isInteger(fid) && fid > 0) loadFacility(fid);
+  }, [id, loadFacility]);
   // 사업자가 확정한 조건이 있으면 그 값으로 표시한다 (판별은 runCheck가 내부에서 같은 override를 적용) (F5)
   const facility = base ? effectiveFacility(base) : undefined;
 

@@ -51,7 +51,7 @@ const HEADER: Record<Mode, { eyebrow: string; title: string; subtitle: string }>
 export default function ExploreScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { settings, registerFacilities } = useAppStore();
+  const { settings, registerFacilities, setLastCoords } = useAppStore();
   const [mode, setMode] = useState<Mode>('nearby');
   const [keyword, setKeyword] = useState('');
   const [category, setCategory] = useState<Category | null>(null);
@@ -67,9 +67,14 @@ export default function ExploreScreen() {
     setLocState('loading');
     getCurrentLocation().then((c) => {
       setCoords(c);
+      // 시설 상세가 거리(distanceM)를 받으려면 좌표가 필요하다. 상세에서 권한을 다시
+      // 묻지 않도록 여기서 잡은 값을 스토어에 넘겨둔다.
+      setLastCoords(c);
       setLocState(c ? 'ok' : 'denied');
     });
   };
+  // locate가 setLastCoords를 닫고 있지만 스토어 setter는 안정적이다 — 최초 1회만 실행한다
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(locate, []);
 
   // 좌표·검색어·카테고리·반경·모드가 바뀌면 재검색(입력 타이핑은 400ms 디바운스).

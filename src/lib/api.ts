@@ -282,6 +282,65 @@ function toFacility(s: ServerFacility): Facility {
   };
 }
 
+// GET /facilities/{id} — 상세. 검색을 안 거치고 들어와도(홈 TOP3·알림·딥링크) 화면이 채워진다.
+// 검색 응답에 없는 것: 동반 조건 안내문·전화·좌표·확정 시각.
+// 검색에만 있는 것: maxWeight·requirements(상세 응답엔 없음) → 스토어에서 병합한다.
+type ServerFacilityDetail = {
+  facilityId: number;
+  name: string;
+  category: string;
+  address: string | null;
+  phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  distanceM: number | null;
+  petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING';
+  petConditionRaw: string | null;
+  confirmedAt: string | null;
+  imageUrl: string | null;
+  thumbnailUrl: string | null;
+};
+
+/** 상세 API가 채울 수 있는 필드만. 나머지(maxWeight 등)는 검색 값을 유지해야 하므로 타입으로 못 박는다. */
+export type FacilityDetail = Pick<
+  Facility,
+  | 'facilityId'
+  | 'name'
+  | 'category'
+  | 'address'
+  | 'phone'
+  | 'distanceM'
+  | 'latitude'
+  | 'longitude'
+  | 'petAllowed'
+  | 'petConditionRaw'
+  | 'confidence'
+  | 'confidenceSource'
+  | 'confirmedAt'
+>;
+
+function toFacilityDetail(s: ServerFacilityDetail): FacilityDetail {
+  // confirmedAt이 있으면 서버가 동반 조건을 확정한 것이다. 다만 확정 주체(사업자/사용자)는
+  // 응답에 없어 SERVER로 둔다 — 없는 근거를 지어내면 사용자가 잘못 신뢰한다.
+  const confirmed = s.confirmedAt !== null;
+  return {
+    facilityId: s.facilityId,
+    name: s.name,
+    category: CATEGORY_FROM_SERVER[s.category] ?? 'TOUR',
+    address: s.address ?? '',
+    phone: s.phone,
+    // 좌표를 안 보냈거나 시설에 좌표가 없으면 null. 거리 표시가 0km로 보이지 않게 호출부에서 병합한다.
+    distanceM: s.distanceM ?? 0,
+    latitude: s.latitude ?? undefined,
+    longitude: s.longitude ?? undefined,
+    petAllowed: s.petAllowed === 'ALLOWED' ? true : s.petAllowed === 'DENIED' ? false : null,
+    petConditionRaw: s.petConditionRaw,
+    confidence: confirmed ? 'CONFIRMED' : 'ESTIMATED',
+    confidenceSource: confirmed ? 'SERVER' : 'PARSED',
+    confirmedAt: s.confirmedAt,
+  };
+}
+
 export const facilitiesApi = {
   /** 시설 목록 검색(거리순). result.items → Facility[], result.total과 함께 반환. */
   search: async (params: FacilitySearchParams): Promise<{ items: Facility[]; total: number }> => {
@@ -290,6 +349,19 @@ export const facilitiesApi = {
       auth: true,
     });
     return { items: (r.items ?? []).map(toFacility), total: r.total ?? 0 };
+  },
+
+  /**
+   * 시설 상세. 좌표는 선택이지만 **둘 중 하나만 보내면 400**이라 쌍으로만 싣는다.
+   * facilityId에 숫자가 아닌 값이 가면 서버가 400이 아니라 500을 낸다(알려진 이슈) → 호출 전 검증.
+   */
+  detail: async (facilityId: number, coords?: { latitude: number; longitude: number }): Promise<FacilityDetail> => {
+    const q =
+      coords && Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude)
+        ? `?latitude=${coords.latitude}&longitude=${coords.longitude}`
+        : '';
+    const r = await request<ServerFacilityDetail>('GET', `/api/v1/facilities/${facilityId}${q}`, { auth: true });
+    return toFacilityDetail(r);
   },
 };
 
