@@ -4,7 +4,7 @@ import type { ThemeMode } from '@/constants/theme';
 import { judgeGroup } from '@/data/judge';
 import { accountApi, facilitiesApi, petsApi, reviewsApi, satisfactionApi, setAuthToken } from '@/lib/api';
 import type { Coords } from '@/lib/location';
-import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS } from '@/data/mock';
+import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, vaccinationDday } from '@/data/types';
 import type {
   CalendarEvent,
@@ -761,6 +761,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 들어온 시설의 체중 제한이 사라져 판별이 통과로 뒤집힌다.
   const loadFacility = useCallback(async (id: number) => {
     if (!Number.isInteger(id) || id <= 0) return; // 숫자가 아니면 서버가 400이 아니라 500을 낸다
+    // 목 시설은 서버에 없다. 호출해봐야 404고, 혹시 같은 ID가 있으면 남의 시설이 병합된다.
+    if (isMockFacilityId(id)) return;
     try {
       const detail = await facilitiesApi.detail(id, lastCoords ?? undefined);
       const base = facilityCache.current.get(id) ?? FACILITIES.find((f) => f.facilityId === id);

@@ -1,4 +1,4 @@
-import type { CheckResult, Facility, Pet } from '@/data/types';
+import type { CheckResult, Facility, Pet, Requirement } from '@/data/types';
 
 /**
  * 목 판별 로직. 백엔드 B(Claude AI) 연동 전까지 같은 입출력 계약으로 동작한다.
@@ -10,12 +10,17 @@ export interface Verdict {
   conditions: string[];
 }
 
-const REQUIREMENT_CONDITION: Record<string, string> = {
+// Record<string, string>이면 서버가 새 요구사항을 추가해도 컴파일러가 못 잡고 조용히 빠진다.
+// Requirement로 키를 못 박아 누락을 빌드 타임에 걸리게 한다.
+// SMALL_ONLY는 여기 없다 — 조건이 아니라 위에서 DENIED로 먼저 걸러지기 때문이다.
+const REQUIREMENT_CONDITION: Record<Exclude<Requirement, 'SMALL_ONLY'>, string> = {
   LEASH: '리드줄 필수 착용',
   CAGE: '케이지(이동장) 이용 필수',
   MUZZLE: '입마개 착용',
   VACCINATION: '예방접종 증명서 지참',
   OUTDOOR_ONLY: '야외 공간만 이용 가능',
+  STROLLER: '반려동물 유모차 이용',
+  MANNER_BELT: '매너벨트 착용',
 };
 
 export function judge(pet: Pet, facility: Facility): Verdict {
@@ -60,7 +65,7 @@ export function judge(pet: Pet, facility: Facility): Verdict {
   }
 
   const conditions = facility.requirements
-    .map((r) => REQUIREMENT_CONDITION[r])
+    .map((r) => (r === 'SMALL_ONLY' ? undefined : REQUIREMENT_CONDITION[r]))
     .filter((c): c is string => Boolean(c));
 
   // 경계값(허용 체중의 90% 이상)은 현장 계측 차이가 있을 수 있어 조건부로 안내

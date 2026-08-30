@@ -36,7 +36,9 @@ export type Requirement =
   | 'MUZZLE'
   | 'VACCINATION'
   | 'SMALL_ONLY'
-  | 'OUTDOOR_ONLY';
+  | 'OUTDOOR_ONLY'
+  | 'STROLLER'
+  | 'MANNER_BELT';
 
 /**
  * 정보 신뢰도 — 판별 결과(가능/조건부/불가)와 별개의 축.
@@ -342,6 +344,8 @@ export const REQUIREMENT_LABEL: Record<Requirement, string> = {
   VACCINATION: '접종증명',
   SMALL_ONLY: '소형견만',
   OUTDOOR_ONLY: '야외만',
+  STROLLER: '유모차',
+  MANNER_BELT: '매너벨트',
 };
 
 /* ── 반려동물 캘린더 ─────────────────────────────────────────

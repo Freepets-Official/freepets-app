@@ -258,7 +258,18 @@ const CATEGORY_FROM_SERVER: Record<string, Category> = {
   RESTAURANT: 'RESTAURANT',
   CAFE: 'CAFE',
 };
-const KNOWN_REQS: Requirement[] = ['LEASH', 'CAGE', 'MUZZLE', 'VACCINATION', 'SMALL_ONLY', 'OUTDOOR_ONLY'];
+// 서버 enum과 같은 8종. 여기 없는 값은 toFacility가 조용히 버리므로, 서버가 새 값을 추가하면
+// 조건이 있는데 없는 것처럼 보인다 — 헛걸음 방지가 목적이라 이 방향의 누락이 제일 위험하다.
+const KNOWN_REQS: Requirement[] = [
+  'LEASH',
+  'CAGE',
+  'MUZZLE',
+  'VACCINATION',
+  'SMALL_ONLY',
+  'OUTDOOR_ONLY',
+  'STROLLER',
+  'MANNER_BELT',
+];
 
 /** 서버 시설 → 앱 Facility. 검색 응답엔 없는 필드(원문·전화·신뢰도)는 기본값으로 채운다. */
 function toFacility(s: ServerFacility): Facility {
