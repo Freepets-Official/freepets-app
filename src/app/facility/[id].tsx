@@ -33,6 +33,7 @@ import { StampIn } from '@/components/stamp-in';
 import { haptic } from '@/lib/haptics';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
+import { primaryPhoneNumber } from '@/lib/phone';
 
 /** 리뷰 로딩 전/집계 미도달 시 헤더 발자국 배지의 기본값 */
 const EMPTY_GRADE: PawGrade = { level: null, label: null, score: null, count: 0, needMore: PAW_MIN_REVIEWS };
@@ -407,15 +408,22 @@ export default function FacilityDetailScreen() {
                     </View>
                   ) : null}
 
-                  {facility.phone ? (
+                  {primaryPhoneNumber(facility.phone) ? (
                     <Pressable
-                      onPress={() => Linking.openURL(`tel:${facility.phone}`)}
+                      // 거는 건 첫 번호로, 보여주는 건 원문 그대로. 안내센터가 따로 있으면
+                      // 사용자가 어디로 걸지 판단할 수 있어야 한다.
+                      onPress={() => {
+                        const tel = primaryPhoneNumber(facility.phone);
+                        if (tel) Linking.openURL(`tel:${tel}`).catch(() => {});
+                      }}
                       style={({ pressed }) => [
                         styles.callBtn,
                         { backgroundColor: pressed ? p.accentDark : p.accent },
                       ]}>
                       <Ionicons name="call" size={16} color={p.onAccent} />
-                      <Text style={[styles.callBtnText, { color: p.onAccent }]}>
+                      <Text
+                        numberOfLines={2}
+                        style={[styles.callBtnText, { color: p.onAccent }]}>
                         전화로 직접 확인 ({facility.phone})
                       </Text>
                     </Pressable>

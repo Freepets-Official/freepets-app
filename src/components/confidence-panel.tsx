@@ -7,6 +7,7 @@ import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import { CONFIDENCE_SOURCE_LABEL, freshnessText, type Facility } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
+import { primaryPhoneNumber } from '@/lib/phone';
 
 /**
  * 확정성 레이어의 핵심 UI — 정보 신뢰도 + 근거 + 최종 확인 시점,
@@ -29,9 +30,18 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
   const confirmedOk = isConfirmed && facility.petAllowed === true;
   const needsCheck = !denied && !confirmedOk;
 
+  // 원문에 안내문·복수 번호가 섞여 오므로 걸 수 있는 첫 번호만 뽑는다. 없으면 버튼 자체를 숨긴다.
+  const tel = primaryPhoneNumber(facility.phone);
+
+  // 전화 앱이 실제로 열렸을 때만 확정으로 올린다. 예전엔 openURL 성공 여부와 무관하게 올려서,
+  // 번호가 아닌 안내문이 와서 전화가 안 걸려도 '내가 전화로 확인'이 찍혔다 — 없는 근거를 만든 셈이다.
   const callAndConfirm = () => {
-    if (facility.phone) Linking.openURL(`tel:${facility.phone.replace(/-/g, '')}`);
-    confirmFacility(facility.facilityId);
+    if (!tel) return;
+    Linking.openURL(`tel:${tel}`)
+      .then(() => confirmFacility(facility.facilityId))
+      .catch(() => {
+        // 전화 앱을 못 열었으면 확인된 게 아니다. 신뢰도는 그대로 둔다.
+      });
   };
 
   return (
@@ -59,7 +69,7 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
         <View style={styles.actions}>
           <Text style={[styles.actionsTitle, { color: p.muted }]}>어디서 확인하나요</Text>
 
-          {facility.phone && (
+          {tel && (
             <Pressable
               onPress={callAndConfirm}
               style={({ pressed }) => [
