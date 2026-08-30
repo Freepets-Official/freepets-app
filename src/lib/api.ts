@@ -303,15 +303,14 @@ type ServerFacilityDetail = {
 
 /**
  * 상세 API가 채울 수 있는 필드만. 나머지(maxWeight 등)는 검색 값을 유지해야 하므로 타입으로 못 박는다.
- * distanceM만 Facility와 다르게 nullable이다 — '거리를 못 구했다'(null)와 '거리가 0m다'를
- * 구분해야 병합에서 실제 0을 캐시 값으로 덮어쓰지 않는다.
+ * distanceM·address는 Facility와 다르게 nullable이다 — '서버가 안 줬다'(null)와 실제 값('거리 0m',
+ * '빈 주소')을 구분해야 병합에서 검색으로 알던 값을 빈 값으로 덮어쓰지 않는다.
  */
 export type FacilityDetail = Pick<
   Facility,
   | 'facilityId'
   | 'name'
   | 'category'
-  | 'address'
   | 'phone'
   | 'latitude'
   | 'longitude'
@@ -320,7 +319,7 @@ export type FacilityDetail = Pick<
   | 'confidence'
   | 'confidenceSource'
   | 'confirmedAt'
-> & { distanceM: number | null };
+> & { distanceM: number | null; address: string | null };
 
 function toFacilityDetail(s: ServerFacilityDetail): FacilityDetail {
   // confirmedAt이 있으면 서버가 동반 조건을 확정한 것이다. 다만 확정 주체(사업자/사용자)는
@@ -330,7 +329,8 @@ function toFacilityDetail(s: ServerFacilityDetail): FacilityDetail {
     facilityId: s.facilityId,
     name: s.name,
     category: CATEGORY_FROM_SERVER[s.category] ?? 'TOUR',
-    address: s.address ?? '',
+    // 주소를 ''로 뭉개지 않는다 — 그대로 넘겨야 호출부가 검색에서 알던 주소를 남길 수 있다.
+    address: s.address,
     phone: s.phone,
     // 좌표를 안 보냈거나 시설에 좌표가 없으면 null. 0으로 뭉개지 않고 그대로 넘겨 호출부가 병합한다.
     distanceM: s.distanceM,

@@ -762,6 +762,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         // 좌표를 못 실어 보냈으면 서버가 거리를 null로 준다 → 검색으로 알던 거리를 유지.
         // ??를 쓰는 이유: 시설 앞에 서 있어 실제 거리가 0이면 그 0을 그대로 써야 한다.
         distanceM: detail.distanceM ?? base?.distanceM ?? 0,
+        // 주소도 같다 — 상세가 주소를 안 주면(null) 검색으로 알던 주소를 지우지 않는다.
+        address: detail.address ?? base?.address ?? '',
         latitude: detail.latitude ?? base?.latitude,
         longitude: detail.longitude ?? base?.longitude,
       };
