@@ -47,6 +47,13 @@ export interface AppSettings {
   searchRadiusKm: number;
   /** 동반 불가 시설 숨기기 */
   hideDenied: boolean;
+  /**
+   * 반려동물 동반 정보가 있는 곳만 보기(서버 `petAllowed=ALLOWED` 필터).
+   * 관광공사 4.8만 건 중 동반 정보가 있는 건 9,677건(19.85%)뿐이고 나머지 80%는 PENDING이라,
+   * 여행을 계획하는 사용자에겐 그 80%가 노이즈다. 다만 "이 근처에 뭐가 있나"에는 여전히
+   * 쓸모가 있어 기본값은 끈 채로 두고, 필요할 때 켜게 한다.
+   */
+  onlyPetInfo: boolean;
   /** 체크리스트에 계절 맞춤 팁 표시 */
   seasonalTips: boolean;
   notifPush: boolean;
@@ -63,6 +70,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   themeMode: 'light',
   searchRadiusKm: 3,
   hideDenied: false,
+  onlyPetInfo: false,
   seasonalTips: true,
   notifPush: true,
   notifReport: true,

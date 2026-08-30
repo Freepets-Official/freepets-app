@@ -127,6 +127,13 @@ export default function SettingsScreen() {
           onChange={(v) => updateSettings({ hideDenied: v })}
         />
         <ToggleRow
+          icon="paw-outline"
+          label="동반 정보 있는 곳만 보기"
+          sub="관광공사에 반려동물 정보가 등록된 곳만 (전체의 약 20%)"
+          value={settings.onlyPetInfo}
+          onChange={(v) => updateSettings({ onlyPetInfo: v })}
+        />
+        <ToggleRow
           icon="sunny-outline"
           label="계절 맞춤 팁 표시"
           sub="체크리스트에 계절별 주의사항을 더해요"

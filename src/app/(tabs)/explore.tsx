@@ -51,7 +51,7 @@ const HEADER: Record<Mode, { eyebrow: string; title: string; subtitle: string }>
 export default function ExploreScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { settings, registerFacilities, setLastCoords } = useAppStore();
+  const { settings, updateSettings, registerFacilities, setLastCoords } = useAppStore();
   const [mode, setMode] = useState<Mode>('nearby');
   const [keyword, setKeyword] = useState('');
   const [category, setCategory] = useState<Category | null>(null);
@@ -95,6 +95,9 @@ export default function ExploreScreen() {
           keyword: keyword.trim() || undefined,
           category: category ?? undefined,
           radiusM: mode === 'all' ? RADIUS_ALL_M : settings.searchRadiusKm * 1000,
+          // 클라이언트에서 거르지 않고 서버 필터를 쓴다 — 30건 받아와서 6건만 남기면
+          // 페이지네이션과 total이 어긋난다. hideDenied가 클라이언트인 건 대상이 16건뿐이라서다.
+          petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
           size: 30,
         });
         if (!active) return; // 그 사이 모드/조건이 바뀌었으면 이 응답은 버린다
@@ -113,7 +116,7 @@ export default function ExploreScreen() {
       active = false;
       clearTimeout(t);
     };
-  }, [mode, coords, keyword, category, settings.searchRadiusKm, registerFacilities]);
+  }, [mode, coords, keyword, category, settings.searchRadiusKm, settings.onlyPetInfo, registerFacilities]);
 
   // '동반 불가 숨기기' 설정은 클라이언트에서 거른다(서버 필터는 단일값이라)
   const facilities = useMemo(
@@ -173,6 +176,12 @@ export default function ExploreScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chips}>
+            {/* 성격이 다른 필터라 카테고리 칩과 구분되게 맨 앞에 둔다 */}
+            <Chip
+              label="동반 정보 있는 곳만"
+              selected={settings.onlyPetInfo}
+              onPress={() => updateSettings({ onlyPetInfo: !settings.onlyPetInfo })}
+            />
             <Chip label="전체" selected={category === null} onPress={() => setCategory(null)} />
             {CATEGORIES.map((c) => (
               <Chip
