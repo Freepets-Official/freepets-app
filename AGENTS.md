@@ -117,7 +117,7 @@ API 명세나 DB 스키마를 바꾸면 **`freepets-docs`에도 반영해야 합
 
 1. **생성 컬럼은 INSERT하지 않는다** — `facilities.location`, `reviews.friendliness`는 `GENERATED`입니다. JPA는 `@Column(insertable = false, updatable = false)`.
 2. **ENUM은 영문 코드 그대로 응답한다** — `ALLOWED`, `CAFE` 등. 한글 변환은 프론트 책임입니다.
-3. **Claude 호출 파라미터 3가지** — ① `claude-sonnet-5`는 `temperature`/`top_p`/`top_k`를 **400으로 거부**합니다. ② `thinking`을 **생략하면 adaptive가 기본 ON**이라, 배치 파싱처럼 사고가 불필요한 곳은 `{"type":"disabled"}`를 명시해야 토큰이 새지 않습니다. ③ `output_config.effort`는 Sonnet 계열 전용 — **Haiku 4.5는 이 파라미터 자체를 거부**합니다. 일관성은 출력 스키마 강제(`strict: true`)로 확보합니다. 자세한 건 `docs/03` 공통 설계 원칙.
+3. **Claude 호출 파라미터 3가지** — ① `claude-sonnet-5`는 `temperature`/`top_p`/`top_k`를 **400으로 거부**합니다. ② `thinking`을 **생략하면 adaptive가 기본 ON**이라, 배치 파싱처럼 사고가 불필요한 곳은 `{"type":"disabled"}`를 명시해야 토큰이 새지 않습니다. ③ `output_config.effort`는 Sonnet 계열 전용 — **Haiku 4.5는 이 파라미터 자체를 거부**합니다. 출력 강제는 두 가지를 구분합니다 — 도구를 쓰는 경로(조건 파싱·판별)는 **도구 정의의 `input_schema`에 `strict: true`**를, 도구 없이 JSON 응답만 받는 경로는 **`output_config.format.type: "json_schema"` + `schema`**를 씁니다. 자세한 건 `docs/03` 공통 설계 원칙.
 4. **API 키는 서버에만** — 앱 번들은 사용자 기기에 내려가므로 키를 넣으면 그대로 유출됩니다. 앱은 반드시 백엔드를 경유합니다.
 5. **리뷰 작성 자격 검사는 서비스 레이어 책임** — 해당 시설에 `pet_checks` 이력이 없으면 403 `REVIEW_NOT_ELIGIBLE`. DB 제약으로 걸려 있지 않습니다.
 6. **삭제 정책** — 대부분 CASCADE지만 `reviews.pet_id`만 `SET NULL`입니다. 반려동물을 지워도 리뷰는 남아야 등급이 흔들리지 않습니다.
