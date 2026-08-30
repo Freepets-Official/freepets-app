@@ -301,7 +301,11 @@ type ServerFacilityDetail = {
   thumbnailUrl: string | null;
 };
 
-/** 상세 API가 채울 수 있는 필드만. 나머지(maxWeight 등)는 검색 값을 유지해야 하므로 타입으로 못 박는다. */
+/**
+ * 상세 API가 채울 수 있는 필드만. 나머지(maxWeight 등)는 검색 값을 유지해야 하므로 타입으로 못 박는다.
+ * distanceM만 Facility와 다르게 nullable이다 — '거리를 못 구했다'(null)와 '거리가 0m다'를
+ * 구분해야 병합에서 실제 0을 캐시 값으로 덮어쓰지 않는다.
+ */
 export type FacilityDetail = Pick<
   Facility,
   | 'facilityId'
@@ -309,7 +313,6 @@ export type FacilityDetail = Pick<
   | 'category'
   | 'address'
   | 'phone'
-  | 'distanceM'
   | 'latitude'
   | 'longitude'
   | 'petAllowed'
@@ -317,7 +320,7 @@ export type FacilityDetail = Pick<
   | 'confidence'
   | 'confidenceSource'
   | 'confirmedAt'
->;
+> & { distanceM: number | null };
 
 function toFacilityDetail(s: ServerFacilityDetail): FacilityDetail {
   // confirmedAt이 있으면 서버가 동반 조건을 확정한 것이다. 다만 확정 주체(사업자/사용자)는
@@ -329,8 +332,8 @@ function toFacilityDetail(s: ServerFacilityDetail): FacilityDetail {
     category: CATEGORY_FROM_SERVER[s.category] ?? 'TOUR',
     address: s.address ?? '',
     phone: s.phone,
-    // 좌표를 안 보냈거나 시설에 좌표가 없으면 null. 거리 표시가 0km로 보이지 않게 호출부에서 병합한다.
-    distanceM: s.distanceM ?? 0,
+    // 좌표를 안 보냈거나 시설에 좌표가 없으면 null. 0으로 뭉개지 않고 그대로 넘겨 호출부가 병합한다.
+    distanceM: s.distanceM,
     latitude: s.latitude ?? undefined,
     longitude: s.longitude ?? undefined,
     petAllowed: s.petAllowed === 'ALLOWED' ? true : s.petAllowed === 'DENIED' ? false : null,

@@ -457,7 +457,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const runCheck = useCallback(
     (facilityId: number, petIds: number[]): PetCheck | null => {
-      const base = FACILITIES.find((f) => f.facilityId === facilityId);
+      // 서버 시설(검색·홈 TOP3·상세)은 목데이터에 없다. 캐시를 먼저 보지 않으면
+      // 실제 시설에서 판별 버튼이 아무 반응 없이 끝난다.
+      const base = facilityCache.current.get(facilityId) ?? FACILITIES.find((f) => f.facilityId === facilityId);
       const chosen = pets.filter((p) => petIds.includes(p.petId));
       if (!base || chosen.length === 0) return null;
 
@@ -757,8 +759,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       const merged: Facility = {
         ...(base ?? EMPTY_FACILITY),
         ...detail,
-        // 좌표를 못 실어 보냈으면 서버가 거리를 못 준다 → 검색으로 알던 거리를 유지
-        distanceM: detail.distanceM || base?.distanceM || 0,
+        // 좌표를 못 실어 보냈으면 서버가 거리를 null로 준다 → 검색으로 알던 거리를 유지.
+        // ??를 쓰는 이유: 시설 앞에 서 있어 실제 거리가 0이면 그 0을 그대로 써야 한다.
+        distanceM: detail.distanceM ?? base?.distanceM ?? 0,
         latitude: detail.latitude ?? base?.latitude,
         longitude: detail.longitude ?? base?.longitude,
       };
