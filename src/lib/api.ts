@@ -258,7 +258,18 @@ const CATEGORY_FROM_SERVER: Record<string, Category> = {
   RESTAURANT: 'RESTAURANT',
   CAFE: 'CAFE',
 };
-const KNOWN_REQS: Requirement[] = ['LEASH', 'CAGE', 'MUZZLE', 'VACCINATION', 'SMALL_ONLY', 'OUTDOOR_ONLY'];
+// 서버 enum과 같은 8종. 여기 없는 값은 toFacility가 조용히 버리므로, 서버가 새 값을 추가하면
+// 조건이 있는데 없는 것처럼 보인다 — 헛걸음 방지가 목적이라 이 방향의 누락이 제일 위험하다.
+const KNOWN_REQS: Requirement[] = [
+  'LEASH',
+  'CAGE',
+  'MUZZLE',
+  'VACCINATION',
+  'SMALL_ONLY',
+  'OUTDOOR_ONLY',
+  'STROLLER',
+  'MANNER_BELT',
+];
 
 /** 서버 시설 → 앱 Facility. 검색 응답엔 없는 필드(원문·전화·신뢰도)는 기본값으로 채운다. */
 function toFacility(s: ServerFacility): Facility {
@@ -282,6 +293,68 @@ function toFacility(s: ServerFacility): Facility {
   };
 }
 
+// GET /facilities/{id} — 상세. 검색을 안 거치고 들어와도(홈 TOP3·알림·딥링크) 화면이 채워진다.
+// 검색 응답에 없는 것: 동반 조건 안내문·전화·좌표·확정 시각.
+// 검색에만 있는 것: maxWeight·requirements(상세 응답엔 없음) → 스토어에서 병합한다.
+type ServerFacilityDetail = {
+  facilityId: number;
+  name: string;
+  category: string;
+  address: string | null;
+  phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  distanceM: number | null;
+  petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING';
+  petConditionRaw: string | null;
+  confirmedAt: string | null;
+  imageUrl: string | null;
+  thumbnailUrl: string | null;
+};
+
+/**
+ * 상세 API가 채울 수 있는 필드만. 나머지(maxWeight 등)는 검색 값을 유지해야 하므로 타입으로 못 박는다.
+ * distanceM·address는 Facility와 다르게 nullable이다 — '서버가 안 줬다'(null)와 실제 값('거리 0m',
+ * '빈 주소')을 구분해야 병합에서 검색으로 알던 값을 빈 값으로 덮어쓰지 않는다.
+ */
+export type FacilityDetail = Pick<
+  Facility,
+  | 'facilityId'
+  | 'name'
+  | 'category'
+  | 'phone'
+  | 'latitude'
+  | 'longitude'
+  | 'petAllowed'
+  | 'petConditionRaw'
+  | 'confidence'
+  | 'confidenceSource'
+  | 'confirmedAt'
+> & { distanceM: number | null; address: string | null };
+
+function toFacilityDetail(s: ServerFacilityDetail): FacilityDetail {
+  // confirmedAt이 있으면 서버가 동반 조건을 확정한 것이다. 다만 확정 주체(사업자/사용자)는
+  // 응답에 없어 SERVER로 둔다 — 없는 근거를 지어내면 사용자가 잘못 신뢰한다.
+  const confirmed = s.confirmedAt !== null;
+  return {
+    facilityId: s.facilityId,
+    name: s.name,
+    category: CATEGORY_FROM_SERVER[s.category] ?? 'TOUR',
+    // 주소를 ''로 뭉개지 않는다 — 그대로 넘겨야 호출부가 검색에서 알던 주소를 남길 수 있다.
+    address: s.address,
+    phone: s.phone,
+    // 좌표를 안 보냈거나 시설에 좌표가 없으면 null. 0으로 뭉개지 않고 그대로 넘겨 호출부가 병합한다.
+    distanceM: s.distanceM,
+    latitude: s.latitude ?? undefined,
+    longitude: s.longitude ?? undefined,
+    petAllowed: s.petAllowed === 'ALLOWED' ? true : s.petAllowed === 'DENIED' ? false : null,
+    petConditionRaw: s.petConditionRaw,
+    confidence: confirmed ? 'CONFIRMED' : 'ESTIMATED',
+    confidenceSource: confirmed ? 'SERVER' : 'PARSED',
+    confirmedAt: s.confirmedAt,
+  };
+}
+
 export const facilitiesApi = {
   /** 시설 목록 검색(거리순). result.items → Facility[], result.total과 함께 반환. */
   search: async (params: FacilitySearchParams): Promise<{ items: Facility[]; total: number }> => {
@@ -290,6 +363,19 @@ export const facilitiesApi = {
       auth: true,
     });
     return { items: (r.items ?? []).map(toFacility), total: r.total ?? 0 };
+  },
+
+  /**
+   * 시설 상세. 좌표는 선택이지만 **둘 중 하나만 보내면 400**이라 쌍으로만 싣는다.
+   * facilityId에 숫자가 아닌 값이 가면 서버가 400이 아니라 500을 낸다(알려진 이슈) → 호출 전 검증.
+   */
+  detail: async (facilityId: number, coords?: { latitude: number; longitude: number }): Promise<FacilityDetail> => {
+    const q =
+      coords && Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude)
+        ? `?latitude=${coords.latitude}&longitude=${coords.longitude}`
+        : '';
+    const r = await request<ServerFacilityDetail>('GET', `/api/v1/facilities/${facilityId}${q}`, { auth: true });
+    return toFacilityDetail(r);
   },
 };
 

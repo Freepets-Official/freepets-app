@@ -1,12 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import { CONFIDENCE_SOURCE_LABEL, freshnessText, type Facility } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
+import { primaryPhoneNumber } from '@/lib/phone';
 
 /**
  * 확정성 레이어의 핵심 UI — 정보 신뢰도 + 근거 + 최종 확인 시점,
@@ -29,9 +30,25 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
   const confirmedOk = isConfirmed && facility.petAllowed === true;
   const needsCheck = !denied && !confirmedOk;
 
+  // 원문에 안내문·복수 번호가 섞여 오므로 걸 수 있는 첫 번호만 뽑는다. 없으면 버튼 자체를 숨긴다.
+  const tel = primaryPhoneNumber(facility.phone);
+
+  // 전화 앱이 실제로 열렸을 때만 확정으로 올린다. 예전엔 openURL 성공 여부와 무관하게 올려서,
+  // 번호가 아닌 안내문이 와서 전화가 안 걸려도 '내가 전화로 확인'이 찍혔다 — 없는 근거를 만든 셈이다.
+  //
+  // ⚠️ 웹에서는 이 판정을 할 수 없다. react-native-web의 Linking.open은 tel: 핸들러가 없어도
+  // 항상 Promise.resolve()를 돌려주고 canOpenURL도 무조건 true라, reject가 오지 않는다.
+  // 그래서 웹에서는 전화만 열고 신뢰도는 올리지 않는다 — 확인되지 않은 것을 확인됐다고
+  // 기록하는 쪽이, 확정 경로가 한 곳 없는 것보다 나쁘다. (Vercel 웹이 시연·심사 경로다.)
   const callAndConfirm = () => {
-    if (facility.phone) Linking.openURL(`tel:${facility.phone.replace(/-/g, '')}`);
-    confirmFacility(facility.facilityId);
+    if (!tel) return;
+    Linking.openURL(`tel:${tel}`)
+      .then(() => {
+        if (Platform.OS !== 'web') confirmFacility(facility.facilityId);
+      })
+      .catch(() => {
+        // 전화 앱을 못 열었으면 확인된 게 아니다. 신뢰도는 그대로 둔다.
+      });
   };
 
   return (
@@ -59,7 +76,7 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
         <View style={styles.actions}>
           <Text style={[styles.actionsTitle, { color: p.muted }]}>어디서 확인하나요</Text>
 
-          {facility.phone && (
+          {tel && (
             <Pressable
               onPress={callAndConfirm}
               style={({ pressed }) => [

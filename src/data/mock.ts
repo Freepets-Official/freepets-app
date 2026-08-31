@@ -6,9 +6,25 @@ import type { CalendarEvent, Facility, Pet, PetCheck, PetSatisfaction, Review, R
  * 데모용 목 데이터. 백엔드 연동 전까지 화면 검증에 사용한다.
  * 기준 위치: 강릉역 (거리값은 데모용 고정값)
  */
+
+/**
+ * 목 시설 ID는 서버 ID와 겹치면 안 된다.
+ *
+ * 예전엔 1~14를 썼는데 서버에도 같은 ID가 있어서, 상세를 열면 `loadFacility`가 서버 응답을
+ * 목 데이터에 병합해 **두 시설이 섞였다** — 목 10번(테라로사 커피공장)에 서버 10번
+ * (상의자동차야영장)의 이름·조건이 덮이고 목의 requirements만 남는 식이었다.
+ * 시설 10은 거부 제보 시연용이라 데모 시나리오가 그대로 깨졌다.
+ *
+ * 서버 시설이 48,754건이므로 900000번대는 앞으로도 겹치지 않는다.
+ * `mockId()`로 감싸 원래 번호를 읽을 수 있게 두고, `isMockFacilityId()`로 서버 호출을 건너뛴다.
+ */
+export const MOCK_ID_BASE = 900_000;
+export const mockId = (n: number) => MOCK_ID_BASE + n;
+export const isMockFacilityId = (id: number) => id >= MOCK_ID_BASE;
+
 export const FACILITIES: Facility[] = [
   {
-    facilityId: 1,
+    facilityId: mockId(1),
     latitude: 37.7713,
     longitude: 128.947,
     name: '안목해변 솔숲 산책로',
@@ -27,7 +43,7 @@ export const FACILITIES: Facility[] = [
     confirmedAt: '2026-07-10',
   },
   {
-    facilityId: 2,
+    facilityId: mockId(2),
     latitude: 37.801,
     longitude: 128.908,
     name: '카페 파도살롱',
@@ -47,7 +63,7 @@ export const FACILITIES: Facility[] = [
     confirmedAt: '2026-07-05',
   },
   {
-    facilityId: 3,
+    facilityId: mockId(3),
     latitude: 37.7792,
     longitude: 128.8784,
     name: '오죽헌',
@@ -66,7 +82,7 @@ export const FACILITIES: Facility[] = [
     confirmedAt: '2026-07-18',
   },
   {
-    facilityId: 4,
+    facilityId: mockId(4),
     latitude: 37.79,
     longitude: 128.92,
     name: '스테이 솔바람 펜션',
@@ -86,7 +102,7 @@ export const FACILITIES: Facility[] = [
     confirmedAt: '2026-06-28',
   },
   {
-    facilityId: 5,
+    facilityId: mockId(5),
     latitude: 37.7955,
     longitude: 128.899,
     name: '경포호 반려견 놀이터',
@@ -105,7 +121,7 @@ export const FACILITIES: Facility[] = [
     confirmedAt: '2026-07-20',
   },
   {
-    facilityId: 6,
+    facilityId: mockId(6),
     latitude: 37.7519,
     longitude: 128.8965,
     name: '강릉중앙시장',
@@ -124,7 +140,7 @@ export const FACILITIES: Facility[] = [
     confirmedAt: null,
   },
   {
-    facilityId: 7,
+    facilityId: mockId(7),
     latitude: 37.76,
     longitude: 128.88,
     name: '헤이도그 애견호텔&카페',
@@ -143,7 +159,7 @@ export const FACILITIES: Facility[] = [
     confirmedAt: '2026-07-21',
   },
   {
-    facilityId: 8,
+    facilityId: mockId(8),
     latitude: 37.69,
     longitude: 129.034,
     name: '정동진 레일바이크',
@@ -162,7 +178,7 @@ export const FACILITIES: Facility[] = [
     confirmedAt: '2026-05-30',
   },
   {
-    facilityId: 9,
+    facilityId: mockId(9),
     latitude: 37.802,
     longitude: 128.901,
     name: '씨마크 호텔',
@@ -181,7 +197,7 @@ export const FACILITIES: Facility[] = [
     confirmedAt: '2026-07-15',
   },
   {
-    facilityId: 10,
+    facilityId: mockId(10),
     latitude: 37.701,
     longitude: 128.872,
     name: '테라로사 커피공장',
@@ -201,7 +217,7 @@ export const FACILITIES: Facility[] = [
   },
   {
     // F6 데모: 아직 반려동물을 안 받는 일반 음식점. 사업자가 온보딩하면 동반 가능으로 바뀐다.
-    facilityId: 11,
+    facilityId: mockId(11),
     latitude: 37.794,
     longitude: 128.913,
     name: '초당순두부 본점',
@@ -221,7 +237,7 @@ export const FACILITIES: Facility[] = [
   },
   // ── 취향 유사도 추천용: 아직 안 가본 동반 가능 시설(전 견종·목줄만) ──
   {
-    facilityId: 12,
+    facilityId: mockId(12),
     latitude: 37.781,
     longitude: 128.949,
     name: '송정해변 솔바람 산책로',
@@ -240,7 +256,7 @@ export const FACILITIES: Facility[] = [
     confirmedAt: '2026-07-22',
   },
   {
-    facilityId: 13,
+    facilityId: mockId(13),
     latitude: 37.83,
     longitude: 128.88,
     name: '보헤미안 로스터스 강릉',
@@ -259,7 +275,7 @@ export const FACILITIES: Facility[] = [
     confirmedAt: '2026-07-25',
   },
   {
-    facilityId: 14,
+    facilityId: mockId(14),
     latitude: 37.72,
     longitude: 128.85,
     name: '강릉 펫 글램핑',
@@ -326,18 +342,21 @@ export const INITIAL_PETS: Pet[] = [
  */
 export const INITIAL_SATISFACTIONS: PetSatisfaction[] = [
   // 몽이(말티즈): 아늑한 실내·산책로를 좋아함
-  { petId: 1, facilityId: 7, score: 9.4 }, // 헤이도그 애견카페
-  { petId: 1, facilityId: 1, score: 8.7 }, // 안목해변 솔숲
-  { petId: 1, facilityId: 2, score: 8.1 }, // 카페 파도살롱
-  { petId: 1, facilityId: 5, score: 6.5 }, // 경포호 놀이터
+  { petId: 1, facilityId: mockId(7), score: 9.4 }, // 헤이도그 애견카페
+  { petId: 1, facilityId: mockId(1), score: 8.7 }, // 안목해변 솔숲
+  { petId: 1, facilityId: mockId(2), score: 8.1 }, // 카페 파도살롱
+  { petId: 1, facilityId: mockId(5), score: 6.5 }, // 경포호 놀이터
   // 보리(골든리트리버): 뛰어놀 넓은 공간을 좋아함
-  { petId: 2, facilityId: 5, score: 9.8 }, // 경포호 반려견 놀이터
-  { petId: 2, facilityId: 7, score: 8.9 }, // 헤이도그
-  { petId: 2, facilityId: 4, score: 8.3 }, // 스테이 솔바람 펜션
-  { petId: 2, facilityId: 2, score: 4.2 }, // 카페 파도살롱 (실내가 좁아 시큰둥)
+  { petId: 2, facilityId: mockId(5), score: 9.8 }, // 경포호 반려견 놀이터
+  { petId: 2, facilityId: mockId(7), score: 8.9 }, // 헤이도그
+  { petId: 2, facilityId: mockId(4), score: 8.3 }, // 스테이 솔바람 펜션
+  { petId: 2, facilityId: mockId(2), score: 4.2 }, // 카페 파도살롱 (실내가 좁아 시큰둥)
 ];
 
-export function formatDistance(m: number): string {
+export function formatDistance(m: number | null): string {
+  // 거리를 모르면 지어내지 않는다. 좌표 없이 상세를 열면 서버가 null을 주는데,
+  // 이걸 0으로 떨어뜨리면 200km 떨어진 시설이 "0m"로 표시된다.
+  if (m == null) return '거리 미상';
   return m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
 }
 
@@ -404,47 +423,47 @@ function makeReviews(
 }
 
 export const REVIEWS: Review[] = [
-  ...makeReviews(7, 160, [5, 5, 5], [
+  ...makeReviews(mockId(7), 160, [5, 5, 5], [
     { nick: '몽이아빠', pet: '몽이', text: '실내 놀이터가 따로 있어서 몽이가 마음껏 뛰었어요. 직원분들이 간식까지 챙겨 주셨습니다.', tags: ['SPACIOUS', 'STAFF_LOVES_PETS', 'OFF_LEASH_OK'] },
     { nick: '보리집사', pet: '보리', text: '대형견도 눈치 안 보고 있을 수 있는 곳이에요. 급수대랑 배변봉투도 잘 갖춰져 있습니다.', tags: ['LARGE_DOG_OK', 'WATER_BOWL', 'POOP_BAG'] },
     { nick: '초코맘', pet: '초코', text: '펫 메뉴가 있어서 같이 먹었어요. 주차도 편하고 재방문 의사 100%.', tags: ['PET_MENU', 'PARKING'] },
   ]),
-  ...makeReviews(5, 95, [5, 4, 5], [
+  ...makeReviews(mockId(5), 95, [5, 4, 5], [
     { nick: '해피가족', pet: '해피', text: '체급별로 운동장이 나뉘어 있어서 소형견도 안전했어요.', tags: ['SPACIOUS', 'OFF_LEASH_OK'] },
     { nick: '두부아빠', pet: '두부', text: '급수대가 곳곳에 있고 그늘도 충분합니다. 여름에도 괜찮았어요.', tags: ['WATER_BOWL', 'SPACIOUS'] },
   ]),
-  ...makeReviews(1, 55, [5, 4, 4], [
+  ...makeReviews(mockId(1), 55, [5, 4, 4], [
     { nick: '산책러', pet: '콩이', text: '솔숲 그늘이 좋아서 한여름에도 산책하기 좋아요. 배변봉투함이 입구에 있습니다.', tags: ['SPACIOUS', 'POOP_BAG', 'QUIET'] },
     { nick: '바다보리', pet: '보리', text: '바다 바로 옆이라 뷰가 좋습니다. 주말엔 사람이 많아 목줄 필수예요.', tags: ['OUTDOOR_SEAT'] },
   ]),
-  ...makeReviews(2, 30, [4, 5, 4], [
+  ...makeReviews(mockId(2), 30, [4, 5, 4], [
     { nick: '라떼언니', pet: '라떼', text: '소형견 기준이라 몽이는 실내 OK. 직원분이 물그릇 먼저 챙겨 주셨어요.', tags: ['WATER_BOWL', 'STAFF_LOVES_PETS'] },
     { nick: '커피중독', pet: '별이', text: '테라스가 넓어 대형견도 앉을 수 있어요. 다만 실내는 10kg 제한 있습니다.', tags: ['OUTDOOR_SEAT'] },
   ]),
-  ...makeReviews(4, 18, [5, 4, 4], [
+  ...makeReviews(mockId(4), 18, [5, 4, 4], [
     { nick: '펜션러버', pet: '뭉치', text: '전 객실 동반 가능이라 편했어요. 마당이 넓어 뛰어놀기 좋습니다.', tags: ['SPACIOUS', 'PARKING'] },
     { nick: '주말여행', pet: '까미', text: '배변패드를 미리 준비해 두셔서 좋았어요. 접종증명서는 꼭 챙기세요.', tags: ['POOP_BAG'] },
   ]),
-  ...makeReviews(10, 12, [4, 4, 3], [
+  ...makeReviews(mockId(10), 12, [4, 4, 3], [
     { nick: '원두킬러', pet: '모카', text: '야외석만 가능하지만 공간이 넓고 조용해서 좋았습니다.', tags: ['OUTDOOR_SEAT', 'QUIET'] },
     { nick: '드라이브', pet: '단추', text: '주차장이 넓어요. 실내는 못 들어가니 날씨 확인하고 가세요.', tags: ['PARKING'] },
   ]),
-  ...makeReviews(8, 8, [3, 4, 3], [
+  ...makeReviews(mockId(8), 8, [3, 4, 3], [
     { nick: '레일바이크', pet: '땅콩', text: '케이지에 넣어야 해서 소형견만 가능해요. 직원분은 친절하셨습니다.', tags: ['STAFF_LOVES_PETS'] },
   ]),
-  ...makeReviews(6, 4, [3, 3, 2], [
+  ...makeReviews(mockId(6), 4, [3, 3, 2], [
     { nick: '시장구경', pet: '메주', text: '동반 가능 여부가 점포마다 달라요. 입구에서 확인하는 게 좋습니다.', tags: [] },
   ]),
   // 유사도 추천용 신규 시설의 리뷰(태그 프로필) — 취향 매칭에 쓰인다
-  ...makeReviews(12, 45, [5, 4, 5], [
+  ...makeReviews(mockId(12), 45, [5, 4, 5], [
     { nick: '솔숲러', pet: '해피', text: '백사장이 넓어서 마음껏 뛰었어요. 목줄 풀 순 없지만 공간이 충분합니다.', tags: ['SPACIOUS', 'OFF_LEASH_OK', 'POOP_BAG'] },
     { nick: '아침산책', pet: '보리', text: '이른 아침 조용해서 산책하기 딱 좋아요. 배변봉투함도 곳곳에 있습니다.', tags: ['QUIET', 'SPACIOUS', 'POOP_BAG'] },
   ]),
-  ...makeReviews(13, 70, [5, 5, 5], [
+  ...makeReviews(mockId(13), 70, [5, 5, 5], [
     { nick: '라떼몽이', pet: '몽이', text: '전 견종 환영이라 대형견도 눈치 안 봐요. 급수대랑 펫 메뉴까지 완벽.', tags: ['LARGE_DOG_OK', 'WATER_BOWL', 'PET_MENU', 'STAFF_LOVES_PETS'] },
     { nick: '테라스족', pet: '초코', text: '테라스가 넓고 주차도 편해요. 직원분들이 아이를 반겨주셨어요.', tags: ['SPACIOUS', 'PARKING', 'STAFF_LOVES_PETS'] },
   ]),
-  ...makeReviews(14, 32, [5, 4, 5], [
+  ...makeReviews(mockId(14), 32, [5, 4, 5], [
     { nick: '글램핑러', pet: '뭉치', text: '개별 마당이 넓어서 밤에도 아이가 편하게 지냈어요. 주차 바로 앞.', tags: ['SPACIOUS', 'PARKING'] },
     { nick: '가족여행', pet: '까미', text: '전 객실 동반이라 눈치 안 보여요. 급수대도 있고 좋았습니다.', tags: ['WATER_BOWL', 'SPACIOUS'] },
   ]),
@@ -458,7 +477,7 @@ export const REVIEWS: Review[] = [
 export const INITIAL_REPORTS: Report[] = [
   {
     reportId: 1,
-    facilityId: 10, // 테라로사 커피공장 — 원문이 모호해 '추정'이던 곳이 실제로 틀렸던 사례
+    facilityId: mockId(10), // 테라로사 커피공장 — 원문이 모호해 '추정'이던 곳이 실제로 틀렸던 사례
     type: 'DENIED',
     content: '현장 거부 · 실내 불가',
     weight: 2,
@@ -471,7 +490,7 @@ export const INITIAL_REPORTS: Report[] = [
   },
   {
     reportId: 2,
-    facilityId: 10,
+    facilityId: mockId(10),
     type: 'DENIED',
     content: '현장 거부 · 혼잡·자리 없음',
     weight: 2,
@@ -484,7 +503,7 @@ export const INITIAL_REPORTS: Report[] = [
   },
   {
     reportId: 3,
-    facilityId: 10,
+    facilityId: mockId(10),
     type: 'DENIED',
     content: '현장 거부 · 정책이 바뀜',
     weight: 2,
@@ -505,7 +524,7 @@ export const INITIAL_REPORTS: Report[] = [
 export const INITIAL_CHECKS: PetCheck[] = [
   {
     checkId: 1,
-    facilityId: 10, // 테라로사 커피공장 — 판별받고 가려던 곳
+    facilityId: mockId(10), // 테라로사 커피공장 — 판별받고 가려던 곳
     petIds: [1, 2],
     verdicts: [
       { petId: 1, result: 'CONDITIONAL', reason: '몽이(말티즈, 3.2kg)는 입장 조건을 충족해요. 다만 아래 조건을 지켜 주세요.', conditions: ['리드줄 필수 착용', '야외 공간만 이용 가능'] },

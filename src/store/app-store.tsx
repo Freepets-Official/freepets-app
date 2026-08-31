@@ -2,9 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import type { ThemeMode } from '@/constants/theme';
 import { judgeGroup } from '@/data/judge';
-import { accountApi, petsApi, reviewsApi, satisfactionApi, setAuthToken } from '@/lib/api';
-import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS } from '@/data/mock';
-import { eventOccursOn, nextVaccinationOf, vaccinationDday } from '@/data/types';
+import { accountApi, facilitiesApi, petsApi, reviewsApi, satisfactionApi, setAuthToken } from '@/lib/api';
+import type { Coords } from '@/lib/location';
+import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
+import { eventOccursOn, nextVaccinationOf, pawGradeOf, vaccinationDday } from '@/data/types';
 import type {
   CalendarEvent,
   Confidence,
@@ -20,6 +21,51 @@ import type {
   TopPlace,
 } from '@/data/types';
 
+/**
+ * 목 시설의 리뷰 집계. 목 시설은 서버에 없어 `/facilities/{id}/reviews`가 404를 주므로,
+ * 로컬 REVIEWS로 서버와 같은 모양을 만들어 친화도 섹션이 정상 렌더되게 한다.
+ * 데모(공모전 시연)에서 목 시설이 에러 화면으로 보이면 안 된다.
+ */
+function mockReviewData(facilityId: number): FacilityReviewData {
+  const rs = REVIEWS.filter((r) => r.facilityId === facilityId);
+  const avg = (pick: (r: Review) => number) =>
+    rs.length === 0 ? 0 : Math.round((rs.reduce((sum, r) => sum + pick(r), 0) / rs.length) * 10) / 10;
+  const tagCount = new Map<ReviewTag, number>();
+  rs.forEach((r) => r.tags.forEach((t) => tagCount.set(t, (tagCount.get(t) ?? 0) + 1)));
+  return {
+    grade: pawGradeOf(rs),
+    categoryAverages: {
+      space: avg((r) => r.ratingSpace),
+      staff: avg((r) => r.ratingStaff),
+      amenity: avg((r) => r.ratingAmenity),
+    },
+    topTags: [...tagCount.entries()]
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count),
+    reviews: rs,
+    pageInfo: { page: 0, size: rs.length, totalElements: rs.length, hasNext: false },
+  };
+}
+
+/** 이름만 아는 시설의 빈 껍데기. 홈 TOP3 캐시와 상세 병합의 기본값으로 쓴다. */
+const EMPTY_FACILITY: Facility = {
+  facilityId: 0,
+  name: '',
+  category: 'TOUR',
+  address: '',
+  phone: null,
+  distanceM: null,
+  petAllowed: null,
+  petConditionRaw: null,
+  maxWeight: null,
+  requirements: [],
+  sido: '',
+  sigungu: '',
+  confidence: 'ESTIMATED',
+  confidenceSource: 'PARSED',
+  confirmedAt: null,
+};
+
 export interface AppSettings {
   /** 화면 모드 — 라이트/다크/자동(저녁~새벽 다크) */
   themeMode: ThemeMode;
@@ -27,6 +73,13 @@ export interface AppSettings {
   searchRadiusKm: number;
   /** 동반 불가 시설 숨기기 */
   hideDenied: boolean;
+  /**
+   * 반려동물 동반 정보가 있는 곳만 보기(서버 `petAllowed=ALLOWED` 필터).
+   * 관광공사 4.8만 건 중 동반 정보가 있는 건 9,677건(19.85%)뿐이고 나머지 80%는 PENDING이라,
+   * 여행을 계획하는 사용자에겐 그 80%가 노이즈다. 다만 "이 근처에 뭐가 있나"에는 여전히
+   * 쓸모가 있어 기본값은 끈 채로 두고, 필요할 때 켜게 한다.
+   */
+  onlyPetInfo: boolean;
   /** 체크리스트에 계절 맞춤 팁 표시 */
   seasonalTips: boolean;
   notifPush: boolean;
@@ -43,6 +96,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   themeMode: 'light',
   searchRadiusKm: 3,
   hideDenied: false,
+  onlyPetInfo: false,
   seasonalTips: true,
   notifPush: true,
   notifReport: true,
@@ -260,6 +314,10 @@ interface AppStore {
 
   /** 시설 조회 — 서버 검색결과 캐시 우선, 없으면 목데이터 */
   facilityById: (id: number) => Facility | undefined;
+  /** GET /facilities/{id} — 상세를 받아 캐시에 병합한다(검색을 안 거치고 들어온 시설용) */
+  loadFacility: (id: number) => Promise<void>;
+  /** 탐색이 잡은 GPS를 보관 — 상세에서 권한을 다시 묻지 않고 거리 계산에 쓴다 */
+  setLastCoords: (c: Coords | null) => void;
   /** 서버에서 받은 시설을 상세 조회용 캐시에 등록 */
   registerFacilities: (fs: Facility[]) => void;
 
@@ -372,6 +430,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 서버 검색·홈 TOP3 등으로 알게 된 시설을 상세 조회용으로 캐시한다.
   // (아래 registerFacilities/facilityById가 쓰고, loadTopPlaces도 최소 정보로 채운다)
   const facilityCache = useRef<Map<number, Facility>>(new Map());
+  // 캐시가 ref라 값이 바뀌어도 리렌더가 안 된다. 상세를 받아오면 이 숫자를 올려 화면을 다시 그린다.
+  const [facilityVersion, setFacilityVersion] = useState(0);
+  // 탐색 화면이 잡은 GPS를 보관한다. 상세에서 다시 권한을 묻지 않고 거리(distanceM)를 받기 위한 것.
+  const [lastCoords, setLastCoords] = useState<Coords | null>(null);
 
   // 서버에서 내 반려동물을 불러와 로컬 상태를 채운다.
   // __DEV__에선 dev 토큰으로 항상 조회되고, 실서비스에선 로그인 후 조회된다.
@@ -429,7 +491,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const runCheck = useCallback(
     (facilityId: number, petIds: number[]): PetCheck | null => {
-      const base = FACILITIES.find((f) => f.facilityId === facilityId);
+      // 서버 시설(검색·홈 TOP3·상세)은 목데이터에 없다. 캐시를 먼저 보지 않으면
+      // 실제 시설에서 판별 버튼이 아무 반응 없이 끝난다.
+      const base = facilityCache.current.get(facilityId) ?? FACILITIES.find((f) => f.facilityId === facilityId);
       const chosen = pets.filter((p) => petIds.includes(p.petId));
       if (!base || chosen.length === 0) return null;
 
@@ -478,6 +542,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next.delete(facilityId);
       return next;
     });
+    // 목 시설은 서버에 없다. 호출하면 FACILITY4041이 떨어지고 친화도 섹션이 통째로
+    // "불러오지 못했어요 + 다시 시도"(절대 성공하지 않는다)가 된다. 로컬 목 리뷰로 집계를 만든다.
+    if (isMockFacilityId(facilityId)) {
+      setReviewData((prev) => ({ ...prev, [facilityId]: mockReviewData(facilityId) }));
+      return;
+    }
     try {
       const data = await reviewsApi.list(facilityId);
       setReviewData((prev) => ({ ...prev, [facilityId]: data }));
@@ -510,6 +580,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 작성/수정(upsert) — 서버가 자격(REVIEW4001)·소유(PET4002)를 검사하므로 오류는 그대로 던져 화면에서 처리.
   const addReview = useCallback(
     async (input: NewReview) => {
+      // 목 시설은 서버에 없다. 그대로 보내면 "존재하지 않는 시설입니다"가 사용자에게 노출된다
+      // (이 함수는 자격·소유 오류를 화면에서 처리하려고 의도적으로 throw한다).
+      if (isMockFacilityId(input.facilityId)) {
+        await loadReviews(input.facilityId);
+        return;
+      }
       await reviewsApi.create(input.facilityId, {
         petIds: input.petIds,
         showPetInfo: input.showPetInfo,
@@ -626,6 +702,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // 시설 상세 진입 시 그 시설에 대한 내 반려동물 만족도를 서버에서 채운다.
   const loadFacilitySatisfactions = useCallback(async (facilityId: number) => {
+    if (isMockFacilityId(facilityId)) return; // 서버에 없다 — 404를 부르지 않는다
     try {
       const items = await satisfactionApi.ofFacility(facilityId);
       setSatisfactions((prev) => {
@@ -656,21 +733,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         pet.topFacilities.forEach((f) => {
           if (facilityCache.current.has(f.facilityId)) return;
           facilityCache.current.set(f.facilityId, {
+            ...EMPTY_FACILITY,
             facilityId: f.facilityId,
             name: f.name,
             category: f.category,
-            address: '',
-            phone: null,
-            distanceM: 0,
-            petAllowed: null,
-            petConditionRaw: null,
-            maxWeight: null,
-            requirements: [],
-            sido: '',
-            sigungu: '',
-            confidence: 'ESTIMATED',
-            confidenceSource: 'PARSED',
-            confirmedAt: null,
           });
         });
       });
@@ -689,6 +755,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         const rest = prev.filter((s) => !(s.petId === petId && s.facilityId === facilityId));
         return [...rest, { petId, facilityId, score }];
       });
+      // 로컬 상태는 위에서 갱신했다. 목 시설은 서버 전송만 건너뛴다 — 보내면 404라
+      // 슬라이더가 조용히 실패해 항상 '기록 전'으로 보인다.
+      if (isMockFacilityId(facilityId)) return;
       const key = `${petId}:${facilityId}`;
       const timers = satTimers.current;
       const existing = timers.get(key);
@@ -724,8 +793,40 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const facilityById = useCallback(
     (id: number): Facility | undefined =>
       facilityCache.current.get(id) ?? FACILITIES.find((f) => f.facilityId === id),
-    [],
+    // facilityVersion은 값을 쓰지 않지만, 캐시가 ref라 이게 없으면 상세를 받아와도 화면이 다시 그려지지 않는다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [facilityVersion],
   );
+
+  // GET /facilities/{id} — 검색을 안 거치고 들어온 시설(홈 TOP3·알림·딥링크)의 빈 상세를 채운다.
+  // 상세 응답엔 maxWeight·requirements가 없으므로 **덮어쓰지 않고 병합**한다. 덮으면 탐색에서
+  // 들어온 시설의 체중 제한이 사라져 판별이 통과로 뒤집힌다.
+  const loadFacility = useCallback(async (id: number) => {
+    if (!Number.isInteger(id) || id <= 0) return; // 숫자가 아니면 서버가 400이 아니라 500을 낸다
+    // 목 시설은 서버에 없다. 호출해봐야 404고, 혹시 같은 ID가 있으면 남의 시설이 병합된다.
+    if (isMockFacilityId(id)) return;
+    try {
+      const detail = await facilitiesApi.detail(id, lastCoords ?? undefined);
+      const base = facilityCache.current.get(id) ?? FACILITIES.find((f) => f.facilityId === id);
+      const merged: Facility = {
+        ...(base ?? EMPTY_FACILITY),
+        ...detail,
+        // 좌표를 못 실어 보냈으면 서버가 거리를 null로 준다 → 검색으로 알던 거리를 유지.
+        // ??를 쓰는 이유: 시설 앞에 서 있어 실제 거리가 0이면 그 0을 그대로 써야 한다.
+        // 마지막을 0으로 떨어뜨리지 않는다 — base가 홈 TOP3의 빈 껍데기면 그 0은 '모른다'의
+        // 자리표시자라, 여기서 0을 쓰면 "거리 없음"이 "0m"로 둔갑한다.
+        distanceM: detail.distanceM ?? base?.distanceM ?? null,
+        // 주소도 같다 — 상세가 주소를 안 주면(null) 검색으로 알던 주소를 지우지 않는다.
+        address: detail.address ?? base?.address ?? '',
+        latitude: detail.latitude ?? base?.latitude,
+        longitude: detail.longitude ?? base?.longitude,
+      };
+      facilityCache.current.set(id, merged);
+      setFacilityVersion((v) => v + 1);
+    } catch {
+      // 실패해도 조용히 — 캐시에 있던 정보로 화면은 그대로 뜬다(데모 안전)
+    }
+  }, [lastCoords]);
 
   const updateSettings = useCallback((patch: Partial<AppSettings>) => {
     setSettings((prev) => ({ ...prev, ...patch }));
@@ -1025,6 +1126,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       topPlacesForPet,
       facilityById,
       registerFacilities,
+      loadFacility,
+      setLastCoords,
       settings,
       updateSettings,
       userConfirmedIds,
@@ -1095,6 +1198,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       topPlacesForPet,
       facilityById,
       registerFacilities,
+      loadFacility,
+      setLastCoords,
       settings,
       updateSettings,
       userConfirmedIds,

@@ -271,7 +271,7 @@ export default function CourseScreen() {
                 <Text style={[styles.pickEmpty, { color: p.muted }]}>추가할 시설이 없어요.</Text>
               ) : (
                 available
-                  .sort((a, b) => a.distanceM - b.distanceM)
+                  .sort((a, b) => (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity))
                   .map((f) => (
                     <Pressable
                       key={f.facilityId}

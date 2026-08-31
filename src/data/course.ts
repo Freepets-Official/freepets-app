@@ -1,5 +1,5 @@
 import { judgeGroup, type GroupResult } from '@/data/judge';
-import { FACILITIES, reviewsOf } from '@/data/mock';
+import { FACILITIES, mockId, reviewsOf } from '@/data/mock';
 import type { Category, CheckResult, Facility, Pet, PetSatisfaction, ReviewTag } from '@/data/types';
 
 /**
@@ -56,14 +56,14 @@ export const PRESET_COURSES: Course[] = [
     name: '강릉 바다 산책 1일 코스',
     description: '해변 산책으로 시작해 카페·놀이터를 거쳐 펜션에서 하루를 마무리',
     source: 'PRESET',
-    stopIds: [1, 2, 5, 4],
+    stopIds: [1, 2, 5, 4].map(mockId),
   },
   {
     id: 'preset-gangneung-cafe',
     name: '강릉 애견 카페 반나절 코스',
     description: '전 견종 환영 카페 위주로 짧게 도는 반나절 코스',
     source: 'PRESET',
-    stopIds: [1, 7, 10],
+    stopIds: [1, 7, 10].map(mockId),
   },
 ];
 
@@ -100,12 +100,12 @@ const hasCoords = (f: Facility): f is Facility & LatLng =>
  */
 function orderByRoute(facs: Facility[]): Facility[] {
   if (facs.length <= 2 || !facs.every(hasCoords)) {
-    return [...facs].sort((a, b) => a.distanceM - b.distanceM);
+    return [...facs].sort((a, b) => (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity));
   }
   const remaining = [...facs];
   // 첫 스톱 = 내 위치에 가장 가까운 곳(distanceM 최소)
   const startIdx = remaining.reduce(
-    (best, f, i, arr) => (f.distanceM < arr[best].distanceM ? i : best),
+    (best, f, i, arr) => ((f.distanceM ?? Infinity) < (arr[best].distanceM ?? Infinity) ? i : best),
     0,
   );
   const route: Facility[] = [remaining.splice(startIdx, 1)[0]];
@@ -294,7 +294,11 @@ function findAlternative(blocked: Facility, pets: Pet[], usedIds: Set<number>): 
       .map((f) => ({ f, overall: judgeGroup(pets, f).overall }))
       .filter((x) => x.overall !== 'DENIED')
       // 조건부보다 완전 가능을 우선, 그다음 거리순
-      .sort((a, b) => RANK[a.overall] - RANK[b.overall] || a.f.distanceM - b.f.distanceM)[0]?.f ?? null
+      .sort(
+        (a, b) =>
+          RANK[a.overall] - RANK[b.overall] ||
+          (a.f.distanceM ?? Infinity) - (b.f.distanceM ?? Infinity),
+      )[0]?.f ?? null
   );
 }
 

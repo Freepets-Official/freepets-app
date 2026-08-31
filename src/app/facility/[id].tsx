@@ -33,6 +33,7 @@ import { StampIn } from '@/components/stamp-in';
 import { haptic } from '@/lib/haptics';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
+import { primaryPhoneNumber } from '@/lib/phone';
 
 /** 리뷰 로딩 전/집계 미도달 시 헤더 발자국 배지의 기본값 */
 const EMPTY_GRADE: PawGrade = { level: null, label: null, score: null, count: 0, needMore: PAW_MIN_REVIEWS };
@@ -56,10 +57,19 @@ export default function FacilityDetailScreen() {
     calendarEvents,
     addCalendarEvent,
     facilityById,
+    loadFacility,
   } = useAppStore();
 
   // 서버 검색결과 캐시 우선, 없으면 목데이터
   const base = facilityById(Number(id));
+
+  // 검색을 안 거치고 들어오면(홈 TOP3·거부 알림·딥링크) 캐시에 이름뿐이라 상세가 빈다.
+  // GET /facilities/{id}로 동반 조건 안내문·전화·좌표·확정 시각을 채운다.
+  // 화면은 캐시 값으로 먼저 그려지고, 응답이 오면 다시 그려진다(빈 화면·스피너 없음).
+  useEffect(() => {
+    const fid = Number(id);
+    if (Number.isInteger(fid) && fid > 0) loadFacility(fid);
+  }, [id, loadFacility]);
   // 사업자가 확정한 조건이 있으면 그 값으로 표시한다 (판별은 runCheck가 내부에서 같은 override를 적용) (F5)
   const facility = base ? effectiveFacility(base) : undefined;
 
@@ -85,7 +95,7 @@ export default function FacilityDetailScreen() {
         f.category === facility.category &&
         f.petAllowed === true,
     )
-      .sort((a, b) => a.distanceM - b.distanceM)
+      .sort((a, b) => (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity))
       .slice(0, 3);
   }, [facility]);
 
@@ -398,18 +408,31 @@ export default function FacilityDetailScreen() {
                     </View>
                   ) : null}
 
-                  {facility.phone ? (
+                  {primaryPhoneNumber(facility.phone) ? (
                     <Pressable
-                      onPress={() => Linking.openURL(`tel:${facility.phone}`)}
+                      // 거는 건 첫 번호로, 보여주는 건 원문 그대로. 안내센터가 따로 있으면
+                      // 사용자가 어디로 걸지 판단할 수 있어야 한다.
+                      onPress={() => {
+                        const tel = primaryPhoneNumber(facility.phone);
+                        if (tel) Linking.openURL(`tel:${tel}`).catch(() => {});
+                      }}
                       style={({ pressed }) => [
                         styles.callBtn,
                         { backgroundColor: pressed ? p.accentDark : p.accent },
                       ]}>
                       <Ionicons name="call" size={16} color={p.onAccent} />
-                      <Text style={[styles.callBtnText, { color: p.onAccent }]}>
+                      <Text
+                        numberOfLines={2}
+                        style={[styles.callBtnText, { color: p.onAccent }]}>
                         전화로 직접 확인 ({facility.phone})
                       </Text>
                     </Pressable>
+                  ) : facility.phone ? (
+                    // 원문은 있는데 걸 수 있는 형태로 못 뽑은 경우(국제표기 등).
+                    // 버튼째 감추면 사용자가 번호를 볼 수조차 없으므로 원문은 그대로 노출한다.
+                    <Text style={[styles.specialBody, { color: p.muted }]}>
+                      {facility.phone}{'\n'}자동으로 걸 수 없는 형식이에요. 번호를 직접 입력해 주세요.
+                    </Text>
                   ) : (
                     <Text style={[styles.specialBody, { color: p.muted }]}>
                       등록된 전화번호가 없어요. 방문 전 시설에 확인해 주세요.
