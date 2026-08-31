@@ -117,10 +117,17 @@ API 명세나 DB 스키마를 바꾸면 **`freepets-docs`에도 반영해야 합
 
 1. **생성 컬럼은 INSERT하지 않는다** — `facilities.location`, `reviews.friendliness`는 `GENERATED`입니다. JPA는 `@Column(insertable = false, updatable = false)`.
 2. **ENUM은 영문 코드 그대로 응답한다** — `ALLOWED`, `CAFE` 등. 한글 변환은 프론트 책임입니다.
-3. **Claude 호출 파라미터** — ① `claude-sonnet-5`는 `temperature`/`top_p`/`top_k`에 **기본값이 아닌 값을 넣으면 400**입니다. 그냥 빼세요. ② **`claude-sonnet-5`는 `thinking`을 생략하면 adaptive가 기본 ON**이라, 배치 파싱처럼 사고가 불필요한 곳은 `{"type":"disabled"}`를 명시해야 토큰이 안 샙니다. 모델마다 다릅니다 — Haiku 4.5·Sonnet 4.6·Opus 4.7/4.8은 생략하면 꺼진 채로 돕니다. ③ `output_config.effort`는 **Sonnet 5와 Opus 4.5 이상에서 지원**되고 **Sonnet 4.5·Haiku 4.5는 거부**합니다("Sonnet 전용"이 아닙니다).
-4. **도구 호출을 강제하지 않으면 파싱이 통째로 실패합니다** — `strict: true`는 도구가 **호출됐을 때** 입력 스키마만 검증하고, 호출 자체는 보장하지 않습니다. 기본값 `tool_choice: auto`면 모델이 도구 없이 텍스트만 반환할 수 있습니다. 도구를 쓰는 경로(조건 파싱·판별)는 **`tool_choice: {"type":"tool","name":"..."}`로 강제**하세요.
-   - `strict: true`는 **도구 정의 최상위**에 둡니다 — `name`·`description`·`input_schema`와 **형제**이지 `input_schema` 안이 아닙니다. 안에 넣으면 적용되지 않고 스키마를 안 지킨 입력이 그대로 통과합니다.
-   - 스키마에 `additionalProperties: false`와 `required`가 없으면 400입니다. strict 실패의 1순위 원인입니다.
+3. **Claude 호출 파라미터** — 모델마다 다릅니다. 쓰는 모델을 먼저 확인하세요.
+   - **샘플링(`temperature`/`top_p`/`top_k`)**: Sonnet 5·Opus 5·Opus 4.7/4.8·Fable 5에서는 파라미터 자체가 **제거**됐습니다. 기본값이든 아니든 **넣으면 400**입니다 — `temperature: 1`도 400입니다. 그냥 빼세요. (Sonnet 4.6·Opus 4.6과 그 이전은 아직 받습니다.)
+   - **`thinking` 생략 시 동작**: `claude-sonnet-5`와 **`claude-opus-5`** 는 생략하면 **adaptive가 기본 ON**이고, Fable 5는 **항상 ON**입니다. Opus 4.7/4.8·Sonnet 4.6·Haiku 4.5는 생략하면 꺼진 채로 돕니다.
+   - **끄는 방법은 모델마다 다릅니다.** Sonnet 5는 `{"type":"disabled"}`가 통하지만, **Fable 5는 400**이고 **Opus 5는 effort `xhigh`/`max`에서 400**입니다. 게다가 **thinking을 끈 Opus 5는 도구 호출을 `tool_use` 블록이 아니라 본문 텍스트에 써버리는** 알려진 실패 모드가 있습니다 — 턴은 성공하고 에러도 안 나는데 호출만 실행되지 않습니다(4번 항목이 막으려는 상황을 이게 만듭니다). **끄지 말고 `output_config.effort`를 `low`/`medium`으로 내리세요.** 비용도 같이 내려갑니다.
+   - **`budget_tokens`는 쓰지 마세요.** Sonnet 5·Opus 5·Opus 4.7/4.8·Fable 5에서 **400**입니다. 훈련 데이터에 흔한 옛 패턴이라 실수하기 쉽습니다. 깊이 조절은 `effort`로 합니다.
+   - **`output_config.effort`**: `low`/`medium`/`high`(모델에 따라 `xhigh`/`max`)이고 **기본값은 `high`** 입니다. **거부하는 건 Sonnet 4.5·Haiku 4.5와 그 이전뿐**이고 Sonnet 4.6·Sonnet 5·Opus 4.5 이상은 전부 지원합니다("Sonnet 전용"이 아닙니다). 단 Opus 4.5는 `low`/`medium`/`high`만 있습니다.
+   - **assistant prefill은 400**입니다(Sonnet 5·Opus 5·Fable 5·4.6/4.7/4.8 전부). 응답 형식은 구조화 출력이나 시스템 프롬프트로 잡으세요.
+   - 모델 ID는 정확히 씁니다 — `claude-opus-5`·`claude-sonnet-5`·`claude-haiku-4-5`. 기억나는 날짜 접미사를 임의로 붙이지 마세요.
+4. **도구 호출을 강제하지 않으면 파싱이 통째로 실패합니다** — `strict: true`는 도구가 **호출됐을 때** 입력 스키마만 검증하고, 호출 자체는 보장하지 않습니다. 기본값 `tool_choice: {"type":"auto"}`면 모델이 도구 없이 텍스트만 반환할 수 있습니다. 도구를 쓰는 경로(조건 파싱·판별)는 **`tool_choice: {"type":"tool","name":"..."}`로 강제**하세요.
+   - `strict: true`는 **도구 정의 최상위**에 둡니다 — `name`·`description`·`input_schema`와 **형제**이지 `input_schema` 안이 아닙니다. 안에 넣으면 적용되지 않습니다(그때 400이 나는지 조용히 무시되는지는 확인된 바 없으니, 위치를 맞추는 것으로 예방하세요).
+   - 스키마에는 `additionalProperties: false`와 `required`가 **필수**입니다. strict 실패의 1순위 원인입니다.
    - 도구 없이 JSON 응답만 받는 경로라면 `output_config.format.type: "json_schema"` + `schema`를 씁니다.
    - 자세한 건 `freepets-docs/docs/03-ai-prompts.md` 공통 설계 원칙.
 5. **API 키는 서버에만** — 앱 번들은 사용자 기기에 내려가므로 키를 넣으면 그대로 유출됩니다. 앱은 반드시 백엔드를 경유합니다.
@@ -167,5 +174,11 @@ src/
 └── store/        전역 상태
 ```
 
-`data/judge.ts`는 백엔드 AI 응답과 **동일한 입출력 계약**의 목 구현입니다.
-백엔드가 붙으면 이 함수 호출만 교체하고 화면은 건드리지 않습니다.
+`data/judge.ts`는 백엔드 AI 판별을 대신하는 목 구현입니다.
+
+⚠️ **"함수 호출만 교체하면 된다"고 가정하지 마세요.** `freepets-docs/docs/03` 4장 판정 순서표
+0~10번 중 `judge.ts`가 구현한 건 1번 하나뿐입니다 — 종(`kind`) 검사·맹견 검사·`partial_area_note`가
+없고, `Facility`에 `petConditionStatus`가 없어 상태 분기도 못 합니다. 요구사항 코드도 서로 없고
+(`SMALL_ONLY`·`VACCINATION`·`OUTDOOR_ONLY` ↔ `MANNER_BELT`·`STROLLER`·`FREE`·`ETC`),
+경계값은 답이 뒤집힙니다("10kg 미만"에 정확히 10.0kg → 표는 `DENIED`, `judge.ts`는 `CONDITIONAL`).
+실 API 교체는 타입 추가·분기 추가·신규 UI가 따르는 별도 작업으로 잡으세요.
