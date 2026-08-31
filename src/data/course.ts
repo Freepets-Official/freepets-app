@@ -100,12 +100,12 @@ const hasCoords = (f: Facility): f is Facility & LatLng =>
  */
 function orderByRoute(facs: Facility[]): Facility[] {
   if (facs.length <= 2 || !facs.every(hasCoords)) {
-    return [...facs].sort((a, b) => a.distanceM - b.distanceM);
+    return [...facs].sort((a, b) => (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity));
   }
   const remaining = [...facs];
   // 첫 스톱 = 내 위치에 가장 가까운 곳(distanceM 최소)
   const startIdx = remaining.reduce(
-    (best, f, i, arr) => (f.distanceM < arr[best].distanceM ? i : best),
+    (best, f, i, arr) => ((f.distanceM ?? Infinity) < (arr[best].distanceM ?? Infinity) ? i : best),
     0,
   );
   const route: Facility[] = [remaining.splice(startIdx, 1)[0]];
@@ -294,7 +294,11 @@ function findAlternative(blocked: Facility, pets: Pet[], usedIds: Set<number>): 
       .map((f) => ({ f, overall: judgeGroup(pets, f).overall }))
       .filter((x) => x.overall !== 'DENIED')
       // 조건부보다 완전 가능을 우선, 그다음 거리순
-      .sort((a, b) => RANK[a.overall] - RANK[b.overall] || a.f.distanceM - b.f.distanceM)[0]?.f ?? null
+      .sort(
+        (a, b) =>
+          RANK[a.overall] - RANK[b.overall] ||
+          (a.f.distanceM ?? Infinity) - (b.f.distanceM ?? Infinity),
+      )[0]?.f ?? null
   );
 }
 

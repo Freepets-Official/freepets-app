@@ -83,7 +83,8 @@ export interface Facility {
   address: string;
   phone: string | null;
   /** 현재 위치(데모: 강릉역) 기준 거리 */
-  distanceM: number;
+  /** 서버가 거리를 못 준 경우(좌표 없이 조회) null. '모른다'와 '0m다'는 다른 축이다. */
+  distanceM: number | null;
   /** 위경도(선택) — 있으면 코스 동선을 nearest-neighbor로 최적화. 서버 검색 응답엔 아직 없다 */
   latitude?: number;
   longitude?: number;

@@ -122,6 +122,8 @@ export function buildChecklist(verdict: Verdict, facility: Facility): Checklist 
   if (facility.requirements.includes('CAGE')) items.push('케이지(이동장) 준비');
   if (facility.requirements.includes('MUZZLE')) items.push('입마개 지참');
   if (facility.requirements.includes('VACCINATION')) items.push('예방접종 증명서 지참');
+  if (facility.requirements.includes('MANNER_BELT')) items.push('매너벨트 착용');
+  if (facility.requirements.includes('STROLLER')) items.push('유모차(카트) 준비');
 
   switch (facility.category) {
     case 'STAY':

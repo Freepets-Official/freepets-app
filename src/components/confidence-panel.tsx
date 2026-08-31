@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
@@ -35,10 +35,17 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
 
   // 전화 앱이 실제로 열렸을 때만 확정으로 올린다. 예전엔 openURL 성공 여부와 무관하게 올려서,
   // 번호가 아닌 안내문이 와서 전화가 안 걸려도 '내가 전화로 확인'이 찍혔다 — 없는 근거를 만든 셈이다.
+  //
+  // ⚠️ 웹에서는 이 판정을 할 수 없다. react-native-web의 Linking.open은 tel: 핸들러가 없어도
+  // 항상 Promise.resolve()를 돌려주고 canOpenURL도 무조건 true라, reject가 오지 않는다.
+  // 그래서 웹에서는 전화만 열고 신뢰도는 올리지 않는다 — 확인되지 않은 것을 확인됐다고
+  // 기록하는 쪽이, 확정 경로가 한 곳 없는 것보다 나쁘다. (Vercel 웹이 시연·심사 경로다.)
   const callAndConfirm = () => {
     if (!tel) return;
     Linking.openURL(`tel:${tel}`)
-      .then(() => confirmFacility(facility.facilityId))
+      .then(() => {
+        if (Platform.OS !== 'web') confirmFacility(facility.facilityId);
+      })
       .catch(() => {
         // 전화 앱을 못 열었으면 확인된 게 아니다. 신뢰도는 그대로 둔다.
       });

@@ -95,7 +95,7 @@ export default function FacilityDetailScreen() {
         f.category === facility.category &&
         f.petAllowed === true,
     )
-      .sort((a, b) => a.distanceM - b.distanceM)
+      .sort((a, b) => (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity))
       .slice(0, 3);
   }, [facility]);
 
@@ -427,6 +427,12 @@ export default function FacilityDetailScreen() {
                         전화로 직접 확인 ({facility.phone})
                       </Text>
                     </Pressable>
+                  ) : facility.phone ? (
+                    // 원문은 있는데 걸 수 있는 형태로 못 뽑은 경우(국제표기 등).
+                    // 버튼째 감추면 사용자가 번호를 볼 수조차 없으므로 원문은 그대로 노출한다.
+                    <Text style={[styles.specialBody, { color: p.muted }]}>
+                      {facility.phone}{'\n'}자동으로 걸 수 없는 형식이에요. 번호를 직접 입력해 주세요.
+                    </Text>
                   ) : (
                     <Text style={[styles.specialBody, { color: p.muted }]}>
                       등록된 전화번호가 없어요. 방문 전 시설에 확인해 주세요.
