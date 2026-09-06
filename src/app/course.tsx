@@ -27,7 +27,7 @@ import {
   type PresetCourse,
   type SimilarCourse,
 } from '@/data/types';
-import { coursesApi } from '@/lib/api';
+import { ApiError, coursesApi } from '@/lib/api';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -62,9 +62,12 @@ export default function CourseScreen() {
   // liked는 실제 방문 기록이, similar는 취향 데이터가 있어야 의미가 있다. 둘 다 없으면
   // 서버가 각각 COURSE4002 / 콜드스타트로 답하므로 그대로 구분해 보여준다.
   const [liked, setLiked] = useState<LikedCourse | null>(null);
+  /** 방문 기록이 부족해서 못 만든 상태(COURSE4002). 장애와 구분한다 */
   const [likedEmpty, setLikedEmpty] = useState(false);
   const [similar, setSimilar] = useState<SimilarCourse | null>(null);
   const [personalLoading, setPersonalLoading] = useState(false);
+  /** 기록 부족이 아니라 진짜 실패(네트워크·401·5xx) */
+  const [personalError, setPersonalError] = useState(false);
   const [validated, setValidated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -130,24 +133,40 @@ export default function CourseScreen() {
   // 선택한 아이가 바뀌면 개인화 추천을 다시 받는다. 실패(기록 부족)는 장애가 아니라
   // "아직 데이터가 없다"는 정상 상태라 화면을 막지 않는다.
   useEffect(() => {
-    if (selectedPetIds.length === 0) return;
     let active = true;
     const t = setTimeout(async () => {
       if (!active) return;
+      // 아이를 하나도 안 고르면 판별할 대상이 없다. 직전 결과를 남겨두면 "누구 취향인지"
+      // 알 수 없는 카드가 그대로 떠 있게 되므로 비운다.
+      if (selectedPetIds.length === 0) {
+        setLiked(null);
+        setSimilar(null);
+        setLikedEmpty(false);
+        setPersonalError(false);
+        setPersonalLoading(false);
+        return;
+      }
       setPersonalLoading(true);
+      setPersonalError(false);
       const params = {
         petIds: selectedPetIds,
         sido: sido ?? undefined,
         sigungu: sigungu ?? undefined,
         maxDistanceM: maxDistance ?? undefined,
       };
+      // 기록 부족(COURSE4002)과 진짜 실패를 구분한다. 네트워크·401·5xx까지 "방문 기록이
+      // 없어요"로 안내하면 서버 장애를 사용자 탓으로 돌리는 셈이 된다.
       const [lk, sm] = await Promise.all([
-        coursesApi.liked(params).catch(() => null),
+        coursesApi
+          .liked(params)
+          .then((r) => ({ ok: true as const, value: r }))
+          .catch((e) => ({ ok: false as const, empty: e instanceof ApiError && e.code === 'COURSE4002' })),
         coursesApi.similar(params).catch(() => null),
       ]);
       if (!active) return;
-      setLiked(lk);
-      setLikedEmpty(lk === null);
+      setLiked(lk.ok ? lk.value : null);
+      setLikedEmpty(!lk.ok && lk.empty);
+      setPersonalError(!lk.ok && !lk.empty);
       setSimilar(sm);
       setPersonalLoading(false);
     }, 300);
@@ -308,7 +327,7 @@ export default function CourseScreen() {
               ))}
 
               {/* 개인화 추천 — 선택한 아이의 만족도 기록을 서버가 읽어 만든다 */}
-              {personalLoading && (
+              {selectedPetIds.length > 0 && personalLoading && (
                 <View style={styles.presetState}>
                   <ActivityIndicator color={p.accent} />
                   <Text style={[styles.presetStateText, { color: p.muted }]}>
@@ -317,6 +336,11 @@ export default function CourseScreen() {
                 </View>
               )}
               {!personalLoading && liked && <LikedCourseCard course={liked} />}
+              {!personalLoading && personalError && selectedPetIds.length > 0 && (
+                <Text style={[styles.presetStateText, { color: p.muted }]}>
+                  추천을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
+                </Text>
+              )}
               {!personalLoading && likedEmpty && selectedPetIds.length > 0 && (
                 <Text style={[styles.presetStateText, { color: p.muted }]}>
                   아직 좋아한 곳을 뽑을 만큼 방문 기록이 없어요.{'\n'}
