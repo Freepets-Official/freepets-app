@@ -4,6 +4,8 @@ import type {
   FacilityReviewData,
   PawGrade,
   Pet,
+  RankingItem,
+  Region,
   Requirement,
   Review,
   ReviewPetInfo,
@@ -377,7 +379,92 @@ export const facilitiesApi = {
     const r = await request<ServerFacilityDetail>('GET', `/api/v1/facilities/${facilityId}${q}`, { auth: true });
     return toFacilityDetail(r);
   },
+
+  /**
+   * 발자국 랭킹. 등급 받은 시설만 내려온다.
+   *
+   * 400을 부르는 조합이 셋 있어 여기서 막는다(서버가 400을 내면 화면이 통째로 실패한다):
+   *   ① 위도·경도 중 하나만  ② 좌표 없이 radiusM만  ③ sidoCode 없이 sigunguCode만
+   */
+  ranking: async (params: RankingParams): Promise<{ items: RankingItem[]; total: number }> => {
+    const q = new URLSearchParams();
+    const hasCoords = Number.isFinite(params.latitude) && Number.isFinite(params.longitude);
+    if (hasCoords) {
+      q.set('latitude', String(params.latitude));
+      q.set('longitude', String(params.longitude));
+      // radiusM은 좌표가 있을 때만 유효하다
+      if (params.radiusM != null) q.set('radiusM', String(params.radiusM));
+    }
+    if (params.sidoCode) {
+      q.set('sidoCode', params.sidoCode);
+      // sigunguCode는 sidoCode와 함께일 때만 유효하다
+      if (params.sigunguCode) q.set('sigunguCode', params.sigunguCode);
+    }
+    if (params.category) q.set('category', params.category);
+    if (params.petAllowed) q.set('petAllowed', params.petAllowed);
+    q.set('page', String(params.page ?? 0));
+    q.set('size', String(params.size ?? 20));
+
+    const r = await request<{ items: ServerRankingItem[]; total: number }>(
+      'GET',
+      `/api/v1/facilities/ranking?${q.toString()}`,
+      { auth: true },
+    );
+    return { items: (r.items ?? []).map(toRankingItem), total: r.total ?? 0 };
+  },
+
+  /**
+   * 지역 칩 목록. 결과가 비어 있으면 연동 실패가 아니라 **서버의 지역 테이블 적재 전**이다
+   * (랭킹의 리뷰 집계 백필과는 별개 조건이다).
+   */
+  regions: async (): Promise<Region[]> => {
+    const r = await request<Region[]>('GET', '/api/v1/facilities/regions', { auth: true });
+    return r ?? [];
+  },
 };
+
+export type RankingParams = {
+  latitude?: number;
+  longitude?: number;
+  sidoCode?: string;
+  sigunguCode?: string;
+  category?: Category;
+  petAllowed?: 'ALLOWED' | 'DENIED' | 'PENDING';
+  radiusM?: number;
+  page?: number;
+  size?: number;
+};
+
+type ServerRankingItem = {
+  rank: number;
+  facilityId: number;
+  name: string;
+  category: string;
+  sido: string | null;
+  sigungu: string | null;
+  distanceM: number | null;
+  petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING';
+  pawGrade: { level: number; label: string };
+  petScore: number;
+  reviewCnt: number;
+};
+
+function toRankingItem(s: ServerRankingItem): RankingItem {
+  return {
+    rank: s.rank,
+    facilityId: s.facilityId,
+    name: s.name,
+    category: CATEGORY_FROM_SERVER[s.category] ?? 'TOUR',
+    sido: s.sido,
+    sigungu: s.sigungu,
+    distanceM: s.distanceM,
+    petAllowed: s.petAllowed === 'ALLOWED' ? true : s.petAllowed === 'DENIED' ? false : null,
+    pawLevel: s.pawGrade?.level ?? 0,
+    pawLabel: s.pawGrade?.label ?? '',
+    petScore: s.petScore,
+    reviewCnt: s.reviewCnt,
+  };
+}
 
 // ─────────────────────────── 리뷰(reviews) ───────────────────────────
 // GET    /facilities/{id}/reviews  — 등급 집계(전체) + 페이지 목록

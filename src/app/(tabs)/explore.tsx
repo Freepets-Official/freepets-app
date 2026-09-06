@@ -102,7 +102,8 @@ export default function ExploreScreen() {
           category: category ?? undefined,
           radiusM: mode === 'all' ? RADIUS_ALL_M : settings.searchRadiusKm * 1000,
           // 클라이언트에서 거르지 않고 서버 필터를 쓴다 — 30건 받아와서 6건만 남기면
-          // 페이지네이션과 total이 어긋난다. hideDenied가 클라이언트인 건 대상이 16건뿐이라서다.
+          // 페이지네이션과 total이 어긋난다. hideDenied가 클라이언트인 건 대상이 적어서다
+          // (DENIED는 2026-09-01 DB 실측 기준 전국 5건뿐이다).
           petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
           size: 30,
         });
@@ -125,7 +126,7 @@ export default function ExploreScreen() {
     };
   }, [mode, coords, keyword, category, settings.searchRadiusKm, settings.onlyPetInfo, retryKey, registerFacilities]);
 
-  // '동반 불가 숨기기' 설정은 클라이언트에서 거른다(서버 필터는 단일값이라)
+  // '동반 불가 숨기기' 설정은 클라이언트에서 거른다(서버 petAllowed 필터가 단일값이라 병행 불가)
   const facilities = useMemo(
     () => items.filter((f) => !(settings.hideDenied && f.petAllowed === false)),
     [items, settings.hideDenied],
@@ -162,7 +163,7 @@ export default function ExploreScreen() {
       </View>
 
       {mode === 'ranking' ? (
-        <RankingView />
+        <RankingView coords={coords} />
       ) : (
         <>
           <View style={[styles.search, { backgroundColor: p.surface, borderColor: p.line }]}>
@@ -185,7 +186,7 @@ export default function ExploreScreen() {
             contentContainerStyle={styles.chips}>
             {/* 성격이 다른 필터라 카테고리 칩과 구분되게 맨 앞에 둔다 */}
             <Chip
-              label="동반 정보 있는 곳만"
+              label="동반 가능만"
               selected={settings.onlyPetInfo}
               onPress={() => updateSettings({ onlyPetInfo: !settings.onlyPetInfo })}
             />
