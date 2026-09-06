@@ -296,6 +296,41 @@ export interface CourseStop {
   distanceM: number | null;
 }
 
+/** 좋아한 곳 추천의 스톱. 왜 뽑혔는지를 함께 준다. */
+export interface LikedStop extends CourseStop {
+  /** 0~10. `petIds`로 좁히지 않은 **전체 반려동물** 평균이다(6.5점 기준선과 같은 값) */
+  avgSatisfaction: number;
+  /** 이 시설을 후보로 만든 아이들. score는 요청한 petIds로 좁힌 개인 점수 */
+  reasonPets: { petId: number; petName: string; score: number }[];
+}
+
+/** 우리 아이가 좋아한 곳(`GET /courses/liked`). 실제 방문·만족도 기록 기반이다. */
+export interface LikedCourse {
+  title: string;
+  stops: LikedStop[];
+}
+
+/** 취향 비슷한 새곳의 스톱. */
+export interface SimilarStop extends CourseStop {
+  /** 겹치는 리뷰 태그. 콜드스타트거나 식사 스톱이면 항상 빈 배열 */
+  matchedTags: ReviewTag[];
+  matchedByKind: boolean;
+  matchedByBreedSize: boolean;
+  /** 카드에 그대로 노출할 한 줄 설명. **재조합하지 말 것**(서버가 패턴을 관리한다) */
+  reason: string;
+}
+
+/** 취향 비슷한 새곳 탐험(`GET /courses/similar`). */
+export interface SimilarCourse {
+  title: string;
+  /**
+   * 선택한 아이들의 만족도 기록이 하나도 없으면 `false` — 취향 매치가 아니라 **리뷰 평점 기준
+   * 대체 추천**이라는 뜻이다. "취향 기반인 척" 하지 않고 이 값으로 구분해 안내해야 한다.
+   */
+  isPersonalized: boolean;
+  stops: SimilarStop[];
+}
+
 /** 지역×테마 추천 결과(`GET /courses/preset`). */
 export interface PresetCourse {
   /** 테마를 1개만 고른 조회에서만 값이 있다(캐시된 코스). 2개 이상이면 항상 null */

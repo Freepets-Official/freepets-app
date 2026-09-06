@@ -7,11 +7,15 @@ import type {
   CourseRegion,
   CourseStop,
   CourseTheme,
+  LikedCourse,
+  LikedStop,
   PawGrade,
   Pet,
   PetVerdictResult,
   PresetCourse,
   RankingItem,
+  SimilarCourse,
+  SimilarStop,
   Region,
   Requirement,
   Review,
@@ -651,6 +655,28 @@ function toCourseStop(s: ServerCourseStop): CourseStop {
   };
 }
 
+/** liked·similar가 공유하는 파라미터. sigungu는 sido가 있을 때만 유효하다. */
+export type CoursePersonalParams = {
+  petIds: number[];
+  maxDistanceM?: string;
+  sido?: string;
+  sigungu?: string;
+  themes?: string[];
+};
+
+function personalQuery(params: CoursePersonalParams): string {
+  const q = new URLSearchParams();
+  params.petIds.forEach((id) => q.append('petIds', String(id)));
+  if (params.maxDistanceM) q.set('maxDistanceM', params.maxDistanceM);
+  if (params.sido) {
+    q.set('sido', params.sido);
+    // sido 없이 sigungu만 보내면 서버가 그 필터를 무시한다("고성군"이 여러 시/도에 있다)
+    if (params.sigungu) q.set('sigungu', params.sigungu);
+  }
+  (params.themes ?? []).forEach((t) => q.append('themes', t));
+  return q.toString();
+}
+
 export const coursesApi = {
   /** 동반 가능 시설이 실제로 있는 (시/도, 시/군/구) 조합만 내려온다. 인증 불필요. */
   regions: async (): Promise<CourseRegion[]> => {
@@ -689,6 +715,57 @@ export const coursesApi = {
    * `sigungu`는 `sido`가 있을 때만 유효하다. "고성군"처럼 여러 시/도에 같은 이름이 실제로 있어서,
    * sido 없이 보내면 엉뚱한 지역이 섞인다 — 서버가 그 필터를 무시한다.
    */
+  /**
+   * 우리 아이가 좋아한 곳. **실제 방문(만족도 기록)하고 평균 6.5점 이상 받은 곳**만 후보다.
+   * 추측이 아니라 경험 기반이라, 방문 기록이 없는 신규 유저는 아무것도 못 받는다(COURSE4002).
+   *
+   * COURSE4002는 네 상황을 한 코드로 준다(기록 없음 / 6.5점 이상이 2곳 미만 / 필터 후 2곳 미만 /
+   * 거리 제약으로 2곳 미만). message로 구분할 수 없으므로 화면은 공통 빈 상태로 처리한다.
+   */
+  liked: async (params: CoursePersonalParams): Promise<LikedCourse> => {
+    const r = await request<{ title: string; stops: (ServerCourseStop & {
+      avgSatisfaction: number | null;
+      reasonPets: { petId: number; petName: string; score: number }[] | null;
+    })[] | null }>('GET', `/api/v1/courses/liked?${personalQuery(params)}`, { auth: true });
+    return {
+      title: r.title,
+      stops: (r.stops ?? []).map<LikedStop>((st) => ({
+        ...toCourseStop(st),
+        // 식사 스톱이면 서버가 더미값(0, [])을 준다 — 화면에서 만족도 문구를 붙이면 거짓이 된다
+        avgSatisfaction: st.avgSatisfaction ?? 0,
+        reasonPets: st.reasonPets ?? [],
+      })),
+    };
+  },
+
+  /**
+   * 취향 비슷한 새곳 탐험. liked와 달리 **안 가본 곳**에서 고른다.
+   *
+   * ⚠️ 만족도 기록이 없으면 서버가 조용히 "인기 코스"로 갈아탄다(콜드스타트). 그때
+   * `isPersonalized: false`가 오므로 **취향 기반인 척 안내하면 안 된다.**
+   */
+  similar: async (params: CoursePersonalParams): Promise<SimilarCourse> => {
+    const r = await request<{ title: string; isPersonalized: boolean | null; stops: (ServerCourseStop & {
+      matchedTags: string[] | null;
+      matchedByKind: boolean | null;
+      matchedByBreedSize: boolean | null;
+      reason: string | null;
+    })[] | null }>('GET', `/api/v1/courses/similar?${personalQuery(params)}`, { auth: true });
+    return {
+      title: r.title,
+      // null이면 개인화가 아니라고 본다 — 근거 없이 "취향 기반"이라 말하는 쪽이 더 나쁘다
+      isPersonalized: r.isPersonalized ?? false,
+      stops: (r.stops ?? []).map<SimilarStop>((st) => ({
+        ...toCourseStop(st),
+        matchedTags: (st.matchedTags ?? []).filter(isReviewTag),
+        matchedByKind: st.matchedByKind ?? false,
+        matchedByBreedSize: st.matchedByBreedSize ?? false,
+        // 문구 패턴은 서버가 관리한다. 프론트에서 재조합하지 말고 그대로 쓴다(명세 요구)
+        reason: st.reason ?? '',
+      })),
+    };
+  },
+
   preset: async (params: {
     sido: string;
     sigungu?: string;
