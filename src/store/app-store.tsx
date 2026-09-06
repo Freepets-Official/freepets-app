@@ -71,7 +71,6 @@ export interface AppSettings {
   themeMode: ThemeMode;
   /** 주변 검색 반경(km) */
   searchRadiusKm: number;
-  /** 동반 불가 시설 숨기기 */
   /**
    * 반려동물 동반 정보가 있는 곳만 보기(서버 `petAllowed=ALLOWED` 필터).
    * 관광공사 4.8만 건 중 동반 정보가 있는 건 9,677건(19.85%)뿐이고 나머지 80%는 PENDING이라,

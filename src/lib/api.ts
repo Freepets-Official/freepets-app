@@ -435,6 +435,16 @@ export type RankingParams = {
   size?: number;
 };
 
+/**
+ * 명세상 `pawGrade`·`petScore`·`reviewCnt`는 non-null이지만(등급 받은 시설만 내려오므로),
+ * 리뷰 집계 백필 전이라 **실제 응답을 아직 한 번도 못 봤다**. 없는 값을 그대로 읽으면 목록이
+ * 통째로 죽으므로 nullable로 받아 변환에서 기본값을 확정한다 — `toFacility`가 `category`·
+ * `requirements`를 방어하는 것과 같은 자세다. 앱 쪽 `RankingItem`은 non-null이라 화면은
+ * 방어를 신경 쓰지 않아도 된다.
+ *
+ * 참고: 같은 `petScore`라도 검색 응답은 `number | null`이고 명세에 "현재는 항상 null"로 적혀
+ * 있다. 랭킹과 계약이 다르므로 두 타입을 공유하지 않는다.
+ */
 type ServerRankingItem = {
   rank: number;
   facilityId: number;
@@ -444,9 +454,9 @@ type ServerRankingItem = {
   sigungu: string | null;
   distanceM: number | null;
   petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING';
-  pawGrade: { level: number; label: string };
-  petScore: number;
-  reviewCnt: number;
+  pawGrade: { level: number; label: string } | null;
+  petScore: number | null;
+  reviewCnt: number | null;
 };
 
 function toRankingItem(s: ServerRankingItem): RankingItem {
@@ -461,8 +471,8 @@ function toRankingItem(s: ServerRankingItem): RankingItem {
     petAllowed: s.petAllowed === 'ALLOWED' ? true : s.petAllowed === 'DENIED' ? false : null,
     pawLevel: s.pawGrade?.level ?? 0,
     pawLabel: s.pawGrade?.label ?? '',
-    petScore: s.petScore,
-    reviewCnt: s.reviewCnt,
+    petScore: s.petScore ?? 0,
+    reviewCnt: s.reviewCnt ?? 0,
   };
 }
 
