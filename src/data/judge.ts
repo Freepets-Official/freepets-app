@@ -117,13 +117,22 @@ export function buildChecklist(verdict: Verdict, facility: Facility): Checklist 
     return { checklist: [], tips: ['주변의 동반 가능한 대안 시설을 확인해 보세요'] };
   }
 
-  const items: string[] = [];
-  if (facility.requirements.includes('LEASH')) items.push('리드줄 필수 지참');
-  if (facility.requirements.includes('CAGE')) items.push('케이지(이동장) 준비');
-  if (facility.requirements.includes('MUZZLE')) items.push('입마개 지참');
-  if (facility.requirements.includes('VACCINATION')) items.push('예방접종 증명서 지참');
-  if (facility.requirements.includes('MANNER_BELT')) items.push('매너벨트 착용');
-  if (facility.requirements.includes('STROLLER')) items.push('유모차(카트) 준비');
+  // 준비물은 판별이 내놓은 conditions를 그대로 쓴다. 서버 판별(POST /ai/check)에는
+  // checklist가 없어서 앱이 만드는데, facility.requirements로 다시 만들면 판별과 안내가
+  // 어긋날 수 있다 — 상세 응답엔 requirements가 없어 비어 있을 수 있고, 서버는 규칙 엔진
+  // 어휘 외에 맹견 전용 조건·자유텍스트·구역 메모까지 conditions에 담기 때문이다.
+  // 로컬 judge()도 같은 자리에 같은 성격의 문구를 넣으므로 두 경로가 같은 결과를 낸다.
+  const items: string[] = [...verdict.conditions];
+
+  // conditions가 비었을 때만(조건 없이 통과) requirements에서 준비물을 뽑아 보완한다
+  if (items.length === 0) {
+    if (facility.requirements.includes('LEASH')) items.push('리드줄 필수 지참');
+    if (facility.requirements.includes('CAGE')) items.push('케이지(이동장) 준비');
+    if (facility.requirements.includes('MUZZLE')) items.push('입마개 지참');
+    if (facility.requirements.includes('VACCINATION')) items.push('예방접종 증명서 지참');
+    if (facility.requirements.includes('MANNER_BELT')) items.push('매너벨트 착용');
+    if (facility.requirements.includes('STROLLER')) items.push('유모차(카트) 준비');
+  }
 
   switch (facility.category) {
     case 'STAY':
@@ -158,7 +167,9 @@ export interface GroupResult {
   tips: string[];
 }
 
-const RANK: Record<CheckResult, number> = { ALLOWED: 0, CONDITIONAL: 1, DENIED: 2 };
+/** 판정의 심각도. 낮을수록 관대하다 — 그룹 결과와 체크리스트 기준을 고를 때 쓴다. */
+export const CHECK_RANK: Record<CheckResult, number> = { ALLOWED: 0, CONDITIONAL: 1, DENIED: 2 };
+const RANK = CHECK_RANK;
 
 /**
  * 데려갈 아이들을 한 번에 판별한다. 한 마리라도 불가면 "다 함께"는 불가지만,

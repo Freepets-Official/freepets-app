@@ -86,6 +86,7 @@ export default function FacilityDetailScreen() {
   const [loading, setLoading] = useState(false);
   const [check, setCheck] = useState<PetCheck | null>(null);
   const [done, setDone] = useState<Set<string>>(new Set());
+  const [checkFailed, setCheckFailed] = useState(false);
   // 판별·만족도·친화도 세 섹션을 토글로 — 한 화면에 다 쌓으면 스크롤이 너무 길다
   const [tab, setTab] = useState<'check' | 'satis' | 'review'>('check');
 
@@ -130,36 +131,44 @@ export default function FacilityDetailScreen() {
     );
   };
 
-  const startCheck = () => {
+  const startCheck = async () => {
     if (selectedIds.length === 0 || loading) return;
     setLoading(true);
     setCheck(null);
-    // 데모: 백엔드 B(Claude AI) 호출을 흉내 내는 지연. 실제 연동 시 POST /api/v1/ai/check 로 대체.
-    setTimeout(() => {
-      const result = runCheck(facility.facilityId, selectedIds);
-      setCheck(result);
-      setDone(new Set());
+    setCheckFailed(false);
+    let result: PetCheck | null = null;
+    try {
+      // 서버 시설은 POST /ai/check, 목 시설·사업자 확정 시설은 로컬 규칙 엔진(store가 가른다)
+      result = await runCheck(facility.facilityId, selectedIds);
+    } catch {
+      // 판별은 이 화면의 핵심 기능이라 조용히 넘기지 않는다 — 실패를 보여주고 다시 시도하게 한다
+      setCheckFailed(true);
       setLoading(false);
-      // 판별 결과에 맞는 햅틱 — 불가면 경고, 그 외 성공
-      if (result?.overall === 'DENIED') haptic.warning();
-      else if (result) haptic.success();
-      // 여행 자동 기록(설정 허용 시) — 판별받고 방문하려는 곳을 캘린더 여행 일정으로 남긴다
-      if (result && result.overall !== 'DENIED' && settings.autoTravelLog) {
-        const title = `${facility.name} 방문`;
-        if (!calendarEvents.some((e) => e.type === 'TRAVEL' && e.title === title)) {
-          addCalendarEvent({
-            petId: null,
-            type: 'TRAVEL',
-            title,
-            date: ymd(new Date()),
-            time: null,
-            repeat: 'NONE',
-            reminder: false,
-            notes: '판별받고 방문한 곳 — 자동 기록',
-          });
-        }
+      haptic.warning();
+      return;
+    }
+    setCheck(result);
+    setDone(new Set());
+    setLoading(false);
+    // 판별 결과에 맞는 햅틱 — 불가면 경고, 그 외 성공
+    if (result?.overall === 'DENIED') haptic.warning();
+    else if (result) haptic.success();
+    // 여행 자동 기록(설정 허용 시) — 판별받고 방문하려는 곳을 캘린더 여행 일정으로 남긴다
+    if (result && result.overall !== 'DENIED' && settings.autoTravelLog) {
+      const title = `${facility.name} 방문`;
+      if (!calendarEvents.some((e) => e.type === 'TRAVEL' && e.title === title)) {
+        addCalendarEvent({
+          petId: null,
+          type: 'TRAVEL',
+          title,
+          date: ymd(new Date()),
+          time: null,
+          repeat: 'NONE',
+          reminder: false,
+          notes: '판별받고 방문한 곳 — 자동 기록',
+        });
       }
-    }, 900);
+    }
   };
 
   const toggleDone = (item: string) => {
@@ -369,6 +378,14 @@ export default function FacilityDetailScreen() {
                       </>
                     )}
                   </Pressable>
+
+                  {/* 판별 실패는 조용히 넘기지 않는다 — 이 화면의 핵심 기능이라 결과가 없으면
+                      사용자는 버튼이 안 먹은 건지 안 되는 곳인지 구분할 수 없다 */}
+                  {checkFailed && (
+                    <Text style={[styles.checkError, { color: p.muted }]}>
+                      판별에 실패했어요. 잠시 후 다시 시도해 주세요.
+                    </Text>
+                  )}
                 </>
               )}
 
@@ -735,6 +752,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingVertical: 16,
   },
+  checkError: { fontSize: 12.5, textAlign: 'center', marginTop: 8 },
   checkLabel: { fontSize: 15.5, fontWeight: '800' },
   resultCard: { borderRadius: Radius.lg, borderWidth: 1.5, padding: Spacing.xl, gap: Spacing.md },
   resultTop: {
