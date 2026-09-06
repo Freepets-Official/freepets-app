@@ -611,21 +611,34 @@ export const aiApi = {
       })[] | null;
     }>('POST', '/api/v1/ai/course-check', { body: { petIds, facilityIds }, auth: true });
 
-    return {
-      overall: r.overall,
-      blockedCount: r.blockedCount ?? 0,
-      stops: (r.stops ?? []).map((st) => ({
-        facility: {
-          facilityId: st.facility.facilityId,
-          name: st.facility.name,
-          category: CATEGORY_FROM_SERVER[st.facility.category] ?? 'TOUR',
-        },
-        time: st.time,
-        verdicts: (st.verdicts ?? []).map((v) => ({ ...v, conditions: v.conditions ?? [] })),
-        overall: st.overall,
-        alternative: st.alternative,
-      })),
-    };
+    const stops = (r.stops ?? []).map((st) => ({
+      facility: {
+        facilityId: st.facility.facilityId,
+        name: st.facility.name,
+        category: CATEGORY_FROM_SERVER[st.facility.category] ?? 'TOUR',
+      },
+      time: st.time,
+      verdicts: (st.verdicts ?? []).map((v) => ({ ...v, conditions: v.conditions ?? [] })),
+      overall: st.overall,
+      alternative: st.alternative,
+    }));
+
+    // 스톱이나 아이별 판별이 요청한 만큼 오지 않으면 이 응답은 신뢰할 수 없다. 그대로 그리면
+    // **근거 없이 overall만 보고 '갈 수 있다'가 뜬다** — /ai/check와 같은 이유로 막는다.
+    const wantStops = new Set(facilityIds);
+    const gotStops = new Set(stops.map((st) => st.facility.facilityId));
+    const stopsCovered =
+      wantStops.size === gotStops.size && [...wantStops].every((id) => gotStops.has(id));
+    const wantPets = new Set(petIds);
+    const verdictsCovered = stops.every((st) => {
+      const got = new Set(st.verdicts.map((v) => v.petId));
+      return wantPets.size === got.size && [...wantPets].every((id) => got.has(id));
+    });
+    if (!stopsCovered || !verdictsCovered) {
+      throw new ApiError('코스 판별 결과를 받지 못했어요. 잠시 후 다시 시도해 주세요.');
+    }
+
+    return { overall: r.overall, blockedCount: r.blockedCount ?? 0, stops };
   },
 
   /**

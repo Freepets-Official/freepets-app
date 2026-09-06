@@ -78,19 +78,32 @@ export default function CourseScreen() {
   const [courseCheckKey, setCourseCheckKey] = useState<string | null>(null);
   const [courseCheckError, setCourseCheckError] = useState<string | null>(null);
 
+  /**
+   * 판별 요청의 서명. 코스 종류만으로는 부족하다 — 같은 'liked'라도 고른 아이나 스톱이 바뀌면
+   * 다른 요청이므로, 늦게 도착한 옛 응답이 새 입력의 결과인 것처럼 덮어쓰면 안 된다.
+   * 방문 순서가 결과를 바꾸므로 facilityIds는 정렬하지 않는다.
+   */
+  const checkSignature = (key: string, facilityIds: number[]) =>
+    `${key}|${[...selectedPetIds].sort((a, b) => a - b).join(',')}|${facilityIds.join(',')}`;
+
   const runCourseCheck = async (key: string, stops: CourseStop[]) => {
     if (selectedPetIds.length === 0 || stops.length === 0) return;
-    setCourseCheckKey(key);
+    // 배열 순서가 곧 방문 순서다. 서버는 1~10개만 받는다.
+    const facilityIds = stops.slice(0, 10).map((st) => st.facilityId);
+    const sig = checkSignature(key, facilityIds);
+    setCourseCheckKey(sig);
     setCourseCheckError(null);
     setCourseCheck(null);
     try {
-      // 배열 순서가 곧 방문 순서다. 서버는 1~10개만 받는다.
-      const res = await aiApi.courseCheck(selectedPetIds, stops.slice(0, 10).map((st) => st.facilityId));
-      setCourseCheck({ key, result: res });
+      const res = await aiApi.courseCheck(selectedPetIds, facilityIds);
+      // 그 사이 아이나 코스가 바뀌었으면 이 응답은 더 이상 화면의 답이 아니다
+      if (checkSignature(key, facilityIds) !== sig) return;
+      setCourseCheck({ key: sig, result: res });
     } catch (e) {
+      if (checkSignature(key, facilityIds) !== sig) return;
       setCourseCheckError(e instanceof Error ? e.message : '코스를 판별하지 못했어요');
     } finally {
-      setCourseCheckKey(null);
+      setCourseCheckKey((cur) => (cur === sig ? null : cur));
     }
   };
   const [validated, setValidated] = useState(false);
@@ -366,10 +379,12 @@ export default function CourseScreen() {
                   <CourseCheckAction
                     label="이 코스로 다녀와도 될까요?"
                     disabled={selectedPetIds.length === 0}
-                    running={courseCheckKey === 'liked'}
+                    running={courseCheckKey === checkSignature('liked', liked.stops.slice(0, 10).map((st) => st.facilityId))}
                     onPress={() => runCourseCheck('liked', liked.stops)}
                   />
-                  {courseCheck?.key === 'liked' && <CourseCheckPanel result={courseCheck.result} />}
+                  {courseCheck?.key === checkSignature('liked', liked.stops.slice(0, 10).map((st) => st.facilityId)) && (
+                    <CourseCheckPanel result={courseCheck.result} />
+                  )}
                 </>
               )}
               {!personalLoading && personalError && selectedPetIds.length > 0 && (
@@ -389,10 +404,12 @@ export default function CourseScreen() {
                   <CourseCheckAction
                     label="이 코스로 다녀와도 될까요?"
                     disabled={selectedPetIds.length === 0}
-                    running={courseCheckKey === 'similar'}
+                    running={courseCheckKey === checkSignature('similar', similar.stops.slice(0, 10).map((st) => st.facilityId))}
                     onPress={() => runCourseCheck('similar', similar.stops)}
                   />
-                  {courseCheck?.key === 'similar' && <CourseCheckPanel result={courseCheck.result} />}
+                  {courseCheck?.key === checkSignature('similar', similar.stops.slice(0, 10).map((st) => st.facilityId)) && (
+                    <CourseCheckPanel result={courseCheck.result} />
+                  )}
                 </>
               )}
 
@@ -481,10 +498,12 @@ export default function CourseScreen() {
                       <CourseCheckAction
                         label="이 코스로 다녀와도 될까요?"
                         disabled={selectedPetIds.length === 0}
-                        running={courseCheckKey === 'preset'}
+                        running={courseCheckKey === checkSignature('preset', preset.course.stops.slice(0, 10).map((st) => st.facilityId))}
                         onPress={() => runCourseCheck('preset', preset.course.stops)}
                       />
-                      {courseCheck?.key === 'preset' && <CourseCheckPanel result={courseCheck.result} />}
+                      {courseCheck?.key === checkSignature('preset', preset.course.stops.slice(0, 10).map((st) => st.facilityId)) && (
+                    <CourseCheckPanel result={courseCheck.result} />
+                  )}
                     </>
                   )}
                 </View>
