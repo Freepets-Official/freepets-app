@@ -327,6 +327,14 @@ interface AppStore {
   /** 사용자가 전화 등으로 직접 확인한 시설 — 신뢰도를 '확정'으로 끌어올린다 */
   userConfirmedIds: Set<number>;
   confirmFacility: (facilityId: number) => void;
+  /**
+   * 전화를 걸어놓고 아직 "확인했다"는 답을 받지 못한 시설.
+   * `Linking.openURL`이 성공했다는 건 다이얼러가 열렸다는 뜻이지 통화가 됐다는 뜻이 아니다 —
+   * 열고 바로 취소해도 성공으로 온다. 그래서 전화 앱에서 돌아왔을 때 한 번 물어보고,
+   * 사용자가 답해야 신뢰도를 올린다.
+   */
+  pendingCallConfirm: { facilityId: number; name: string } | null;
+  setPendingCallConfirm: (target: { facilityId: number; name: string } | null) => void;
   /** 신뢰도를 즉시 하향시킨 시설 (거부 실시간 피드백에서 사용) */
   downgradedIds: Set<number>;
   downgradeFacility: (facilityId: number) => void;
@@ -832,6 +840,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
+  const [pendingCallConfirm, setPendingCallConfirm] = useState<{ facilityId: number; name: string } | null>(null);
+
   const confirmFacility = useCallback((facilityId: number) => {
     setUserConfirmedIds((prev) => new Set(prev).add(facilityId));
     setDowngradedIds((prev) => {
@@ -1132,6 +1142,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       updateSettings,
       userConfirmedIds,
       confirmFacility,
+      pendingCallConfirm,
+      setPendingCallConfirm,
       downgradedIds,
       downgradeFacility,
       confidenceOf,
@@ -1203,6 +1215,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       settings,
       updateSettings,
       userConfirmedIds,
+      pendingCallConfirm,
       confirmFacility,
       downgradedIds,
       downgradeFacility,
