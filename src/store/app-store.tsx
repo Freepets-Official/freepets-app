@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { ThemeMode } from '@/constants/theme';
-import { judgeGroup } from '@/data/judge';
-import { accountApi, facilitiesApi, petsApi, reviewsApi, satisfactionApi, setAuthToken } from '@/lib/api';
+import { CHECK_RANK, buildChecklist, judgeGroup } from '@/data/judge';
+import { accountApi, aiApi, facilitiesApi, petsApi, reviewsApi, satisfactionApi, setAuthToken } from '@/lib/api';
 import type { Coords } from '@/lib/location';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, pawGradeOf, vaccinationDday } from '@/data/types';
@@ -15,6 +15,7 @@ import type {
   Pet,
   PetCheck,
   PetSatisfaction,
+  PetVerdictResult,
   Requirement,
   Review,
   ReviewTag,
@@ -255,7 +256,7 @@ interface AppStore {
 
   checks: PetCheck[];
   /** 선택한 여러 마리를 한 번에 판별한다 */
-  runCheck: (facilityId: number, petIds: number[]) => PetCheck | null;
+  runCheck: (facilityId: number, petIds: number[]) => Promise<PetCheck | null>;
 
   /** 다음 접종이 30일 이내로 다가왔거나 지난 아이들 (홈 알림용) — 임박순 */
   upcomingVaccinations: () => { pet: Pet; dday: number; date: string }[];
@@ -487,7 +488,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, [pets]);
 
   const runCheck = useCallback(
-    (facilityId: number, petIds: number[]): PetCheck | null => {
+    async (facilityId: number, petIds: number[]): Promise<PetCheck | null> => {
       // 서버 시설(검색·홈 TOP3·상세)은 목데이터에 없다. 캐시를 먼저 보지 않으면
       // 실제 시설에서 판별 버튼이 아무 반응 없이 끝난다.
       const base = facilityCache.current.get(facilityId) ?? FACILITIES.find((f) => f.facilityId === facilityId);
@@ -506,13 +507,48 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           }
         : base;
 
-      const { verdicts, overall, checklist, tips } = judgeGroup(chosen, facility);
+      // 목 시설은 서버에 없다. 데모·시연 경로를 살려두려고 로컬 규칙 엔진으로 판별한다.
+      // 목을 걷어낼 때(이슈 #15) 이 분기만 지우면 된다.
+      //
+      // 사업자가 조건을 확정한 시설도 로컬로 돈다. 그 조건은 아직 서버에 올라가지 않아
+      // (owner/* API 미배포) 서버가 관광공사 원문으로만 판별하면 사업자 확정이 무시된다.
+      if (isMockFacilityId(facilityId) || reg) {
+        const { verdicts, overall, checklist, tips } = judgeGroup(chosen, facility);
+        const check: PetCheck = {
+          checkId: nextCheckId.current++,
+          facilityId,
+          petIds: chosen.map((p) => p.petId),
+          verdicts,
+          overall,
+          checklist,
+          tips,
+          createdAt: new Date().toISOString(),
+        };
+        setChecks((prev) => [check, ...prev]);
+        return check;
+      }
+
+      // 서버 판별. overall도 서버가 정하므로 앱이 다시 계산하지 않는다.
+      const res = await aiApi.check(facilityId, chosen.map((p) => p.petId));
+
+      // 응답에 checklist·tips가 없다(명세에 미구현으로 명시). 앱이 만들되 **서버가 준
+      // conditions를 입력으로** 쓴다 — facility.requirements로 다시 만들면 판별과 안내가
+      // 어긋난다. 가장 관대한 결과를 기준으로 삼는 것은 로컬 judgeGroup과 같은 규칙이다.
+      const best = res.verdicts.reduce<PetVerdictResult | null>(
+        (b, v) => (b === null || CHECK_RANK[v.result] < CHECK_RANK[b.result] ? v : b),
+        null,
+      );
+      const { checklist, tips } = buildChecklist(
+        best ?? { result: 'DENIED', reason: '', conditions: [] },
+        facility,
+      );
+
       const check: PetCheck = {
-        checkId: nextCheckId.current++,
+        checkId: res.checkId, // 서버가 발급한 id — 이력 조회·출입증이 이 값을 쓴다
         facilityId,
         petIds: chosen.map((p) => p.petId),
-        verdicts,
-        overall,
+        verdicts: res.verdicts,
+        overall: res.overall,
         checklist,
         tips,
         createdAt: new Date().toISOString(),
