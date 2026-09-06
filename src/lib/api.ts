@@ -592,18 +592,26 @@ export const aiApi = {
       body: { facilityId, petIds },
       auth: true,
     });
-    return {
-      checkId: r.checkId,
-      facilityId: r.facilityId,
-      overall: r.overall,
-      verdicts: (r.verdicts ?? []).map((v) => ({
-        petId: v.petId,
-        result: v.result,
-        reason: v.reason,
-        // 조건이 없으면 서버가 [] 를 주지만, null로 와도 화면이 깨지지 않게 받는다
-        conditions: v.conditions ?? [],
-      })),
-    };
+    const verdicts: PetVerdictResult[] = (r.verdicts ?? []).map((v) => ({
+      petId: v.petId,
+      result: v.result,
+      reason: v.reason,
+      // 조건이 없으면 서버가 [] 를 주지만, null로 와도 화면이 깨지지 않게 받는다
+      conditions: v.conditions ?? [],
+    }));
+
+    // 아이별 판별이 요청한 만큼 오지 않으면 이 응답은 신뢰할 수 없다. 그대로 저장하면
+    // **판별 근거 없이 overall만 보고 '입장 가능'이 뜨고**, 자동 여행 기록까지 남는다.
+    // 헛걸음 방지가 목적인 서비스에서 근거 없는 '가능'은 가장 위험한 답이라, 조용히 넘기지
+    // 않고 실패로 돌려 화면이 다시 시도하게 한다.
+    const requested = new Set(petIds);
+    const returned = new Set(verdicts.map((v) => v.petId));
+    const covered = requested.size === returned.size && [...requested].every((id) => returned.has(id));
+    if (!covered) {
+      throw new ApiError('판별 결과를 받지 못했어요. 잠시 후 다시 시도해 주세요.');
+    }
+
+    return { checkId: r.checkId, facilityId: r.facilityId, overall: r.overall, verdicts };
   },
 };
 
