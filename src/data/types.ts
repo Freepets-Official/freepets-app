@@ -289,8 +289,11 @@ export interface CourseStop {
   isMealStop: boolean;
   /** 리뷰 평균 평점(0~5). 리뷰가 없으면 0 */
   score: number;
-  /** 코스 첫 스톱으로부터의 거리(m). 첫 스톱 자신은 항상 0 */
-  distanceM: number;
+  /**
+   * 코스 첫 스톱으로부터의 거리(m). 첫 스톱 자신은 0이다.
+   * 서버가 안 주면 null — 0으로 떨어뜨리면 "모른다"가 "0m"로 둔갑한다(Facility.distanceM과 같은 이유).
+   */
+  distanceM: number | null;
 }
 
 /** 지역×테마 추천 결과(`GET /courses/preset`). */

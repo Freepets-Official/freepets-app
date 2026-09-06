@@ -50,7 +50,9 @@ export default function CourseScreen() {
   const [sigungu, setSigungu] = useState<string | null>(null);
   const [pickedThemes, setPickedThemes] = useState<string[]>([]);
   const [maxDistance, setMaxDistance] = useState<string | null>(null);
-  const [preset, setPreset] = useState<PresetCourse | null>(null);
+  // 결과에 그때의 요청 키를 함께 담는다. 필터를 바꾼 뒤 300ms 디바운스 동안 이전 결과가
+  // 새 필터의 답인 것처럼 보이는 걸 막으려는 것이다.
+  const [preset, setPreset] = useState<{ key: string; course: PresetCourse } | null>(null);
   const [presetLoading, setPresetLoading] = useState(false);
   const [presetError, setPresetError] = useState<string | null>(null);
   const [validated, setValidated] = useState(false);
@@ -76,6 +78,9 @@ export default function CourseScreen() {
     };
   }, []);
 
+  /** 지금 화면의 필터 조합. 결과에 붙은 키와 다르면 그 결과는 옛 필터의 답이다 */
+  const presetKey = `${sido ?? ''}|${sigungu ?? ''}|${[...pickedThemes].sort().join(',')}|${maxDistance ?? ''}`;
+
   // 지역과 테마가 모두 정해져야 조회한다(서버 필수 파라미터).
   // 조건이 안 맞을 때 상태를 되돌리지 않고 렌더에서 presetReady로 가린다 —
   // effect 본문에서 setState를 동기로 부르면 연쇄 렌더 경고가 뜬다.
@@ -87,6 +92,7 @@ export default function CourseScreen() {
       setPresetLoading(true);
       setPresetError(null);
       try {
+        const key = presetKey;
         const res = await coursesApi.preset({
           sido,
           sigungu: sigungu ?? undefined,
@@ -94,7 +100,7 @@ export default function CourseScreen() {
           maxDistanceM: maxDistance ?? undefined,
         });
         if (!active) return;
-        setPreset(res);
+        setPreset({ key, course: res });
       } catch (e) {
         if (!active) return;
         setPreset(null);
@@ -109,7 +115,7 @@ export default function CourseScreen() {
       active = false;
       clearTimeout(t);
     };
-  }, [sido, sigungu, pickedThemes, maxDistance]);
+  }, [sido, sigungu, pickedThemes, maxDistance, presetKey]);
 
   const sigunguOptions = regions.find((r) => r.sido === sido)?.sigungus ?? [];
   /** 지역·테마가 다 골라졌을 때만 결과를 보여준다(고르는 중엔 직전 결과가 남아 있어도 감춘다) */
@@ -331,13 +337,13 @@ export default function CourseScreen() {
                   {presetReady && !presetLoading && presetError && (
                     <Text style={[styles.presetStateText, { color: p.muted }]}>{presetError}</Text>
                   )}
-                  {(!presetReady || (!presetLoading && !presetError && !preset)) && (
+                  {(!presetReady || (!presetLoading && !presetError && preset?.key !== presetKey)) && (
                     <Text style={[styles.presetStateText, { color: p.muted }]}>
                       지역과 테마를 고르면 코스를 만들어 드려요.
                     </Text>
                   )}
-                  {presetReady && !presetLoading && !presetError && preset && (
-                    <PresetCourseCard course={preset} />
+                  {presetReady && !presetLoading && !presetError && preset?.key === presetKey && (
+                    <PresetCourseCard course={preset.course} />
                   )}
                 </View>
               )}

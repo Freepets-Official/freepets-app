@@ -646,7 +646,8 @@ function toCourseStop(s: ServerCourseStop): CourseStop {
     category: CATEGORY_FROM_SERVER[s.category] ?? 'TOUR',
     isMealStop: s.isMealStop ?? false,
     score: s.score ?? 0,
-    distanceM: s.distanceM ?? 0,
+    // null을 0으로 바꾸지 않는다 — formatDistance가 '거리 미상'으로 그리게 둔다
+    distanceM: s.distanceM,
   };
 }
 
