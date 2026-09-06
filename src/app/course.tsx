@@ -23,7 +23,9 @@ import {
   type CourseDistanceOption,
   type CourseRegion,
   type CourseTheme,
+  type LikedCourse,
   type PresetCourse,
+  type SimilarCourse,
 } from '@/data/types';
 import { coursesApi } from '@/lib/api';
 import { usePalette } from '@/hooks/use-theme';
@@ -55,6 +57,14 @@ export default function CourseScreen() {
   const [preset, setPreset] = useState<{ key: string; course: PresetCourse } | null>(null);
   const [presetLoading, setPresetLoading] = useState(false);
   const [presetError, setPresetError] = useState<string | null>(null);
+
+  // ── 개인화 추천(서버) ────────────────────────────────────────────────
+  // liked는 실제 방문 기록이, similar는 취향 데이터가 있어야 의미가 있다. 둘 다 없으면
+  // 서버가 각각 COURSE4002 / 콜드스타트로 답하므로 그대로 구분해 보여준다.
+  const [liked, setLiked] = useState<LikedCourse | null>(null);
+  const [likedEmpty, setLikedEmpty] = useState(false);
+  const [similar, setSimilar] = useState<SimilarCourse | null>(null);
+  const [personalLoading, setPersonalLoading] = useState(false);
   const [validated, setValidated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -116,6 +126,36 @@ export default function CourseScreen() {
       clearTimeout(t);
     };
   }, [sido, sigungu, pickedThemes, maxDistance, presetKey]);
+
+  // 선택한 아이가 바뀌면 개인화 추천을 다시 받는다. 실패(기록 부족)는 장애가 아니라
+  // "아직 데이터가 없다"는 정상 상태라 화면을 막지 않는다.
+  useEffect(() => {
+    if (selectedPetIds.length === 0) return;
+    let active = true;
+    const t = setTimeout(async () => {
+      if (!active) return;
+      setPersonalLoading(true);
+      const params = {
+        petIds: selectedPetIds,
+        sido: sido ?? undefined,
+        sigungu: sigungu ?? undefined,
+        maxDistanceM: maxDistance ?? undefined,
+      };
+      const [lk, sm] = await Promise.all([
+        coursesApi.liked(params).catch(() => null),
+        coursesApi.similar(params).catch(() => null),
+      ]);
+      if (!active) return;
+      setLiked(lk);
+      setLikedEmpty(lk === null);
+      setSimilar(sm);
+      setPersonalLoading(false);
+    }, 300);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+  }, [selectedPetIds, sido, sigungu, maxDistance]);
 
   const sigunguOptions = regions.find((r) => r.sido === sido)?.sigungus ?? [];
   /** 지역·테마가 다 골라졌을 때만 결과를 보여준다(고르는 중엔 직전 결과가 남아 있어도 감춘다) */
@@ -266,6 +306,24 @@ export default function CourseScreen() {
               {PRESET_COURSES.map((c) => (
                 <CoursePickCard key={c.id} course={c} onPress={() => loadCourse(c)} />
               ))}
+
+              {/* 개인화 추천 — 선택한 아이의 만족도 기록을 서버가 읽어 만든다 */}
+              {personalLoading && (
+                <View style={styles.presetState}>
+                  <ActivityIndicator color={p.accent} />
+                  <Text style={[styles.presetStateText, { color: p.muted }]}>
+                    아이 취향으로 코스를 찾는 중…
+                  </Text>
+                </View>
+              )}
+              {!personalLoading && liked && <LikedCourseCard course={liked} />}
+              {!personalLoading && likedEmpty && selectedPetIds.length > 0 && (
+                <Text style={[styles.presetStateText, { color: p.muted }]}>
+                  아직 좋아한 곳을 뽑을 만큼 방문 기록이 없어요.{'\n'}
+                  다녀온 곳에 만족도를 남기면 그 기록으로 코스를 만들어 드려요.
+                </Text>
+              )}
+              {!personalLoading && similar && <SimilarCourseCard course={similar} />}
 
               {/* 지역×테마 추천 — 서버가 지역별로 만들어 준다. 로그인 없이도 쓸 수 있는 둘러보기 */}
               {regions.length > 0 && (
@@ -505,6 +563,80 @@ export default function CourseScreen() {
  * "테마 하나로만 채워지는 걸 완화하려고" 붙인 것이라, 만족도나 취향 문구를 붙이면 거짓이 된다.
  * 그래서 별도 태그로 구분해 표시한다(명세의 요구).
  */
+/**
+ * 좋아한 곳 카드. 만족도 문구는 **식사 스톱이 아닐 때만** 붙인다 —
+ * 식사 스톱은 서버가 동선 근처에서 자동으로 끼워 넣은 것이라 만족도가 더미값(0)이고,
+ * 거기에 "9.4점" 같은 문구를 붙이면 그냥 거짓말이 된다.
+ */
+function LikedCourseCard({ course }: { course: LikedCourse }) {
+  const p = usePalette();
+  return (
+    <View style={[styles.presetCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
+      <Text style={[styles.presetTitle, { color: p.ink }]}>{course.title}</Text>
+      {course.stops.map((st, i) => (
+        <View key={st.facilityId} style={styles.presetStopBlock}>
+          <View style={styles.presetStop}>
+            <Text style={[styles.presetOrder, { backgroundColor: p.accentSoft, color: p.accent }]}>
+              {i + 1}
+            </Text>
+            <Text style={[styles.presetStopName, { color: p.ink }]} numberOfLines={1}>
+              {st.name}
+            </Text>
+            {st.isMealStop && (
+              <Text style={[styles.mealTag, { backgroundColor: p.surface, color: p.muted }]}>식사</Text>
+            )}
+            <Text style={[styles.presetStopMeta, { color: p.muted, marginLeft: 'auto' }]}>
+              {CATEGORY_LABEL[st.category]}
+            </Text>
+          </View>
+          {!st.isMealStop && st.reasonPets.length > 0 && (
+            <Text style={[styles.stopReason, { color: p.muted }]}>
+              {st.reasonPets.map((rp) => `${rp.petName} ${rp.score.toFixed(1)}점`).join(' · ')}
+            </Text>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * 취향 비슷한 새곳 카드.
+ *
+ * `isPersonalized: false`면 취향 매치가 아니라 **리뷰 평점 기준 인기 코스**로 자동 전환된
+ * 결과다. 그대로 "취향 기반"이라고 보여주면 사용자를 속이는 것이라, 제목 아래에 무엇을
+ * 근거로 뽑았는지 밝힌다. 스톱별 `reason`은 서버 문구를 그대로 쓴다(재조합 금지).
+ */
+function SimilarCourseCard({ course }: { course: SimilarCourse }) {
+  const p = usePalette();
+  return (
+    <View style={[styles.presetCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
+      <Text style={[styles.presetTitle, { color: p.ink }]}>{course.title}</Text>
+      {!course.isPersonalized && (
+        <Text style={[styles.coldStart, { color: p.muted }]}>
+          아직 취향 데이터가 없어 평점이 좋은 곳으로 보여드려요.
+        </Text>
+      )}
+      {course.stops.map((st, i) => (
+        <View key={st.facilityId} style={styles.presetStopBlock}>
+          <View style={styles.presetStop}>
+            <Text style={[styles.presetOrder, { backgroundColor: p.accentSoft, color: p.accent }]}>
+              {i + 1}
+            </Text>
+            <Text style={[styles.presetStopName, { color: p.ink }]} numberOfLines={1}>
+              {st.name}
+            </Text>
+            {st.isMealStop && (
+              <Text style={[styles.mealTag, { backgroundColor: p.surface, color: p.muted }]}>식사</Text>
+            )}
+          </View>
+          {!!st.reason && <Text style={[styles.stopReason, { color: p.muted }]}>{st.reason}</Text>}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function PresetCourseCard({ course }: { course: PresetCourse }) {
   const p = usePalette();
   return (
@@ -706,6 +838,9 @@ const styles = StyleSheet.create({
   presetCard: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.lg, gap: 10 },
   presetTitle: { fontSize: 15.5, fontWeight: '800', letterSpacing: -0.3 },
   presetStop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  presetStopBlock: { gap: 3 },
+  stopReason: { fontSize: 11.5, lineHeight: 17, paddingLeft: 30 },
+  coldStart: { fontSize: 12, lineHeight: 18 },
   presetOrder: {
     width: 20, height: 20, borderRadius: 999,
     alignItems: 'center', justifyContent: 'center',
