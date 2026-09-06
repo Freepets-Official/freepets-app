@@ -85,7 +85,6 @@ export default function PassportScreen() {
                 pet={pet}
                 facility={facility}
                 verdict={verdict}
-                checkId={check.checkId}
                 issuedAt={check.createdAt}
                 confidence={conf.confidence}
                 confidenceSource={conf.source}

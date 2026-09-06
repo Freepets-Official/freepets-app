@@ -8,7 +8,6 @@ import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import {
   buildRuleRows,
   formatIssuedAt,
-  passIssueCode,
   passVerifyUrl,
   type RuleStatus,
 } from '@/data/passport';
@@ -29,7 +28,6 @@ interface Props {
   pet: Pet;
   facility: Facility;
   verdict: PetVerdictResult;
-  checkId: number;
   issuedAt: string;
   confidence: Confidence;
   confidenceSource: ConfidenceSource;
@@ -47,7 +45,6 @@ export function PassportCard({
   pet,
   facility,
   verdict,
-  checkId,
   issuedAt,
   confidence,
   confidenceSource,
@@ -79,7 +76,9 @@ export function PassportCard({
             <Ionicons name="paw" size={13} color={p.accent} />
             <Text style={[styles.brandText, { color: p.accent }]}>프리펫스 동반 출입증</Text>
           </View>
-          <Text style={[styles.code, { color: p.muted }]}>{passIssueCode(checkId, pet.petId)}</Text>
+          {verdict.verifyCode && (
+            <Text style={[styles.code, { color: p.muted }]}>{verdict.verifyCode}</Text>
+          )}
         </View>
 
         {/* 결론 — 가장 먼저 읽혀야 하는 부분 */}
@@ -170,15 +169,20 @@ export function PassportCard({
           </Text>
         </View>
 
-        {/* QR — 직원이 스캔해 판별 근거를 직접 확인 */}
+        {/* QR — 직원이 스캔해 판별 근거를 직접 확인.
+            코드가 없으면(로컬 판별한 목 시설) 열리지 않는 주소라 QR을 그리지 않는다 */}
         <View style={[styles.qrRow, { borderTopColor: p.line }]}>
           <View style={[styles.qrBox, { borderColor: p.line }]}>
-            <QRCode
-              value={passVerifyUrl(checkId, pet.petId)}
-              size={72}
-              color={p.ink}
-              backgroundColor="#FFFFFF"
-            />
+            {verdict.verifyCode ? (
+              <QRCode
+                value={passVerifyUrl(verdict.verifyCode)}
+                size={72}
+                color={p.ink}
+                backgroundColor="#FFFFFF"
+              />
+            ) : (
+              <Text style={[styles.qrEmpty, { color: p.muted }]}>검증 코드{'\n'}없음</Text>
+            )}
           </View>
           <View style={styles.qrText}>
             <Text style={[styles.qrTitle, { color: p.ink }]}>스캔하면 판별 근거를 볼 수 있어요</Text>
@@ -270,6 +274,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingTop: Spacing.md,
   },
+  qrEmpty: { fontSize: 10, textAlign: 'center', lineHeight: 14 },
   qrBox: { borderWidth: 1, borderRadius: Radius.sm, padding: 6, backgroundColor: '#FFFFFF' },
   qrText: { flex: 1, gap: 2 },
   qrTitle: { fontSize: 12.5, fontWeight: '800' },

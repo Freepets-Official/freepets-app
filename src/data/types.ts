@@ -458,6 +458,12 @@ export interface PetVerdictResult {
   result: CheckResult;
   reason: string;
   conditions: string[];
+  /**
+   * 동반 출입증 QR이 가리키는 검증 코드(`FP-` + 12자). 서버가 CSPRNG로 발급한다.
+   * 이 코드 하나가 곧 열람 권한이라(인증 없는 공개 페이지가 반려동물 이름·체중·접종여부까지
+   * 보여준다) 예측 가능한 값을 앱이 만들어 쓰면 안 된다. 로컬 판별(목 시설)에는 없다.
+   */
+  verifyCode?: string;
 }
 
 /** 여러 마리를 한 번에 판별한 기록 */
