@@ -223,6 +223,39 @@ export function pawGradeOf(reviews: Review[]): PawGrade {
   };
 }
 
+/**
+ * 발자국 랭킹 한 줄 (`GET /facilities/ranking`).
+ * 등급을 받은 시설만 내려오므로 `pawLevel`은 항상 1 이상이고, "리뷰 수집 중"이 오지 않는다.
+ */
+export interface RankingItem {
+  /** 순위. **서버가 매긴다** — 페이지를 넘겨도 이어지므로 배열 인덱스로 다시 매기면 2페이지 첫 행이 1위가 된다 */
+  rank: number;
+  facilityId: number;
+  name: string;
+  category: Category;
+  /** 화면 표시용. 필터는 이름이 아니라 코드로 보낸다 */
+  sido: string | null;
+  sigungu: string | null;
+  /** 요청에 좌표가 없으면 null */
+  distanceM: number | null;
+  petAllowed: boolean | null;
+  pawLevel: number;
+  pawLabel: string;
+  petScore: number;
+  reviewCnt: number;
+}
+
+/**
+ * 지역 칩 목록 (`GET /facilities/regions`). 시도 → 시군구 2단계.
+ * 코드와 이름이 함께 오는 이유: 필터는 **코드로** 보내고 화면엔 **이름을** 보여줘야 하는데,
+ * 이름만 있으면 프론트가 변환표를 들고 있어야 하고 지명이 바뀌면(강원도 → 강원특별자치도) 어긋난다.
+ */
+export interface Region {
+  sidoCode: string;
+  sido: string;
+  sigungus: { sigunguCode: string; sigungu: string }[];
+}
+
 /** 시설 상세 친화도 탭에 필요한 전체 묶음 (집계 + 페이지 목록) — 서버 응답과 같은 모양 */
 export interface FacilityReviewData {
   grade: PawGrade;
