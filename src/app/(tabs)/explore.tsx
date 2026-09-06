@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Chip } from '@/components/chip';
@@ -102,8 +102,7 @@ export default function ExploreScreen() {
           category: category ?? undefined,
           radiusM: mode === 'all' ? RADIUS_ALL_M : settings.searchRadiusKm * 1000,
           // 클라이언트에서 거르지 않고 서버 필터를 쓴다 — 30건 받아와서 6건만 남기면
-          // 페이지네이션과 total이 어긋난다. hideDenied가 클라이언트인 건 대상이 적어서다
-          // (DENIED는 2026-09-01 DB 실측 기준 전국 5건뿐이다).
+          // 페이지네이션과 total이 어긋난다.
           petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
           size: 30,
         });
@@ -126,11 +125,9 @@ export default function ExploreScreen() {
     };
   }, [mode, coords, keyword, category, settings.searchRadiusKm, settings.onlyPetInfo, retryKey, registerFacilities]);
 
-  // '동반 불가 숨기기' 설정은 클라이언트에서 거른다(서버 petAllowed 필터가 단일값이라 병행 불가)
-  const facilities = useMemo(
-    () => items.filter((f) => !(settings.hideDenied && f.petAllowed === false)),
-    [items, settings.hideDenied],
-  );
+  // 동반 불가 시설을 숨기지 않는다. 헛걸음 방지가 목적인 앱에서 '여긴 안 된다'는 가장 확실한
+  // 정보라, 감추는 것보다 보여주는 쪽이 값어치가 있다(전국 5건뿐이라 목록을 어지럽히지도 않는다).
+  const facilities = items;
 
   return (
     <Screen {...HEADER[mode]}>

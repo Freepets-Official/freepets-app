@@ -120,13 +120,6 @@ export default function SettingsScreen() {
       {/* 탐색 (앱 특화) */}
       <Group title="탐색 · 판별" caption="프리펫스 전용">
         <ToggleRow
-          icon="eye-off-outline"
-          label="동반 불가 시설 숨기기"
-          sub="현장에서 거부로 확인된 소수 시설을 목록에서 감춰요"
-          value={settings.hideDenied}
-          onChange={(v) => updateSettings({ hideDenied: v })}
-        />
-        <ToggleRow
           icon="paw-outline"
           label="동반 가능만 보기"
           sub="관광공사가 동반 가능으로 확인한 곳만 (전체의 약 20%)"
