@@ -296,6 +296,32 @@ export interface CourseStop {
   distanceM: number | null;
 }
 
+/** 코스 일괄 판별의 스톱 하나(`POST /ai/course-check`). */
+export interface CourseCheckStop {
+  facility: { facilityId: number; name: string; category: Category };
+  /**
+   * ⚠️ **데모용 고정 계산값**이다 — 첫 스톱 10:00에서 스톱마다 +90분. 실제 방문 시간과
+   * 무관하므로 화면에 "예상(참고용)"임을 함께 밝혀야 한다.
+   */
+  time: string;
+  verdicts: (PetVerdictResult & { petName?: string })[];
+  overall: CheckResult;
+  /**
+   * DENIED 스톱에만 붙는 대체 시설. **`null`은 "전국에 대안이 없다"가 아니라
+   * "가까운 후보(반경 30km 상위 20곳) 중엔 없다"는 뜻**이라 문구를 과장하면 안 된다.
+   * CONDITIONAL 스톱은 못 들어가는 게 아니므로 애초에 대안을 찾지 않는다.
+   */
+  alternative: { facilityId: number; name: string; distanceKm: number } | null;
+}
+
+/** 코스 일괄 판별 결과. 스톱마다 낱개 판별과 **동일한 규칙**을 쓴다. */
+export interface CourseCheckResult {
+  overall: CheckResult;
+  /** overall이 DENIED인 스톱 개수 */
+  blockedCount: number;
+  stops: CourseCheckStop[];
+}
+
 /** 좋아한 곳 추천의 스톱. 왜 뽑혔는지를 함께 준다. */
 export interface LikedStop extends CourseStop {
   /** 0~10. `petIds`로 좁히지 않은 **전체 반려동물** 평균이다(6.5점 기준선과 같은 값) */

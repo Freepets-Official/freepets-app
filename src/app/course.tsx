@@ -22,12 +22,14 @@ import {
   RESULT_LABEL,
   type CourseDistanceOption,
   type CourseRegion,
+  type CourseCheckResult,
+  type CourseStop,
   type CourseTheme,
   type LikedCourse,
   type PresetCourse,
   type SimilarCourse,
 } from '@/data/types';
-import { ApiError, coursesApi } from '@/lib/api';
+import { ApiError, aiApi, coursesApi } from '@/lib/api';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -68,6 +70,42 @@ export default function CourseScreen() {
   const [personalLoading, setPersonalLoading] = useState(false);
   /** 기록 부족이 아니라 진짜 실패(네트워크·401·5xx) */
   const [personalError, setPersonalError] = useState(false);
+
+  // ── 서버 코스 일괄 판별 ──────────────────────────────────────────────
+  // 빌더의 스톱은 전부 목 시설이라 서버 판별을 쓸 수 없다. 서버가 만들어 준 코스(preset·
+  // liked·similar)를 그대로 판별에 넘기는 게 이 API가 쓰이는 자리다.
+  const [courseCheck, setCourseCheck] = useState<{ key: string; result: CourseCheckResult } | null>(null);
+  const [courseCheckKey, setCourseCheckKey] = useState<string | null>(null);
+  const [courseCheckError, setCourseCheckError] = useState<string | null>(null);
+
+  /**
+   * 판별 요청의 서명. 코스 종류만으로는 부족하다 — 같은 'liked'라도 고른 아이나 스톱이 바뀌면
+   * 다른 요청이므로, 늦게 도착한 옛 응답이 새 입력의 결과인 것처럼 덮어쓰면 안 된다.
+   * 방문 순서가 결과를 바꾸므로 facilityIds는 정렬하지 않는다.
+   */
+  const checkSignature = (key: string, facilityIds: number[]) =>
+    `${key}|${[...selectedPetIds].sort((a, b) => a - b).join(',')}|${facilityIds.join(',')}`;
+
+  const runCourseCheck = async (key: string, stops: CourseStop[]) => {
+    if (selectedPetIds.length === 0 || stops.length === 0) return;
+    // 배열 순서가 곧 방문 순서다. 서버는 1~10개만 받는다.
+    const facilityIds = stops.slice(0, 10).map((st) => st.facilityId);
+    const sig = checkSignature(key, facilityIds);
+    setCourseCheckKey(sig);
+    setCourseCheckError(null);
+    setCourseCheck(null);
+    try {
+      const res = await aiApi.courseCheck(selectedPetIds, facilityIds);
+      // 그 사이 아이나 코스가 바뀌었으면 이 응답은 더 이상 화면의 답이 아니다
+      if (checkSignature(key, facilityIds) !== sig) return;
+      setCourseCheck({ key: sig, result: res });
+    } catch (e) {
+      if (checkSignature(key, facilityIds) !== sig) return;
+      setCourseCheckError(e instanceof Error ? e.message : '코스를 판별하지 못했어요');
+    } finally {
+      setCourseCheckKey((cur) => (cur === sig ? null : cur));
+    }
+  };
   const [validated, setValidated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -335,7 +373,20 @@ export default function CourseScreen() {
                   </Text>
                 </View>
               )}
-              {!personalLoading && liked && <LikedCourseCard course={liked} />}
+              {selectedPetIds.length > 0 && !personalLoading && liked && (
+                <>
+                  <LikedCourseCard course={liked} />
+                  <CourseCheckAction
+                    label="이 코스로 다녀와도 될까요?"
+                    disabled={selectedPetIds.length === 0}
+                    running={courseCheckKey === checkSignature('liked', liked.stops.slice(0, 10).map((st) => st.facilityId))}
+                    onPress={() => runCourseCheck('liked', liked.stops)}
+                  />
+                  {courseCheck?.key === checkSignature('liked', liked.stops.slice(0, 10).map((st) => st.facilityId)) && (
+                    <CourseCheckPanel result={courseCheck.result} />
+                  )}
+                </>
+              )}
               {!personalLoading && personalError && selectedPetIds.length > 0 && (
                 <Text style={[styles.presetStateText, { color: p.muted }]}>
                   추천을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
@@ -347,7 +398,24 @@ export default function CourseScreen() {
                   다녀온 곳에 만족도를 남기면 그 기록으로 코스를 만들어 드려요.
                 </Text>
               )}
-              {!personalLoading && similar && <SimilarCourseCard course={similar} />}
+              {selectedPetIds.length > 0 && !personalLoading && similar && (
+                <>
+                  <SimilarCourseCard course={similar} />
+                  <CourseCheckAction
+                    label="이 코스로 다녀와도 될까요?"
+                    disabled={selectedPetIds.length === 0}
+                    running={courseCheckKey === checkSignature('similar', similar.stops.slice(0, 10).map((st) => st.facilityId))}
+                    onPress={() => runCourseCheck('similar', similar.stops)}
+                  />
+                  {courseCheck?.key === checkSignature('similar', similar.stops.slice(0, 10).map((st) => st.facilityId)) && (
+                    <CourseCheckPanel result={courseCheck.result} />
+                  )}
+                </>
+              )}
+
+              {courseCheckError && (
+                <Text style={[styles.presetStateText, { color: p.muted }]}>{courseCheckError}</Text>
+              )}
 
               {/* 지역×테마 추천 — 서버가 지역별로 만들어 준다. 로그인 없이도 쓸 수 있는 둘러보기 */}
               {regions.length > 0 && (
@@ -425,7 +493,18 @@ export default function CourseScreen() {
                     </Text>
                   )}
                   {presetReady && !presetLoading && !presetError && preset?.key === presetKey && (
-                    <PresetCourseCard course={preset.course} />
+                    <>
+                      <PresetCourseCard course={preset.course} />
+                      <CourseCheckAction
+                        label="이 코스로 다녀와도 될까요?"
+                        disabled={selectedPetIds.length === 0}
+                        running={courseCheckKey === checkSignature('preset', preset.course.stops.slice(0, 10).map((st) => st.facilityId))}
+                        onPress={() => runCourseCheck('preset', preset.course.stops)}
+                      />
+                      {courseCheck?.key === checkSignature('preset', preset.course.stops.slice(0, 10).map((st) => st.facilityId)) && (
+                    <CourseCheckPanel result={courseCheck.result} />
+                  )}
+                    </>
                   )}
                 </View>
               )}
@@ -592,6 +671,101 @@ export default function CourseScreen() {
  * 식사 스톱은 서버가 동선 근처에서 자동으로 끼워 넣은 것이라 만족도가 더미값(0)이고,
  * 거기에 "9.4점" 같은 문구를 붙이면 그냥 거짓말이 된다.
  */
+/**
+ * 서버 코스 판별 결과 패널.
+ *
+ * `time`은 **데모용 고정값**(첫 스톱 10:00, 스톱마다 +90분)이라 실제 방문 시간과 무관하다.
+ * 그대로 시간표처럼 보여주면 사용자가 실제 일정으로 오해하므로 "예상(참고용)"임을 밝힌다.
+ *
+ * `alternative`가 없다고 "대안이 없다"고 단정하지 않는다 — 서버는 반경 30km 상위 20곳 안에서만
+ * 찾으므로 **"가까운 곳 중엔 없다"**가 정확한 뜻이다.
+ */
+/** 서버 코스를 그대로 일괄 판별에 넘기는 버튼. 아이를 안 고르면 판별할 대상이 없다. */
+function CourseCheckAction({
+  label,
+  disabled,
+  running,
+  onPress,
+}: {
+  label: string;
+  disabled: boolean;
+  running: boolean;
+  onPress: () => void;
+}) {
+  const p = usePalette();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled || running}
+      style={({ pressed }) => [
+        styles.courseCheckBtn,
+        {
+          borderColor: disabled ? p.line : p.accent,
+          backgroundColor: pressed && !disabled ? p.accentSoft : 'transparent',
+        },
+      ]}>
+      {running ? (
+        <ActivityIndicator color={p.accent} size="small" />
+      ) : (
+        <Text style={[styles.courseCheckBtnText, { color: disabled ? p.muted : p.accent }]}>
+          {disabled ? '데려갈 아이를 골라 주세요' : label}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+function CourseCheckPanel({ result }: { result: CourseCheckResult }) {
+  const p = usePalette();
+  const tone =
+    result.overall === 'DENIED' ? p.danger : result.overall === 'CONDITIONAL' ? p.warn : p.success;
+  return (
+    <View style={[styles.checkPanel, { borderColor: p.line, backgroundColor: p.surface }]}>
+      <View style={styles.checkHead}>
+        <Text style={[styles.checkOverall, { color: tone }]}>{RESULT_LABEL[result.overall]}</Text>
+        {result.blockedCount > 0 && (
+          <Text style={[styles.checkSub, { color: p.muted }]}>
+            못 가는 곳 {result.blockedCount}곳
+          </Text>
+        )}
+        <Text style={[styles.checkSub, { color: p.muted, marginLeft: 'auto' }]}>
+          시간은 예상(참고용)
+        </Text>
+      </View>
+
+      {result.stops.map((st) => (
+        <View key={st.facility.facilityId} style={styles.checkStop}>
+          <Text style={[styles.checkTime, { color: p.muted }]}>{st.time}</Text>
+          <View style={styles.checkStopBody}>
+            <View style={styles.checkStopHead}>
+              <Text style={[styles.checkStopName, { color: p.ink }]} numberOfLines={1}>
+                {st.facility.name}
+              </Text>
+              <ResultBadge result={st.overall} />
+            </View>
+            {st.verdicts.map((v) => (
+              <Text key={v.petId} style={[styles.checkReason, { color: p.muted }]}>
+                {v.petName ? `${v.petName} · ` : ''}
+                {v.reason}
+              </Text>
+            ))}
+            {st.overall === 'DENIED' &&
+              (st.alternative ? (
+                <Text style={[styles.checkAlt, { color: p.accent }]}>
+                  대신 {st.alternative.name} ({st.alternative.distanceKm.toFixed(1)}km)
+                </Text>
+              ) : (
+                <Text style={[styles.checkAlt, { color: p.muted }]}>
+                  가까운 곳 중엔 대체할 만한 시설을 찾지 못했어요. 이 스톱은 빼는 걸 권해요.
+                </Text>
+              ))}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function LikedCourseCard({ course }: { course: LikedCourse }) {
   const p = usePalette();
   return (
@@ -863,6 +1037,22 @@ const styles = StyleSheet.create({
   presetTitle: { fontSize: 15.5, fontWeight: '800', letterSpacing: -0.3 },
   presetStop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   presetStopBlock: { gap: 3 },
+  courseCheckBtn: {
+    borderWidth: 1, borderRadius: Radius.md,
+    paddingVertical: 9, alignItems: 'center', marginTop: 4,
+  },
+  courseCheckBtnText: { fontSize: 13, fontWeight: '800' },
+  checkPanel: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, gap: 10, marginTop: 6 },
+  checkHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  checkOverall: { fontSize: 14, fontWeight: '800' },
+  checkSub: { fontSize: 11.5 },
+  checkStop: { flexDirection: 'row', gap: 10 },
+  checkTime: { fontSize: 11.5, fontWeight: '700', width: 42, fontVariant: ['tabular-nums'] },
+  checkStopBody: { flex: 1, gap: 3 },
+  checkStopHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  checkStopName: { fontSize: 13.5, fontWeight: '700', flexShrink: 1 },
+  checkReason: { fontSize: 11.5, lineHeight: 17 },
+  checkAlt: { fontSize: 11.5, lineHeight: 17, fontWeight: '600' },
   stopReason: { fontSize: 11.5, lineHeight: 17, paddingLeft: 30 },
   coldStart: { fontSize: 12, lineHeight: 18 },
   presetOrder: {
