@@ -256,6 +256,54 @@ export interface Region {
   sigungus: { sigunguCode: string; sigungu: string }[];
 }
 
+/** 코스 지역 목록(`GET /courses/regions`). 시설 랭킹과 달리 **코드가 아니라 이름 문자열**을 쓴다. */
+export interface CourseRegion {
+  sido: string;
+  /** 시/도 전체를 아우르는 시설만 있으면 빈 배열 — 이때는 sido만으로 조회한다 */
+  sigungus: string[];
+}
+
+/** 코스 테마(`GET /courses/themes`). DB가 아니라 서버 코드에 고정된 값이라 하드코딩하지 않는다. */
+export interface CourseTheme {
+  /** API 파라미터로 그대로 쓰는 값 */
+  value: string;
+  label: string;
+}
+
+/** 스톱 간 최대 거리 선택지(`GET /courses/distance-options`). */
+export interface CourseDistanceOption {
+  value: string;
+  label: string;
+  meters: number;
+}
+
+/** 추천 코스의 스톱 한 곳. */
+export interface CourseStop {
+  facilityId: number;
+  name: string;
+  category: Category;
+  /**
+   * 서버가 자동으로 끼워 넣은 식사 스톱. 개인화·취향 매치 결과가 **아니므로**
+   * "만족도 9.4점" 같은 문구를 붙이면 거짓 정보가 된다 — 카드를 다르게 그려야 한다.
+   */
+  isMealStop: boolean;
+  /** 리뷰 평균 평점(0~5). 리뷰가 없으면 0 */
+  score: number;
+  /**
+   * 코스 첫 스톱으로부터의 거리(m). 첫 스톱 자신은 0이다.
+   * 서버가 안 주면 null — 0으로 떨어뜨리면 "모른다"가 "0m"로 둔갑한다(Facility.distanceM과 같은 이유).
+   */
+  distanceM: number | null;
+}
+
+/** 지역×테마 추천 결과(`GET /courses/preset`). */
+export interface PresetCourse {
+  /** 테마를 1개만 고른 조회에서만 값이 있다(캐시된 코스). 2개 이상이면 항상 null */
+  courseId: number | null;
+  title: string;
+  stops: CourseStop[];
+}
+
 /** 시설 상세 친화도 탭에 필요한 전체 묶음 (집계 + 페이지 목록) — 서버 응답과 같은 모양 */
 export interface FacilityReviewData {
   grade: PawGrade;

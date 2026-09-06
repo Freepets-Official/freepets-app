@@ -1,11 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ResultBadge } from '@/components/badge';
+import { Chip } from '@/components/chip';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import {
   PRESET_COURSES,
@@ -16,7 +17,15 @@ import {
   type StopResult,
 } from '@/data/course';
 import { FACILITIES, formatDistance } from '@/data/mock';
-import { CATEGORY_LABEL, RESULT_LABEL } from '@/data/types';
+import {
+  CATEGORY_LABEL,
+  RESULT_LABEL,
+  type CourseDistanceOption,
+  type CourseRegion,
+  type CourseTheme,
+  type PresetCourse,
+} from '@/data/types';
+import { coursesApi } from '@/lib/api';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -30,9 +39,90 @@ export default function CourseScreen() {
 
   const [selectedPetIds, setSelectedPetIds] = useState<number[]>(pets.map((x) => x.petId));
   const [stopIds, setStopIds] = useState<number[]>([]);
+
+  // ── 지역×테마 추천(서버) ─────────────────────────────────────────────
+  // 재료(지역·테마·거리)는 서버가 준다. 지역 이름은 자유 텍스트라 "강원"처럼 축약해 보내면
+  // 실제 값("강원특별자치도")과 안 맞아 후보가 0건이 되므로, 반드시 이 응답의 값을 그대로 쓴다.
+  const [regions, setRegions] = useState<CourseRegion[]>([]);
+  const [themes, setThemes] = useState<CourseTheme[]>([]);
+  const [distanceOptions, setDistanceOptions] = useState<CourseDistanceOption[]>([]);
+  const [sido, setSido] = useState<string | null>(null);
+  const [sigungu, setSigungu] = useState<string | null>(null);
+  const [pickedThemes, setPickedThemes] = useState<string[]>([]);
+  const [maxDistance, setMaxDistance] = useState<string | null>(null);
+  // 결과에 그때의 요청 키를 함께 담는다. 필터를 바꾼 뒤 300ms 디바운스 동안 이전 결과가
+  // 새 필터의 답인 것처럼 보이는 걸 막으려는 것이다.
+  const [preset, setPreset] = useState<{ key: string; course: PresetCourse } | null>(null);
+  const [presetLoading, setPresetLoading] = useState(false);
+  const [presetError, setPresetError] = useState<string | null>(null);
   const [validated, setValidated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [picking, setPicking] = useState(false);
+
+  // 재료는 필터와 무관하게 한 번만 받는다. 실패해도 화면 전체를 막지 않는다 —
+  // 아래 로컬 추천·직접 만들기는 그대로 쓸 수 있어야 한다.
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      coursesApi.regions().catch(() => [] as CourseRegion[]),
+      coursesApi.themes().catch(() => [] as CourseTheme[]),
+      coursesApi.distanceOptions().catch(() => [] as CourseDistanceOption[]),
+    ]).then(([rg, th, dp]) => {
+      if (!active) return;
+      setRegions(rg);
+      setThemes(th);
+      setDistanceOptions(dp);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  /** 지금 화면의 필터 조합. 결과에 붙은 키와 다르면 그 결과는 옛 필터의 답이다 */
+  const presetKey = `${sido ?? ''}|${sigungu ?? ''}|${[...pickedThemes].sort().join(',')}|${maxDistance ?? ''}`;
+
+  // 지역과 테마가 모두 정해져야 조회한다(서버 필수 파라미터).
+  // 조건이 안 맞을 때 상태를 되돌리지 않고 렌더에서 presetReady로 가린다 —
+  // effect 본문에서 setState를 동기로 부르면 연쇄 렌더 경고가 뜬다.
+  useEffect(() => {
+    if (!sido || pickedThemes.length === 0) return;
+    let active = true;
+    const t = setTimeout(async () => {
+      if (!active) return;
+      setPresetLoading(true);
+      setPresetError(null);
+      try {
+        const key = presetKey;
+        const res = await coursesApi.preset({
+          sido,
+          sigungu: sigungu ?? undefined,
+          themes: pickedThemes,
+          maxDistanceM: maxDistance ?? undefined,
+        });
+        if (!active) return;
+        setPreset({ key, course: res });
+      } catch (e) {
+        if (!active) return;
+        setPreset(null);
+        // 조건에 맞는 시설이 2곳 미만이면 서버가 COURSE4001을 준다 — 장애가 아니라 조건 문제라
+        // 그대로 알려주고 다른 조합을 고르게 한다.
+        setPresetError(e instanceof Error ? e.message : '코스를 만들지 못했어요');
+      } finally {
+        if (active) setPresetLoading(false);
+      }
+    }, 300);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+  }, [sido, sigungu, pickedThemes, maxDistance, presetKey]);
+
+  const sigunguOptions = regions.find((r) => r.sido === sido)?.sigungus ?? [];
+  /** 지역·테마가 다 골라졌을 때만 결과를 보여준다(고르는 중엔 직전 결과가 남아 있어도 감춘다) */
+  const presetReady = sido !== null && pickedThemes.length > 0;
+
+  const toggleTheme = (value: string) =>
+    setPickedThemes((prev) => (prev.includes(value) ? prev.filter((x) => x !== value) : [...prev, value]));
 
   const chosenPets = useMemo(
     () => pets.filter((x) => selectedPetIds.includes(x.petId)),
@@ -176,6 +266,87 @@ export default function CourseScreen() {
               {PRESET_COURSES.map((c) => (
                 <CoursePickCard key={c.id} course={c} onPress={() => loadCourse(c)} />
               ))}
+
+              {/* 지역×테마 추천 — 서버가 지역별로 만들어 준다. 로그인 없이도 쓸 수 있는 둘러보기 */}
+              {regions.length > 0 && (
+                <View style={styles.presetBlock}>
+                  <Text style={[styles.blockLabel, { color: p.ink }]}>지역으로 코스 찾기</Text>
+
+                  <Text style={[styles.filterLabel, { color: p.muted }]}>지역</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                    {regions.map((r) => (
+                      <Chip
+                        key={r.sido}
+                        label={r.sido}
+                        selected={sido === r.sido}
+                        onPress={() => {
+                          setSido(sido === r.sido ? null : r.sido);
+                          setSigungu(null);
+                        }}
+                      />
+                    ))}
+                  </ScrollView>
+                  {sido && sigunguOptions.length > 0 && (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                      <Chip label="전체" selected={sigungu === null} onPress={() => setSigungu(null)} />
+                      {sigunguOptions.map((sg) => (
+                        <Chip
+                          key={sg}
+                          label={sg}
+                          selected={sigungu === sg}
+                          onPress={() => setSigungu(sigungu === sg ? null : sg)}
+                        />
+                      ))}
+                    </ScrollView>
+                  )}
+
+                  <Text style={[styles.filterLabel, { color: p.muted }]}>테마 (여러 개 고를 수 있어요)</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                    {themes.map((t) => (
+                      <Chip
+                        key={t.value}
+                        label={t.label}
+                        selected={pickedThemes.includes(t.value)}
+                        onPress={() => toggleTheme(t.value)}
+                      />
+                    ))}
+                  </ScrollView>
+
+                  {distanceOptions.length > 0 && (
+                    <>
+                      <Text style={[styles.filterLabel, { color: p.muted }]}>스톱 간 최대 거리</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                        {distanceOptions.map((o) => (
+                          <Chip
+                            key={o.value}
+                            label={o.label}
+                            selected={maxDistance === o.value}
+                            onPress={() => setMaxDistance(maxDistance === o.value ? null : o.value)}
+                          />
+                        ))}
+                      </ScrollView>
+                    </>
+                  )}
+
+                  {presetReady && presetLoading && (
+                    <View style={styles.presetState}>
+                      <ActivityIndicator color={p.accent} />
+                      <Text style={[styles.presetStateText, { color: p.muted }]}>코스를 만드는 중…</Text>
+                    </View>
+                  )}
+                  {presetReady && !presetLoading && presetError && (
+                    <Text style={[styles.presetStateText, { color: p.muted }]}>{presetError}</Text>
+                  )}
+                  {(!presetReady || (!presetLoading && !presetError && preset?.key !== presetKey)) && (
+                    <Text style={[styles.presetStateText, { color: p.muted }]}>
+                      지역과 테마를 고르면 코스를 만들어 드려요.
+                    </Text>
+                  )}
+                  {presetReady && !presetLoading && !presetError && preset?.key === presetKey && (
+                    <PresetCourseCard course={preset.course} />
+                  )}
+                </View>
+              )}
 
               <Pressable
                 onPress={() => setPicking(true)}
@@ -324,6 +495,39 @@ export default function CourseScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * 지역×테마 추천 결과 카드.
+ *
+ * `isMealStop`은 서버가 자동으로 끼워 넣은 식사 스톱이다 — 개인화·취향 매치 결과가 아니라
+ * "테마 하나로만 채워지는 걸 완화하려고" 붙인 것이라, 만족도나 취향 문구를 붙이면 거짓이 된다.
+ * 그래서 별도 태그로 구분해 표시한다(명세의 요구).
+ */
+function PresetCourseCard({ course }: { course: PresetCourse }) {
+  const p = usePalette();
+  return (
+    <View style={[styles.presetCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
+      <Text style={[styles.presetTitle, { color: p.ink }]}>{course.title}</Text>
+      {course.stops.map((st, i) => (
+        <View key={st.facilityId} style={styles.presetStop}>
+          <Text style={[styles.presetOrder, { backgroundColor: p.accentSoft, color: p.accent }]}>
+            {i + 1}
+          </Text>
+          <Text style={[styles.presetStopName, { color: p.ink }]} numberOfLines={1}>
+            {st.name}
+          </Text>
+          {st.isMealStop && (
+            <Text style={[styles.mealTag, { backgroundColor: p.surface, color: p.muted }]}>식사</Text>
+          )}
+          <Text style={[styles.presetStopMeta, { color: p.muted, marginLeft: 'auto' }]}>
+            {CATEGORY_LABEL[st.category]}
+            {i > 0 ? ` · ${formatDistance(st.distanceM)}` : ''}
+          </Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -494,6 +698,25 @@ function StopResultCard({
 }
 
 const styles = StyleSheet.create({
+  presetBlock: { gap: 10, marginTop: 4 },
+  filterLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
+  chips: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.xl },
+  presetState: { alignItems: 'center', gap: 8, paddingVertical: 20 },
+  presetStateText: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  presetCard: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.lg, gap: 10 },
+  presetTitle: { fontSize: 15.5, fontWeight: '800', letterSpacing: -0.3 },
+  presetStop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  presetOrder: {
+    width: 20, height: 20, borderRadius: 999,
+    alignItems: 'center', justifyContent: 'center',
+    fontSize: 11, fontWeight: '800', overflow: 'hidden',
+  },
+  presetStopName: { fontSize: 14, fontWeight: '700', flexShrink: 1 },
+  presetStopMeta: { fontSize: 11.5, fontVariant: ['tabular-nums'] },
+  mealTag: {
+    fontSize: 10, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: Radius.sm, overflow: 'hidden',
+  },
   safe: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 64, alignItems: 'center' },
   inner: { width: '100%', maxWidth: MaxContentWidth, gap: Spacing.lg, paddingTop: Spacing.sm },
