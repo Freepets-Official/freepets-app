@@ -6,6 +6,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { Radius, Spacing } from '@/constants/theme';
 import { sinceText } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
+import { ApiError } from '@/lib/api';
 import { DENIAL_REASON_LABEL, useAppStore, type DenialReason } from '@/store/app-store';
 
 const REASONS: DenialReason[] = ['WEIGHT', 'BREED', 'INDOOR', 'POLICY_CHANGED', 'CROWDED', 'OTHER'];
@@ -22,6 +23,26 @@ export function DenialReport({ facilityId }: { facilityId: number }) {
   const p = usePalette();
   const { reportDenial, myDenialOf } = useAppStore();
   const [open, setOpen] = useState(false);
+  const [sending, setSending] = useState<DenialReason | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // 접수되지 않았는데 "접수됐다"고 보여주면 사용자는 경고가 남에게 전달됐다고 믿는다.
+  // 실패는 그대로 알린다.
+  const send = async (reason: DenialReason) => {
+    setSending(reason);
+    setError(null);
+    try {
+      await reportDenial(facilityId, reason);
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.code === 'REPORT4001'
+          ? '이 시설에는 최근 24시간 안에 이미 제보하셨어요.'
+          : '제보를 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
+      );
+    } finally {
+      setSending(null);
+    }
+  };
 
   const sent = myDenialOf(facilityId);
 
@@ -68,7 +89,8 @@ export function DenialReport({ facilityId }: { facilityId: number }) {
         {REASONS.map((r) => (
           <Pressable
             key={r}
-            onPress={() => reportDenial(facilityId, r)}
+            onPress={() => send(r)}
+            disabled={sending !== null}
             style={({ pressed }) => [
               styles.chip,
               { backgroundColor: pressed ? p.danger : p.card, borderColor: p.danger },
@@ -77,6 +99,7 @@ export function DenialReport({ facilityId }: { facilityId: number }) {
           </Pressable>
         ))}
       </View>
+      {error && <Text style={[styles.errorText, { color: p.danger }]}>{error}</Text>}
       <Pressable onPress={() => setOpen(false)} style={styles.cancel}>
         <Text style={[styles.cancelText, { color: p.muted }]}>취소</Text>
       </Pressable>
@@ -117,6 +140,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   chipText: { fontSize: 13, fontWeight: '700' },
+  errorText: { fontSize: 12, lineHeight: 18, marginTop: 4 },
   cancel: { alignSelf: 'center', paddingVertical: 6, paddingHorizontal: Spacing.lg },
   cancelText: { fontSize: 12.5, fontWeight: '700' },
 });

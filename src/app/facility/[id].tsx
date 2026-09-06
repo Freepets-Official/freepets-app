@@ -50,6 +50,7 @@ export default function FacilityDetailScreen() {
     reviewDataOf,
     reviewErrorOf,
     loadReviews,
+    loadDenials,
     loadFacilitySatisfactions,
     canReview,
     confidenceOf,
@@ -106,6 +107,8 @@ export default function FacilityDetailScreen() {
   useEffect(() => {
     if (facility) {
       loadReviews(facility.facilityId);
+      // 남의 거부 제보(경고 배너)와 내 제보 상태를 서버에서 받아둔다. 목 시설은 store가 건너뛴다.
+      loadDenials(facility.facilityId);
       loadFacilitySatisfactions(facility.facilityId);
     }
     // facility 객체는 매 렌더 새로 만들어지므로 id만 의존성으로 둔다

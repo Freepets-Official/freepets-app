@@ -2,7 +2,17 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import type { ThemeMode } from '@/constants/theme';
 import { CHECK_RANK, buildChecklist, judgeGroup } from '@/data/judge';
-import { accountApi, aiApi, facilitiesApi, petsApi, reviewsApi, satisfactionApi, setAuthToken } from '@/lib/api';
+import {
+  accountApi,
+  aiApi,
+  denialApi,
+  facilitiesApi,
+  petsApi,
+  reviewsApi,
+  satisfactionApi,
+  setAuthToken,
+  type ServerDenialReport,
+} from '@/lib/api';
 import type { Coords } from '@/lib/location';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, pawGradeOf, vaccinationDday } from '@/data/types';
@@ -45,6 +55,26 @@ function mockReviewData(facilityId: number): FacilityReviewData {
       .sort((a, b) => b.count - a.count),
     reviews: rs,
     pageInfo: { page: 0, size: rs.length, totalElements: rs.length, hasNext: false },
+  };
+}
+
+/**
+ * 서버 제보 → 앱 Report. 필드가 거의 같지만 nullable 여부가 달라 여기서 확정한다.
+ * weight/hasEvidence는 사진·AI 검증(2단계, 미구현)이 있어야 값이 달라지는 필드라 지금은 고정값이다.
+ */
+function toReport(r: ServerDenialReport): Report {
+  return {
+    reportId: r.reportId,
+    facilityId: r.facilityId,
+    type: r.type,
+    content: r.content,
+    weight: r.weight ?? 2,
+    hasEvidence: r.hasEvidence ?? false,
+    reason: r.reason,
+    mine: r.mine ?? false,
+    realtime: r.realtime ?? true,
+    status: r.status,
+    createdAt: r.createdAt,
   };
 }
 
@@ -286,11 +316,13 @@ interface AppStore {
     hasEvidence: boolean,
   ) => void;
   /** 문 앞에서 거부당한 즉시 보내는 원터치 제보 — 신뢰도를 바로 하향시킨다 */
-  reportDenial: (facilityId: number, reason: DenialReason) => void;
+  reportDenial: (facilityId: number, reason: DenialReason) => Promise<void>;
   /** 최근 1주 내 남이 보낸 현장 거부 제보 — 최신순 최대 3건 (시설 상세 토글) */
   recentDenialsOf: (facilityId: number) => Report[];
   /** 그중 가장 최신 1건 — 홈 알림·목록 카드용 */
   recentDenialOf: (facilityId: number) => Report | undefined;
+  /** 시설 상세 진입 시 서버 제보를 받아둔다(목 시설은 건너뛴다) */
+  loadDenials: (facilityId: number) => Promise<void>;
   /** 내가 판별받은 시설 중 최근 1주 내 거부가 뜬 곳 — 홈 알림에 쓴다 */
   plannedDenialAlerts: () => { facility: Facility; report: Report }[];
   /** 내가 이 시설에 보낸 현장 거부 제보 */
@@ -678,8 +710,32 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   );
 
   // 최근 1주 내 남의 현장 거부를 최신순 최대 3건 (시설 상세에서 토글로 펼쳐 본다)
+  /**
+   * 서버에서 받은 시설별 거부 제보. 목 시설은 서버에 없으므로 로컬 reports를 그대로 쓴다
+   * (판별과 같은 분기다). 서버 시설은 이 캐시가 진실이고, 비어 있으면 진짜로 제보가 없는 것이다.
+   */
+  const [serverDenials, setServerDenials] = useState<Record<number, { recent: Report[]; mine: Report | null }>>({});
+
+  const loadDenials = useCallback(async (facilityId: number) => {
+    if (isMockFacilityId(facilityId)) return;
+    try {
+      const [recent, mine] = await Promise.all([
+        denialApi.recent(facilityId),
+        denialApi.mine(facilityId),
+      ]);
+      setServerDenials((prev) => ({
+        ...prev,
+        [facilityId]: { recent: recent.map(toReport), mine: mine ? toReport(mine) : null },
+      }));
+    } catch {
+      // 경고를 못 받아도 화면은 떠야 한다. 다만 조용히 빈 값으로 두지 않고 캐시를 만들지 않아,
+      // "제보가 없다"와 "못 받았다"를 구분한다.
+    }
+  }, []);
+
   const recentDenialsOf = useCallback(
     (facilityId: number): Report[] =>
+      serverDenials[facilityId]?.recent ??
       reports
         .filter(
           (r) =>
@@ -691,7 +747,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         )
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, MAX_DENIAL_ALERTS),
-    [reports],
+    [reports, serverDenials],
   );
 
   // 가장 최신 1건 (홈 알림·목록 카드용) — 목록의 첫 번째
@@ -718,9 +774,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, [checks, recentDenialOf]);
 
   const myDenialOf = useCallback(
-    (facilityId: number) =>
-      reports.find((r) => r.facilityId === facilityId && r.type === 'DENIED' && r.realtime && r.mine),
-    [reports],
+    (facilityId: number) => {
+      const cached = serverDenials[facilityId];
+      if (cached) return cached.mine ?? undefined;
+      return reports.find((r) => r.facilityId === facilityId && r.type === 'DENIED' && r.realtime && r.mine);
+    },
+    [reports, serverDenials],
   );
 
   const reportReview = useCallback(
@@ -897,25 +956,39 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // downgradeFacility 를 쓰므로 그 아래에 둔다
   const reportDenial = useCallback(
-    (facilityId: number, reason: DenialReason) => {
-      setReports((prev) => [
-        {
-          reportId: nextReportId.current++,
-          facilityId,
-          type: 'DENIED',
-          content: `현장 거부 · ${DENIAL_REASON_LABEL[reason]}`,
-          // 현장에서 바로 보낸 제보는 시점이 붙어 있어 사후 기억보다 정확하다 → 사진 없이도 가중치 2
-          weight: 2,
-          hasEvidence: false,
-          reason,
-          mine: true,
-          realtime: true,
-          // 검토를 기다리지 않고 신뢰도에 즉시 반영되므로 접수 시점부터 APPLIED
-          status: 'APPLIED',
-          createdAt: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
+    async (facilityId: number, reason: DenialReason) => {
+      // 목 시설은 서버에 없다. 시연 경로를 살려두려고 로컬로 접수한다(판별과 같은 분기).
+      if (isMockFacilityId(facilityId)) {
+        setReports((prev) => [
+          {
+            reportId: nextReportId.current++,
+            facilityId,
+            type: 'DENIED',
+            content: `현장 거부 · ${DENIAL_REASON_LABEL[reason]}`,
+            // 현장에서 바로 보낸 제보는 시점이 붙어 있어 사후 기억보다 정확하다 → 사진 없이도 가중치 2
+            weight: 2,
+            hasEvidence: false,
+            reason,
+            mine: true,
+            realtime: true,
+            // 검토를 기다리지 않고 신뢰도에 즉시 반영되므로 접수 시점부터 APPLIED
+            status: 'APPLIED',
+            createdAt: new Date().toISOString(),
+          },
+          ...prev,
+        ]);
+        downgradeFacility(facilityId);
+        return;
+      }
+
+      // 서버 시설은 서버가 접수하고 신뢰도도 서버가 계산한다(시설 상세의 confidenceSource가
+      // DENIAL_REPORT로 내려온다). 실패는 삼키지 않고 던져서 화면이 알려주게 한다 —
+      // 접수되지 않았는데 "접수됐다"고 보여주면 사용자는 경고가 남에게 전달됐다고 믿는다.
+      const created = await denialApi.report(facilityId, reason);
+      setServerDenials((prev) => {
+        const cur = prev[facilityId] ?? { recent: [], mine: null };
+        return { ...prev, [facilityId]: { ...cur, mine: toReport(created) } };
+      });
       downgradeFacility(facilityId);
     },
     [downgradeFacility],
@@ -1156,6 +1229,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reports,
       addReport,
       reportDenial,
+      loadDenials,
       recentDenialsOf,
       recentDenialOf,
       plannedDenialAlerts,
@@ -1231,6 +1305,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       addReport,
       reportDenial,
       recentDenialsOf,
+      loadDenials,
       recentDenialOf,
       plannedDenialAlerts,
       myDenialOf,
