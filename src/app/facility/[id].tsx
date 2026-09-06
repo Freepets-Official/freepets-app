@@ -33,6 +33,7 @@ import { StampIn } from '@/components/stamp-in';
 import { haptic } from '@/lib/haptics';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
+import { useCallFacility } from '@/hooks/use-call-facility';
 import { primaryPhoneNumber } from '@/lib/phone';
 
 /** 리뷰 로딩 전/집계 미도달 시 헤더 발자국 배지의 기본값 */
@@ -41,6 +42,7 @@ const EMPTY_GRADE: PawGrade = { level: null, label: null, score: null, count: 0,
 export default function FacilityDetailScreen() {
   const p = usePalette();
   const router = useRouter();
+  const callFacility = useCallFacility();
   const { id } = useLocalSearchParams<{ id: string }>();
   const {
     pets,
@@ -412,10 +414,8 @@ export default function FacilityDetailScreen() {
                     <Pressable
                       // 거는 건 첫 번호로, 보여주는 건 원문 그대로. 안내센터가 따로 있으면
                       // 사용자가 어디로 걸지 판단할 수 있어야 한다.
-                      onPress={() => {
-                        const tel = primaryPhoneNumber(facility.phone);
-                        if (tel) Linking.openURL(`tel:${tel}`).catch(() => {});
-                      }}
+                      // 신뢰도 갱신 규칙은 신뢰도 패널의 버튼과 같다(useCallFacility).
+                      onPress={() => callFacility(facility)}
                       style={({ pressed }) => [
                         styles.callBtn,
                         { backgroundColor: pressed ? p.accentDark : p.accent },
