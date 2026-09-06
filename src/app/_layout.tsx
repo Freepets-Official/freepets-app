@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 
 import { AppSplash } from '@/components/app-splash';
 import { BiometricGate } from '@/components/biometric-gate';
+import { CallConfirmSheet } from '@/components/call-confirm-sheet';
 import { PawTouches } from '@/components/paw-touches';
 import { AppThemeProvider, usePalette, useColorScheme } from '@/hooks/use-theme';
 import { AppStoreProvider, useAppStore } from '@/store/app-store';
@@ -147,6 +148,9 @@ function ThemedRoot() {
           <RootNavigator />
         </PawTouches>
       </BiometricGate>
+      {/* 전화 후 "확인하셨나요"는 앱 전체에서 한 곳에서만 묻는다 — 전화 버튼이 여러 화면에 있어도
+          신뢰도 갱신 규칙이 갈리지 않게 하려는 것이다 */}
+      <CallConfirmSheet />
       {/* 다크에선 밝은 글씨의 상태바 */}
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       {!splashDone && <AppSplash onDone={() => setSplashDone(true)} />}

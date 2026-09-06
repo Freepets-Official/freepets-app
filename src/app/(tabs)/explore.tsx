@@ -51,7 +51,7 @@ const HEADER: Record<Mode, { eyebrow: string; title: string; subtitle: string }>
 export default function ExploreScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { settings, registerFacilities } = useAppStore();
+  const { settings, updateSettings, registerFacilities, setLastCoords } = useAppStore();
   const [mode, setMode] = useState<Mode>('nearby');
   const [keyword, setKeyword] = useState('');
   const [category, setCategory] = useState<Category | null>(null);
@@ -62,14 +62,24 @@ export default function ExploreScreen() {
   const [items, setItems] = useState<Facility[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  // 검색 실패(네트워크·CORS·인증)와 '조건에 맞는 게 없음'은 사용자가 할 일이 정반대인데,
+  // 예전엔 catch가 조용히 빈 배열만 넣어 둘 다 "조건을 바꿔 보세요"로 보였다.
+  // 실제로 CORS 403을 반경 문제로 오해해 한참 헤맨 적이 있다.
+  const [failed, setFailed] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
 
   const locate = () => {
     setLocState('loading');
     getCurrentLocation().then((c) => {
       setCoords(c);
+      // 시설 상세가 거리(distanceM)를 받으려면 좌표가 필요하다. 상세에서 권한을 다시
+      // 묻지 않도록 여기서 잡은 값을 스토어에 넘겨둔다.
+      setLastCoords(c);
       setLocState(c ? 'ok' : 'denied');
     });
   };
+  // locate가 setLastCoords를 닫고 있지만 스토어 setter는 안정적이다 — 최초 1회만 실행한다
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(locate, []);
 
   // 좌표·검색어·카테고리·반경·모드가 바뀌면 재검색(입력 타이핑은 400ms 디바운스).
@@ -83,6 +93,7 @@ export default function ExploreScreen() {
     let active = true;
     const t = setTimeout(async () => {
       setLoading(true);
+      setFailed(false);
       try {
         const res = await facilitiesApi.search({
           latitude: center.latitude,
@@ -90,6 +101,9 @@ export default function ExploreScreen() {
           keyword: keyword.trim() || undefined,
           category: category ?? undefined,
           radiusM: mode === 'all' ? RADIUS_ALL_M : settings.searchRadiusKm * 1000,
+          // 클라이언트에서 거르지 않고 서버 필터를 쓴다 — 30건 받아와서 6건만 남기면
+          // 페이지네이션과 total이 어긋난다. hideDenied가 클라이언트인 건 대상이 16건뿐이라서다.
+          petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
           size: 30,
         });
         if (!active) return; // 그 사이 모드/조건이 바뀌었으면 이 응답은 버린다
@@ -100,6 +114,7 @@ export default function ExploreScreen() {
         if (!active) return;
         setItems([]);
         setTotal(0);
+        setFailed(true);
       } finally {
         if (active) setLoading(false);
       }
@@ -108,7 +123,7 @@ export default function ExploreScreen() {
       active = false;
       clearTimeout(t);
     };
-  }, [mode, coords, keyword, category, settings.searchRadiusKm, registerFacilities]);
+  }, [mode, coords, keyword, category, settings.searchRadiusKm, settings.onlyPetInfo, retryKey, registerFacilities]);
 
   // '동반 불가 숨기기' 설정은 클라이언트에서 거른다(서버 필터는 단일값이라)
   const facilities = useMemo(
@@ -168,6 +183,12 @@ export default function ExploreScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chips}>
+            {/* 성격이 다른 필터라 카테고리 칩과 구분되게 맨 앞에 둔다 */}
+            <Chip
+              label="동반 정보 있는 곳만"
+              selected={settings.onlyPetInfo}
+              onPress={() => updateSettings({ onlyPetInfo: !settings.onlyPetInfo })}
+            />
             <Chip label="전체" selected={category === null} onPress={() => setCategory(null)} />
             {CATEGORIES.map((c) => (
               <Chip
@@ -235,14 +256,31 @@ export default function ExploreScreen() {
               {facilities.map((f) => (
                 <FacilityCard key={f.facilityId} facility={f} />
               ))}
-              {facilities.length === 0 && (
-                <View style={styles.empty}>
-                  <Ionicons name="search" size={30} color={p.muted} />
-                  <Text style={[styles.emptyText, { color: p.muted }]}>
-                    조건에 맞는 시설이 없어요.{'\n'}검색어·카테고리·반경(설정)을 바꿔 보세요.
-                  </Text>
-                </View>
-              )}
+              {facilities.length === 0 &&
+                (failed ? (
+                  <View style={styles.empty}>
+                    <Ionicons name="cloud-offline-outline" size={30} color={p.muted} />
+                    <Text style={[styles.emptyText, { color: p.muted }]}>
+                      시설 정보를 불러오지 못했어요.{'\n'}네트워크 상태를 확인하고 다시 시도해 주세요.
+                    </Text>
+                    <Pressable
+                      onPress={() => setRetryKey((k) => k + 1)}
+                      style={({ pressed }) => [
+                        styles.retry,
+                        { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : 'transparent' },
+                      ]}>
+                      <Ionicons name="refresh" size={15} color={p.accent} />
+                      <Text style={[styles.retryText, { color: p.accent }]}>다시 시도</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={styles.empty}>
+                    <Ionicons name="search" size={30} color={p.muted} />
+                    <Text style={[styles.emptyText, { color: p.muted }]}>
+                      조건에 맞는 시설이 없어요.{'\n'}검색어·카테고리·반경(설정)을 바꿔 보세요.
+                    </Text>
+                  </View>
+                ))}
             </View>
           )}
         </>

@@ -31,11 +31,23 @@ export interface RuleRow {
   status: RuleStatus;
 }
 
-/** 방문자가 지참해야 하는 요구사항 — 앱이 충족 여부를 알 수 없다 */
-const BRING_ITEMS: Partial<Record<Requirement, { label: string; rule: string; mine: string }>> = {
+/**
+ * 방문자가 지참해야 하는 요구사항 — 앱이 충족 여부를 알 수 없다.
+ * Partial이 아니라 Record로 둔다. Requirement에 종류가 늘었을 때 여기 누락되면
+ * 판별 조건에는 뜨는데 출입증 지참 항목에는 안 뜨는 조용한 구멍이 생긴다.
+ * 지참 대상이 아닌 것(체중·종 제한 등)은 null로 명시해 "빠뜨린 것"과 구분한다.
+ */
+const BRING_ITEMS: Record<Requirement, { label: string; rule: string; mine: string } | null> = {
   LEASH: { label: '리드줄', rule: '착용 필수', mine: '지참' },
   CAGE: { label: '케이지', rule: '이동장 필수', mine: '지참' },
   MUZZLE: { label: '입마개', rule: '착용 필수', mine: '착용' },
+  MANNER_BELT: { label: '매너벨트', rule: '착용 필수', mine: '착용' },
+  STROLLER: { label: '유모차', rule: '카트 이용 필수', mine: '준비' },
+  // 아래 셋은 위에서 이미 전용 행을 만든다(접종 여부·체급·이용 구역까지 대조하므로
+  // 여기서 또 넣으면 같은 항목이 두 줄로 뜬다). 빠뜨린 게 아니라는 뜻으로 null을 명시한다.
+  VACCINATION: null,
+  SMALL_ONLY: null,
+  OUTDOOR_ONLY: null,
 };
 
 /** 시설 조건 × 반려동물 정보 대조표 */

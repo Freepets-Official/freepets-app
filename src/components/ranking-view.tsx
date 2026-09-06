@@ -38,7 +38,7 @@ export function RankingView() {
       .filter((x) => !category || x.facility.category === category)
       .filter((x) => !sido || x.facility.sido === sido)
       .filter((x) => !sigungu || x.facility.sigungu === sigungu)
-      .filter((x) => radiusKm == null || x.facility.distanceM <= radiusKm * 1000)
+      .filter((x) => radiusKm == null || (x.facility.distanceM != null && x.facility.distanceM <= radiusKm * 1000))
       .sort(
         (a, b) =>
           (b.grade.level ?? 0) - (a.grade.level ?? 0) || (b.grade.score ?? 0) - (a.grade.score ?? 0),

@@ -1,12 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import { CONFIDENCE_SOURCE_LABEL, freshnessText, type Facility } from '@/data/types';
+import { useCallFacility } from '@/hooks/use-call-facility';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
+import { primaryPhoneNumber } from '@/lib/phone';
 
 /**
  * 확정성 레이어의 핵심 UI — 정보 신뢰도 + 근거 + 최종 확인 시점,
@@ -14,7 +16,8 @@ import { useAppStore } from '@/store/app-store';
  */
 export function ConfidencePanel({ facility }: { facility: Facility }) {
   const p = usePalette();
-  const { confidenceOf, confirmFacility } = useAppStore();
+  const { confidenceOf } = useAppStore();
+  const callFacility = useCallFacility();
   const { confidence, source, confirmedAt } = confidenceOf(facility);
 
   const [requested, setRequested] = useState(false);
@@ -29,10 +32,12 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
   const confirmedOk = isConfirmed && facility.petAllowed === true;
   const needsCheck = !denied && !confirmedOk;
 
-  const callAndConfirm = () => {
-    if (facility.phone) Linking.openURL(`tel:${facility.phone.replace(/-/g, '')}`);
-    confirmFacility(facility.facilityId);
-  };
+  // 원문에 안내문·복수 번호가 섞여 오므로 걸 수 있는 첫 번호만 뽑는다. 없으면 버튼 자체를 숨긴다.
+  const tel = primaryPhoneNumber(facility.phone);
+
+  // 전화 걸기와 신뢰도 갱신 규칙은 useCallFacility 하나로 모았다 — 상세 화면에도 전화 버튼이
+  // 있는데, 어느 버튼으로 걸었느냐로 신뢰도가 갈리면 사용자는 그 차이를 알 수 없다.
+  const callAndConfirm = () => callFacility(facility);
 
   return (
     <View style={[styles.card, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
@@ -59,7 +64,7 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
         <View style={styles.actions}>
           <Text style={[styles.actionsTitle, { color: p.muted }]}>어디서 확인하나요</Text>
 
-          {facility.phone && (
+          {tel && (
             <Pressable
               onPress={callAndConfirm}
               style={({ pressed }) => [
