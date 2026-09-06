@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,6 +27,7 @@ import {
   type CourseTheme,
   type LikedCourse,
   type PresetCourse,
+  type SavedCourse,
   type SimilarCourse,
 } from '@/data/types';
 import { ApiError, aiApi, coursesApi } from '@/lib/api';
@@ -77,6 +78,60 @@ export default function CourseScreen() {
   const [courseCheck, setCourseCheck] = useState<{ key: string; result: CourseCheckResult } | null>(null);
   const [courseCheckKey, setCourseCheckKey] = useState<string | null>(null);
   const [courseCheckError, setCourseCheckError] = useState<string | null>(null);
+
+  // ── 내 코스 저장 ────────────────────────────────────────────────────
+  // 서버는 stopIds만 저장한다. 추천 당시의 이름·카테고리·점수는 안 남으므로 목록을 그릴 땐
+  // 그 ID로 시설을 다시 조회해야 한다 — 지금은 개수만 보여주고 상세는 다음 작업으로 둔다.
+  const [savedCourses, setSavedCourses] = useState<SavedCourse[]>([]);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  const reloadSaved = useCallback(async () => {
+    const list = await coursesApi.list().catch(() => null);
+    if (list) setSavedCourses(list);
+  }, []);
+
+  // 초기 로드는 effect 안에서 직접 받는다. reloadSaved를 그대로 부르면 effect 본문에서
+  // setState를 동기로 부르는 모양이 되어 연쇄 렌더 경고가 뜬다.
+  useEffect(() => {
+    let active = true;
+    coursesApi
+      .list()
+      .then((list) => {
+        if (active) setSavedCourses(list);
+      })
+      .catch(() => {
+        // 저장된 코스를 못 받아도 추천·판별은 그대로 쓸 수 있어야 한다
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const saveCourse = async (key: string, name: string, stops: CourseStop[]) => {
+    if (stops.length === 0) return;
+    setSavingKey(key);
+    setSaveMessage(null);
+    try {
+      // 서버는 1~10개만 받는다. 추천 stops의 facilityId를 순서 그대로 넣으면 내 코스가 된다.
+      await coursesApi.create({ name, stopIds: stops.slice(0, 10).map((st) => st.facilityId) });
+      await reloadSaved();
+      setSaveMessage(`'${name}'을(를) 내 코스에 담았어요`);
+    } catch (e) {
+      setSaveMessage(e instanceof Error ? e.message : '코스를 저장하지 못했어요');
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const removeCourse = async (courseId: number) => {
+    try {
+      await coursesApi.remove(courseId);
+      await reloadSaved();
+    } catch {
+      setSaveMessage('코스를 삭제하지 못했어요');
+    }
+  };
 
   /**
    * 판별 요청의 서명. 코스 종류만으로는 부족하다 — 같은 'liked'라도 고른 아이나 스톱이 바뀌면
@@ -382,6 +437,10 @@ export default function CourseScreen() {
                     running={courseCheckKey === checkSignature('liked', liked.stops.slice(0, 10).map((st) => st.facilityId))}
                     onPress={() => runCourseCheck('liked', liked.stops)}
                   />
+                  <SaveCourseAction
+                    running={savingKey === 'liked'}
+                    onPress={() => saveCourse('liked', liked.title, liked.stops)}
+                  />
                   {courseCheck?.key === checkSignature('liked', liked.stops.slice(0, 10).map((st) => st.facilityId)) && (
                     <CourseCheckPanel result={courseCheck.result} />
                   )}
@@ -407,10 +466,38 @@ export default function CourseScreen() {
                     running={courseCheckKey === checkSignature('similar', similar.stops.slice(0, 10).map((st) => st.facilityId))}
                     onPress={() => runCourseCheck('similar', similar.stops)}
                   />
+                  <SaveCourseAction
+                    running={savingKey === 'similar'}
+                    onPress={() => saveCourse('similar', similar.title, similar.stops)}
+                  />
                   {courseCheck?.key === checkSignature('similar', similar.stops.slice(0, 10).map((st) => st.facilityId)) && (
                     <CourseCheckPanel result={courseCheck.result} />
                   )}
                 </>
+              )}
+
+              {/* 내 코스 — 저장한 CUSTOM 코스. 서버는 stopIds만 남기므로 지금은 개수만 보여준다 */}
+              {savedCourses.length > 0 && (
+                <View style={styles.presetBlock}>
+                  <Text style={[styles.blockLabel, { color: p.ink }]}>내 코스 · {savedCourses.length}개</Text>
+                  {savedCourses.map((c) => (
+                    <View key={c.courseId} style={[styles.savedRow, { borderColor: p.line }]}>
+                      <Ionicons name="bookmark" size={15} color={p.accent} />
+                      <Text style={[styles.savedName, { color: p.ink }]} numberOfLines={1}>
+                        {c.name}
+                      </Text>
+                      <Text style={[styles.savedMeta, { color: p.muted, marginLeft: 'auto' }]}>
+                        {c.stopIds.length}곳
+                      </Text>
+                      <Pressable onPress={() => removeCourse(c.courseId)} hitSlop={8}>
+                        <Ionicons name="trash-outline" size={16} color={p.muted} />
+                      </Pressable>
+                    </View>
+                  ))}
+                </View>
+              )}
+              {saveMessage && (
+                <Text style={[styles.presetStateText, { color: p.muted }]}>{saveMessage}</Text>
               )}
 
               {courseCheckError && (
@@ -500,6 +587,10 @@ export default function CourseScreen() {
                         disabled={selectedPetIds.length === 0}
                         running={courseCheckKey === checkSignature('preset', preset.course.stops.slice(0, 10).map((st) => st.facilityId))}
                         onPress={() => runCourseCheck('preset', preset.course.stops)}
+                      />
+                      <SaveCourseAction
+                        running={savingKey === 'preset'}
+                        onPress={() => saveCourse('preset', preset.course.title, preset.course.stops)}
                       />
                       {courseCheck?.key === checkSignature('preset', preset.course.stops.slice(0, 10).map((st) => st.facilityId)) && (
                     <CourseCheckPanel result={courseCheck.result} />
@@ -681,6 +772,29 @@ export default function CourseScreen() {
  * 찾으므로 **"가까운 곳 중엔 없다"**가 정확한 뜻이다.
  */
 /** 서버 코스를 그대로 일괄 판별에 넘기는 버튼. 아이를 안 고르면 판별할 대상이 없다. */
+/** 추천 코스를 내 코스로 담는다. 서버는 stopIds만 저장한다. */
+function SaveCourseAction({ running, onPress }: { running: boolean; onPress: () => void }) {
+  const p = usePalette();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={running}
+      style={({ pressed }) => [
+        styles.saveBtn,
+        { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
+      ]}>
+      {running ? (
+        <ActivityIndicator color={p.muted} size="small" />
+      ) : (
+        <>
+          <Ionicons name="bookmark-outline" size={15} color={p.muted} />
+          <Text style={[styles.saveBtnText, { color: p.muted }]}>내 코스에 담기</Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
 function CourseCheckAction({
   label,
   disabled,
@@ -1037,6 +1151,17 @@ const styles = StyleSheet.create({
   presetTitle: { fontSize: 15.5, fontWeight: '800', letterSpacing: -0.3 },
   presetStop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   presetStopBlock: { gap: 3 },
+  saveBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderWidth: 1, borderRadius: Radius.md, paddingVertical: 9, marginTop: 4,
+  },
+  saveBtnText: { fontSize: 12.5, fontWeight: '700' },
+  savedRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderWidth: 1, borderRadius: Radius.md, paddingVertical: 11, paddingHorizontal: Spacing.lg,
+  },
+  savedName: { fontSize: 13.5, fontWeight: '700', flexShrink: 1 },
+  savedMeta: { fontSize: 11.5 },
   courseCheckBtn: {
     borderWidth: 1, borderRadius: Radius.md,
     paddingVertical: 9, alignItems: 'center', marginTop: 4,
