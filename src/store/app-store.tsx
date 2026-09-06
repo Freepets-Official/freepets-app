@@ -716,13 +716,24 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   const [serverDenials, setServerDenials] = useState<Record<number, { recent: Report[]; mine: Report | null }>>({});
 
+  /**
+   * 시설별 제보 변경 세대. 제보가 성공하면 올린다.
+   * 화면에 들어오자마자 조회가 시작된 상태에서 사용자가 제보하면, 먼저 떠난 조회가 나중에
+   * 도착해 방금 접수한 mine을 조회 시점의 null로 덮어쓴다 — 완료 카드가 다시 입력 폼으로
+   * 바뀌고, 사용자는 다시 눌렀다가 REPORT4001(24시간 중복)을 받는다.
+   */
+  const denialGen = useRef<Record<number, number>>({});
+
   const loadDenials = useCallback(async (facilityId: number) => {
     if (isMockFacilityId(facilityId)) return;
+    const gen = denialGen.current[facilityId] ?? 0;
     try {
       const [recent, mine] = await Promise.all([
         denialApi.recent(facilityId),
         denialApi.mine(facilityId),
       ]);
+      // 조회가 도는 사이 제보가 접수됐으면 이 응답은 이미 낡았다
+      if ((denialGen.current[facilityId] ?? 0) !== gen) return;
       setServerDenials((prev) => ({
         ...prev,
         [facilityId]: { recent: recent.map(toReport), mine: mine ? toReport(mine) : null },
@@ -985,6 +996,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       // DENIAL_REPORT로 내려온다). 실패는 삼키지 않고 던져서 화면이 알려주게 한다 —
       // 접수되지 않았는데 "접수됐다"고 보여주면 사용자는 경고가 남에게 전달됐다고 믿는다.
       const created = await denialApi.report(facilityId, reason);
+      // 진행 중이던 조회가 이 결과를 덮지 못하게 세대를 올린다
+      denialGen.current[facilityId] = (denialGen.current[facilityId] ?? 0) + 1;
       setServerDenials((prev) => {
         const cur = prev[facilityId] ?? { recent: [], mine: null };
         return { ...prev, [facilityId]: { ...cur, mine: toReport(created) } };
