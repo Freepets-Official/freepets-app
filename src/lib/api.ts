@@ -684,6 +684,75 @@ export const aiApi = {
   },
 };
 
+// ─────────────────────────── 거부 제보(denial-reports) ───────────────────────────
+// 문 앞에서 거부당한 순간 사유 하나만 눌러 보내는 제보. 검토를 기다리지 않고 바로 반영된다.
+// 신뢰도는 이 응답이 아니라 시설 상세의 confidence/confidenceSource로 확인한다 —
+// 최근 1주 내 실시간 거부가 있으면 UNVERIFIED/DENIAL_REPORT로 계산된다.
+
+export type DenialReasonCode = 'WEIGHT' | 'BREED' | 'INDOOR' | 'POLICY_CHANGED' | 'CROWDED' | 'OTHER';
+
+/** 서버 제보 레코드. 앱 FacilityReport와 필드가 거의 같다. */
+export type ServerDenialReport = {
+  reportId: number;
+  facilityId: number;
+  type: 'DENIED' | 'ENTERED' | 'CONDITION_CHANGED';
+  content: string;
+  reason: DenialReasonCode | null;
+  weight: number | null;
+  hasEvidence: boolean | null;
+  mine: boolean | null;
+  realtime: boolean | null;
+  status: 'PENDING' | 'APPLIED' | 'REJECTED';
+  createdAt: string;
+};
+
+/** 내가 판별받은 시설 중 최근 1주 내 거부가 뜬 곳. */
+export type DenialAlert = {
+  facility: { facilityId: number; name: string };
+  report: { reportId: number; reason: DenialReasonCode | null; createdAt: string };
+};
+
+export const denialApi = {
+  /**
+   * 원터치 제보. 같은 시설에 24시간 내 재제보하면 REPORT4001(409)이 온다 —
+   * 장애가 아니라 "이미 보냈다"는 뜻이라 화면에서 구분해 안내해야 한다.
+   */
+  report: (facilityId: number, reason: DenialReasonCode) =>
+    request<ServerDenialReport>('POST', `/api/v1/facilities/${facilityId}/denial-reports`, {
+      body: { reason },
+      auth: true,
+    }),
+
+  /** 최근 1주 내 **타인의** 제보 최신순 최대 3건. 경고 배너용. 없으면 빈 배열. */
+  recent: async (facilityId: number): Promise<ServerDenialReport[]> => {
+    const r = await request<ServerDenialReport[] | null>(
+      'GET',
+      `/api/v1/facilities/${facilityId}/denial-reports/recent`,
+      { auth: true },
+    );
+    return r ?? [];
+  },
+
+  /**
+   * 내가 이 시설에 보낸 제보. **보낸 적이 없으면 `result` 키 자체가 응답에서 빠진다**
+   * (`@JsonInclude(NON_NULL)`) — null 비교가 아니라 존재 여부로 판단해야 한다.
+   */
+  mine: async (facilityId: number): Promise<ServerDenialReport | null> => {
+    const r = await request<ServerDenialReport | undefined>(
+      'GET',
+      `/api/v1/facilities/${facilityId}/denial-reports/mine`,
+      { auth: true },
+    );
+    return r ?? null;
+  },
+
+  /** 내가 판별받은 시설 중 최근 1주 내 거부가 뜬 곳. 홈 상단 경고용. 시설당 최신 1건. */
+  alerts: async (): Promise<DenialAlert[]> => {
+    const r = await request<DenialAlert[] | null>('GET', '/api/v1/me/denial-alerts', { auth: true });
+    return r ?? [];
+  },
+};
+
 // ─────────────────────────── 여행 코스(courses) ───────────────────────────
 // 코스는 만들어지는 방식에 따라 셋이다:
 //   PRESET      지역×테마로 서버가 미리 계산해 캐시해둔 코스 (로그인 불필요)
