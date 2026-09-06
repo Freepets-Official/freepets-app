@@ -296,6 +296,20 @@ export interface CourseStop {
   distanceM: number | null;
 }
 
+/**
+ * 저장한 내 코스(CUSTOM). **`stopIds`만 남는다** — 추천 당시의 이름·카테고리·점수·isMealStop은
+ * 저장되지 않으므로, 목록을 그리려면 이 ID들로 시설을 다시 조회해야 한다.
+ */
+export interface SavedCourse {
+  courseId: number;
+  name: string;
+  description: string | null;
+  stopIds: number[];
+  createdAt: string;
+  /** true면 `GET /courses/public`으로 다른 사용자에게 노출된다 */
+  isPublic: boolean;
+}
+
 /** 코스 일괄 판별의 스톱 하나(`POST /ai/course-check`). */
 export interface CourseCheckStop {
   facility: { facilityId: number; name: string; category: Category };

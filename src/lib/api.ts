@@ -16,6 +16,7 @@ import type {
   PetVerdictResult,
   PresetCourse,
   RankingItem,
+  SavedCourse,
   SimilarCourse,
   SimilarStop,
   Region,
@@ -726,6 +727,17 @@ function personalQuery(params: CoursePersonalParams): string {
   return q.toString();
 }
 
+function toSavedCourse(c: SavedCourse): SavedCourse {
+  return {
+    courseId: c.courseId,
+    name: c.name,
+    description: c.description ?? null,
+    stopIds: c.stopIds ?? [],
+    createdAt: c.createdAt,
+    isPublic: c.isPublic ?? false,
+  };
+}
+
 export const coursesApi = {
   /** 동반 가능 시설이 실제로 있는 (시/도, 시/군/구) 조합만 내려온다. 인증 불필요. */
   regions: async (): Promise<CourseRegion[]> => {
@@ -814,6 +826,45 @@ export const coursesApi = {
       })),
     };
   },
+
+  /** 내 CUSTOM 코스 전체. 페이지네이션이 없다(많이 쌓일 자원이 아니라는 판단). */
+  list: async (): Promise<SavedCourse[]> => {
+    const r = await request<SavedCourse[] | null>('GET', '/api/v1/courses', { auth: true });
+    return (r ?? []).map(toSavedCourse);
+  },
+
+  /** 추천으로 받은 stops의 facilityId를 그대로 넣으면 내 코스가 된다. 1~10개. */
+  create: async (input: {
+    name: string;
+    description?: string;
+    stopIds: number[];
+    isPublic?: boolean;
+  }): Promise<SavedCourse> =>
+    toSavedCourse(await request<SavedCourse>('POST', '/api/v1/courses', { body: input, auth: true })),
+
+  /** stopIds **전체를 교체**한다. 한 곳만 바꾸려면 replaceStop을 쓴다. */
+  update: async (
+    courseId: number,
+    input: { name: string; description?: string; stopIds: number[]; isPublic?: boolean },
+  ): Promise<SavedCourse> =>
+    toSavedCourse(
+      await request<SavedCourse>('PUT', `/api/v1/courses/${courseId}`, { body: input, auth: true }),
+    ),
+
+  /**
+   * 그 자리(0부터 시작)의 스톱만 교체한다. 개수가 바뀌는 추가·삭제는 update(전체 교체)를 쓴다.
+   * 한 곳 스왑 때마다 stopIds 전체를 다시 구성해 보내지 않으려고 있는 API다.
+   */
+  replaceStop: async (courseId: number, stopOrder: number, facilityId: number): Promise<SavedCourse> =>
+    toSavedCourse(
+      await request<SavedCourse>('PUT', `/api/v1/courses/${courseId}/stops/${stopOrder}`, {
+        body: { facilityId },
+        auth: true,
+      }),
+    ),
+
+  remove: (courseId: number) =>
+    request<{ courseId: number }>('DELETE', `/api/v1/courses/${courseId}`, { auth: true }),
 
   /**
    * 스톱 순서만 최근접 이웃으로 다듬는다. **아무것도 저장하지 않는다** — 결과를 저장하려면
