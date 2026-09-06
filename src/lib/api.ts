@@ -6,6 +6,8 @@ import type {
   CourseDistanceOption,
   CourseRegion,
   CourseStop,
+  CourseCheckResult,
+  CourseCheckStop,
   CourseTheme,
   LikedCourse,
   LikedStop,
@@ -593,6 +595,40 @@ type ServerAiCheck = {
 
 export const aiApi = {
   /**
+   * 코스 일괄 판별. 스톱마다 낱개 판별(`/ai/check`)과 **동일한 규칙**을 쓴다 —
+   * 낱개와 코스가 다른 답을 내면 안 된다는 게 설계 의도다.
+   *
+   * `facilityIds`의 **배열 순서가 곧 방문 순서**이고 1~10개만 받는다(11개 이상 400).
+   */
+  courseCheck: async (petIds: number[], facilityIds: number[]): Promise<CourseCheckResult> => {
+    const r = await request<{
+      overall: CheckResult;
+      blockedCount: number | null;
+      stops: (Omit<CourseCheckStop, 'verdicts' | 'alternative' | 'facility'> & {
+        facility: { facilityId: number; name: string; category: string };
+        verdicts: (PetVerdictResult & { petName?: string; conditions: string[] | null })[] | null;
+        alternative: { facilityId: number; name: string; distanceKm: number } | null;
+      })[] | null;
+    }>('POST', '/api/v1/ai/course-check', { body: { petIds, facilityIds }, auth: true });
+
+    return {
+      overall: r.overall,
+      blockedCount: r.blockedCount ?? 0,
+      stops: (r.stops ?? []).map((st) => ({
+        facility: {
+          facilityId: st.facility.facilityId,
+          name: st.facility.name,
+          category: CATEGORY_FROM_SERVER[st.facility.category] ?? 'TOUR',
+        },
+        time: st.time,
+        verdicts: (st.verdicts ?? []).map((v) => ({ ...v, conditions: v.conditions ?? [] })),
+        overall: st.overall,
+        alternative: st.alternative,
+      })),
+    };
+  },
+
+  /**
    * 그룹 판별. 중복 petId는 서버가 알아서 무시한다.
    * `overall`은 verdicts 중 가장 심각한 값이라 앱이 다시 계산하지 않는다.
    */
@@ -764,6 +800,22 @@ export const coursesApi = {
         reason: st.reason ?? '',
       })),
     };
+  },
+
+  /**
+   * 스톱 순서만 최근접 이웃으로 다듬는다. **아무것도 저장하지 않는다** — 결과를 저장하려면
+   * 반환된 순서를 코스 저장/수정 API에 다시 넣어야 한다.
+   *
+   * ⚠️ 명세는 "인증 불필요(순수 계산)"라고 적었지만 **실제로는 401이 온다**(2026-09-07 확인).
+   * distance-options와 같은 불일치다. 토큰을 함께 보내는 건 무해하므로 auth를 붙인다.
+   */
+  optimizeOrder: async (stopIds: number[]): Promise<number[]> => {
+    const r = await request<{ stopIds: number[] | null }>('POST', '/api/v1/courses/optimize-order', {
+      body: { stopIds },
+      auth: true,
+    });
+    // 서버가 순서를 못 주면 원래 순서를 그대로 쓴다 — 동선이 덜 다듬어질 뿐 코스는 유효하다
+    return r.stopIds ?? stopIds;
   },
 
   preset: async (params: {
