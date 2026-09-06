@@ -86,9 +86,9 @@ export default function CourseScreen() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
+  /** 목록 새로고침. 실패하면 던진다 — 호출자가 "무엇이 실패했는지" 구분해 안내해야 한다. */
   const reloadSaved = useCallback(async () => {
-    const list = await coursesApi.list().catch(() => null);
-    if (list) setSavedCourses(list);
+    setSavedCourses(await coursesApi.list());
   }, []);
 
   // 초기 로드는 effect 안에서 직접 받는다. reloadSaved를 그대로 부르면 effect 본문에서
@@ -114,9 +114,16 @@ export default function CourseScreen() {
     setSaveMessage(null);
     try {
       // 서버는 1~10개만 받는다. 추천 stops의 facilityId를 순서 그대로 넣으면 내 코스가 된다.
-      await coursesApi.create({ name, stopIds: stops.slice(0, 10).map((st) => st.facilityId) });
-      await reloadSaved();
+      const created = await coursesApi.create({
+        name,
+        stopIds: stops.slice(0, 10).map((st) => st.facilityId),
+      });
+      // 저장 결과로 목록을 먼저 갱신한다. 목록 재조회가 실패해도 방금 담은 코스는 보여야 한다 —
+      // 저장은 됐는데 목록에 없으면 사용자는 실패한 줄 안다.
+      setSavedCourses((prev) => [created, ...prev.filter((c) => c.courseId !== created.courseId)]);
       setSaveMessage(`'${name}'을(를) 내 코스에 담았어요`);
+      // 서버가 매긴 순서·필드로 맞춰두되, 실패는 저장 성공을 덮지 않는다
+      reloadSaved().catch(() => {});
     } catch (e) {
       setSaveMessage(e instanceof Error ? e.message : '코스를 저장하지 못했어요');
     } finally {
@@ -127,7 +134,10 @@ export default function CourseScreen() {
   const removeCourse = async (courseId: number) => {
     try {
       await coursesApi.remove(courseId);
-      await reloadSaved();
+      // 삭제 성공을 화면에 먼저 반영한다(같은 이유로 목록 재조회 실패에 기대지 않는다)
+      setSavedCourses((prev) => prev.filter((c) => c.courseId !== courseId));
+      setSaveMessage(null);
+      reloadSaved().catch(() => {});
     } catch {
       setSaveMessage('코스를 삭제하지 못했어요');
     }
