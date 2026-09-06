@@ -3,9 +3,14 @@ import type {
   Facility,
   FacilityReviewData,
   CheckResult,
+  CourseDistanceOption,
+  CourseRegion,
+  CourseStop,
+  CourseTheme,
   PawGrade,
   Pet,
   PetVerdictResult,
+  PresetCourse,
   RankingItem,
   Region,
   Requirement,
@@ -612,6 +617,98 @@ export const aiApi = {
     }
 
     return { checkId: r.checkId, facilityId: r.facilityId, overall: r.overall, verdicts };
+  },
+};
+
+// ─────────────────────────── 여행 코스(courses) ───────────────────────────
+// 코스는 만들어지는 방식에 따라 셋이다:
+//   PRESET      지역×테마로 서버가 미리 계산해 캐시해둔 코스 (로그인 불필요)
+//   RECOMMENDED 만족도 기록 기반 개인화 추천. 매 요청 즉시 계산하고 DB에 저장되지 않는다
+//   CUSTOM      사용자가 직접 담아 저장한 코스
+//
+// ⚠️ 지역은 **이름 문자열**을 쓴다(`facilities/regions`의 코드와 다르다). 자유 텍스트라
+// "강원" 같은 축약 표기를 보내면 실제 값("강원특별자치도")과 안 맞아 후보가 0건이 된다 —
+// 반드시 `courses/regions` 응답의 값을 그대로 보낸다.
+
+type ServerCourseStop = {
+  facilityId: number;
+  name: string;
+  category: string;
+  isMealStop: boolean | null;
+  score: number | null;
+  distanceM: number | null;
+};
+
+function toCourseStop(s: ServerCourseStop): CourseStop {
+  return {
+    facilityId: s.facilityId,
+    name: s.name,
+    category: CATEGORY_FROM_SERVER[s.category] ?? 'TOUR',
+    isMealStop: s.isMealStop ?? false,
+    score: s.score ?? 0,
+    distanceM: s.distanceM ?? 0,
+  };
+}
+
+export const coursesApi = {
+  /** 동반 가능 시설이 실제로 있는 (시/도, 시/군/구) 조합만 내려온다. 인증 불필요. */
+  regions: async (): Promise<CourseRegion[]> => {
+    const r = await request<{ sidos: CourseRegion[] | null }>('GET', '/api/v1/courses/regions');
+    return (r.sidos ?? []).map((x) => ({ sido: x.sido, sigungus: x.sigungus ?? [] }));
+  },
+
+  /** 테마 목록. 서버 코드에 고정된 값이라 프론트가 라벨을 하드코딩하지 않는다. 인증 불필요. */
+  themes: async (): Promise<CourseTheme[]> => {
+    const r = await request<{ themes: CourseTheme[] | null }>('GET', '/api/v1/courses/themes');
+    return r.themes ?? [];
+  },
+
+  /**
+   * 스톱 간 최대 거리 선택지. 연속값이 아니라 고정 구간만 받는다(캐시 적중률 때문).
+   *
+   * ⚠️ 명세(`api-specs/course.md`)는 "인증 불필요"라고 적었지만 **실제로는 401이 온다**
+   * (2026-09-07 라이브 확인). 셋 중 이것만 다르다 — regions·themes·preset은 토큰 없이 된다.
+   * 서버가 나중에 명세대로 열어도 토큰을 함께 보내는 건 무해하므로 auth를 붙여둔다.
+   */
+  distanceOptions: async (): Promise<CourseDistanceOption[]> => {
+    const r = await request<{ options: CourseDistanceOption[] | null }>(
+      'GET',
+      '/api/v1/courses/distance-options',
+      { auth: true },
+    );
+    return r.options ?? [];
+  },
+
+  /**
+   * 지역×테마 추천. 인증 불필요라 로그인 없이도 "둘러보기"가 된다.
+   *
+   * 같은 조합을 다시 조회하면 **구성이 조금 달라질 수 있다** — 서버가 표시 개수(4곳)보다 넉넉한
+   * 후보 풀(8곳)을 캐시해두고 매번 무작위로 뽑기 때문이다. 버그가 아니다.
+   *
+   * `sigungu`는 `sido`가 있을 때만 유효하다. "고성군"처럼 여러 시/도에 같은 이름이 실제로 있어서,
+   * sido 없이 보내면 엉뚱한 지역이 섞인다 — 서버가 그 필터를 무시한다.
+   */
+  preset: async (params: {
+    sido: string;
+    sigungu?: string;
+    themes: string[];
+    maxDistanceM?: string;
+  }): Promise<PresetCourse> => {
+    const q = new URLSearchParams();
+    q.set('sido', params.sido);
+    if (params.sigungu) q.set('sigungu', params.sigungu);
+    params.themes.forEach((t) => q.append('themes', t));
+    if (params.maxDistanceM) q.set('maxDistanceM', params.maxDistanceM);
+
+    const r = await request<{ courseId: number | null; title: string; stops: ServerCourseStop[] | null }>(
+      'GET',
+      `/api/v1/courses/preset?${q.toString()}`,
+    );
+    return {
+      courseId: r.courseId ?? null,
+      title: r.title,
+      stops: (r.stops ?? []).map(toCourseStop),
+    };
   },
 };
 
