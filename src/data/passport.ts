@@ -4,6 +4,7 @@ import {
   type Pet,
   type Requirement,
 } from '@/data/types';
+import { API_URL } from '@/lib/config';
 
 /**
  * 동반 출입증의 핵심 — 시설이 게시한 조건과 우리 아이의 정보를 한 줄씩 대조한다.
@@ -104,25 +105,19 @@ export function buildRuleRows(pet: Pet, facility: Facility): RuleRow[] {
 }
 
 /**
- * 출입증 확인 코드 — 직원이 육안으로 대조하고, 문의 시 우리가 조회할 수 있는 식별자.
- * 판별 기록 id에서 결정적으로 만들어지므로 같은 판별은 항상 같은 코드가 나온다.
- */
-export function passIssueCode(checkId: number, petId: number): string {
-  const n = (checkId * 31 + petId * 17) % 1_048_576; // 20비트
-  return `FP-${n.toString(36).toUpperCase().padStart(4, '0')}`;
-}
-
-/**
  * QR에 담을 검증 주소.
  *
- * TODO(백엔드): 이 주소는 아직 실제로 열리지 않는다. 백엔드가 붙으면
- * `GET /verify/:checkId` 로 판별 근거 웹페이지(시설 조건 원문 + 판별 결과 + 확인 시각)를
- * 서빙하고, 여기 BASE를 실제 도메인으로 교체해야 한다.
+ * 코드는 **서버가 발급한다**(`POST /ai/check` 응답의 `verdicts[].verifyCode`).
+ * 예전에는 `checkId * 31 + petId * 17`을 20비트로 접어 앱이 직접 만들었는데, 그건
+ * 충돌하고 역산도 된다. 이 페이지는 인증 없이 열리면서 반려동물 이름·체중·접종여부까지
+ * 보여주므로 **코드 하나가 곧 열람 권한**이다 — 예측 가능한 값이면 남의 출입증을 열 수 있다.
+ * 그래서 서버가 CSPRNG로 `FP-` + 12자(36^12)를 발급하고 앱은 받은 값을 그대로 쓴다.
+ *
+ * 코드가 없으면(로컬 판별한 목 시설 등) QR을 그리지 않는다 — 열리지 않는 주소를 QR로 만들면
+ * 직원이 스캔했을 때 404를 보게 된다.
  */
-const VERIFY_BASE = 'https://freepets.kr/v';
-
-export function passVerifyUrl(checkId: number, petId: number): string {
-  return `${VERIFY_BASE}/${passIssueCode(checkId, petId)}`;
+export function passVerifyUrl(verifyCode: string): string {
+  return `${API_URL}/verify/${verifyCode}`;
 }
 
 /** 발급 시각 문구 — "2026. 7. 22. 14:32 발급" */

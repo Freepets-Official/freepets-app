@@ -591,7 +591,15 @@ type ServerAiCheck = {
   checkId: number;
   facilityId: number;
   overall: CheckResult;
-  verdicts: { petId: number; result: CheckResult; reason: string; conditions: string[] | null }[] | null;
+  verdicts:
+    | {
+        petId: number;
+        result: CheckResult;
+        reason: string;
+        conditions: string[] | null;
+        verifyCode?: string | null;
+      }[]
+    | null;
 };
 
 export const aiApi = {
@@ -657,6 +665,8 @@ export const aiApi = {
       reason: v.reason,
       // 조건이 없으면 서버가 [] 를 주지만, null로 와도 화면이 깨지지 않게 받는다
       conditions: v.conditions ?? [],
+      // 출입증 QR이 이 코드로 열린다. 없으면 QR을 그리지 않는다(로컬 판별 등)
+      verifyCode: v.verifyCode ?? undefined,
     }));
 
     // 아이별 판별이 요청한 만큼 오지 않으면 이 응답은 신뢰할 수 없다. 그대로 저장하면
