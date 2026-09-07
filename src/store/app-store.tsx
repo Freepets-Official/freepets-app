@@ -1,8 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
+import { clearSession, loadSession, saveSession } from '@/lib/token-store';
+
 import type { ThemeMode } from '@/constants/theme';
 import { CHECK_RANK, buildChecklist, judgeGroup } from '@/data/judge';
 import {
+  ApiError,
   accountApi,
   aiApi,
   denialApi,
@@ -406,6 +409,8 @@ interface AppStore {
 
   /** 로그인 세션 (계정 하나 + 활성 프로필) */
   session: Session;
+  /** 저장된 세션을 아직 확인 중. true면 로그인 여부를 판단하면 안 된다 */
+  restoring: boolean;
   /** 이 계정이 가진 프로필들 — 소비자는 항상, 사업자는 매장을 등록했을 때 생긴다 */
   availableProfiles: ProfileKind[];
   /** (소셜 데모용) 세션만 설정 — 프로필이 하나면 자동 진입, 둘이면 프로필 선택으로 */
@@ -448,8 +453,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [promotions, setPromotions] = useState<Record<number, Promotion>>({});
   const [benefits, setBenefits] = useState<Record<number, Benefit[]>>({});
   const [session, setSession] = useState<Session>({ authed: false, email: null, activeProfile: null });
-  // 백엔드 인증 토큰(메모리 보관). 영속 저장(SecureStore)은 후속 과제.
+  // 백엔드 인증 토큰. 기기에도 남긴다(네이티브 SecureStore / 웹 localStorage) —
+  // 남기지 않으면 새로고침·앱 재실행마다 로그인해야 한다.
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  // 저장된 세션을 확인하는 동안은 "아직 모름"이다. 이 값이 false가 되기 전에
+  // 라우터가 판단하면 로그인돼 있는 사용자를 로그인 화면으로 한 번 튕긴다.
+  const [restoring, setRestoring] = useState(true);
   const refreshTokenRef = useRef<string | null>(null);
   const [account, setAccount] = useState<Account>({ nickname: '나', avatarUri: null });
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(INITIAL_CAL_EVENTS);
@@ -1204,6 +1213,51 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     });
   }, [businessRegs]);
 
+  // 저장된 세션을 되살린다. 토큰이 남아 있어도 **유효한지는 확인해야 한다** —
+  // 만료된 토큰으로 로그인 상태를 만들면 화면은 들어가지는데 모든 조회가 401로
+  // 실패해, 데이터가 텅 빈 채로 로그인된 것처럼 보인다. 서버 재발급 API도 없다.
+  //
+  // 회원정보 조회로 확인한다. 성공하면 닉네임·아바타까지 같이 채워진다.
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const saved = await loadSession();
+      if (!saved) {
+        if (alive) setRestoring(false);
+        return;
+      }
+      setAuthToken(saved.accessToken);
+      try {
+        const me = await accountApi.get();
+        if (!alive) return;
+        setAccessToken(saved.accessToken);
+        refreshTokenRef.current = saved.refreshToken;
+        setAccount({ nickname: me.nickname, avatarUri: me.avatarUri });
+        setSession({ authed: true, email: saved.email, activeProfile: 'consumer' });
+      } catch (e) {
+        if (!alive) return;
+        // 인증 실패(만료·폐기)와 서버 장애를 구분한다. 502·네트워크 오류로 지워버리면
+        // 서버가 잠깐 흔들릴 때마다 모든 사용자가 로그아웃된다 — 이 서버는 실제로
+        // 502를 낸 적이 있다. 그런 경우엔 토큰을 그대로 두고 로그인 상태를 유지한다.
+        const authFailed = e instanceof ApiError && (e.status === 401 || e.status === 403);
+        if (authFailed) {
+          setAuthToken(null);
+          await clearSession();
+        } else {
+          setAccessToken(saved.accessToken);
+          refreshTokenRef.current = saved.refreshToken;
+          setSession({ authed: true, email: saved.email, activeProfile: 'consumer' });
+        }
+      } finally {
+        if (alive) setRestoring(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // 앱 시작에 한 번만 — 이후 로그인/로그아웃은 authenticate·logout이 관리한다
+  }, []);
+
   const authenticate = useCallback(
     (email: string, tokens: { accessToken: string; refreshToken: string }) => {
       setAccessToken(tokens.accessToken);
@@ -1214,6 +1268,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         email,
         activeProfile: Object.keys(businessRegs).length > 0 ? null : 'consumer',
       });
+      // 다음 실행에서 되살릴 수 있게 기기에 남긴다. 이메일까지 담는 이유는 서버가
+      // 회원정보에 이메일을 주지 않아, 없으면 설정·프로필 화면이 게스트로 되돌아가기 때문.
+      void saveSession({
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        email: email || null,
+      });
     },
     [businessRegs],
   );
@@ -1223,6 +1284,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setAuthToken(null);
     refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
+    void clearSession(); // 남겨두면 다음 실행에 로그아웃한 계정으로 되살아난다
   }, []);
 
   const selectProfile = useCallback((kind: ProfileKind) => {
@@ -1329,6 +1391,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       toggleMedTaken,
       isMedTaken,
       session,
+      restoring,
       availableProfiles,
       login,
       authenticate,
@@ -1403,6 +1466,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       toggleMedTaken,
       isMedTaken,
       session,
+      restoring,
       availableProfiles,
       login,
       authenticate,
