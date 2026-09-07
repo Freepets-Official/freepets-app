@@ -459,6 +459,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 저장된 세션을 확인하는 동안은 "아직 모름"이다. 이 값이 false가 되기 전에
   // 라우터가 판단하면 로그인돼 있는 사용자를 로그인 화면으로 한 번 튕긴다.
   const [restoring, setRestoring] = useState(true);
+  // 세션이 바뀔 때마다 오른다. 복원은 await가 두 번 있어 그 사이에 로그인·로그아웃이
+  // 끼어들 수 있는데, 그때 복원이 늦게 끝나면 **옛 계정으로 되돌려놓는다.**
+  // 네이버 로그인에서 돌아오는 흐름이 복원과 나란히 도는 실제 경로가 있다.
+  const sessionRev = useRef(0);
   const refreshTokenRef = useRef<string | null>(null);
   const [account, setAccount] = useState<Account>({ nickname: '나', avatarUri: null });
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(INITIAL_CAL_EVENTS);
@@ -1221,21 +1225,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let alive = true;
     void (async () => {
+      const rev = sessionRev.current;
+      // 매 await 뒤에 확인한다. 살아 있는지(alive)만으로는 부족하다 —
+      // 컴포넌트는 그대로인데 세션만 새것으로 바뀐 경우를 못 걸러낸다.
+      const stale = () => !alive || rev !== sessionRev.current;
+
       const saved = await loadSession();
+      if (stale()) return;
       if (!saved) {
-        if (alive) setRestoring(false);
+        setRestoring(false);
         return;
       }
       setAuthToken(saved.accessToken);
       try {
         const me = await accountApi.get();
-        if (!alive) return;
+        if (stale()) return;
         setAccessToken(saved.accessToken);
         refreshTokenRef.current = saved.refreshToken;
         setAccount({ nickname: me.nickname, avatarUri: me.avatarUri });
         setSession({ authed: true, email: saved.email, activeProfile: 'consumer' });
       } catch (e) {
-        if (!alive) return;
+        if (stale()) return;
         // 인증 실패(만료·폐기)와 서버 장애를 구분한다. 502·네트워크 오류로 지워버리면
         // 서버가 잠깐 흔들릴 때마다 모든 사용자가 로그아웃된다 — 이 서버는 실제로
         // 502를 낸 적이 있다. 그런 경우엔 토큰을 그대로 두고 로그인 상태를 유지한다.
@@ -1249,7 +1259,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           setSession({ authed: true, email: saved.email, activeProfile: 'consumer' });
         }
       } finally {
-        if (alive) setRestoring(false);
+        // 세션이 바뀌었으면 그쪽이 이미 restoring을 내렸다
+        if (alive && rev === sessionRev.current) setRestoring(false);
       }
     })();
     return () => {
@@ -1260,6 +1271,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const authenticate = useCallback(
     (email: string, tokens: { accessToken: string; refreshToken: string }) => {
+      // 진행 중인 복원이 이 로그인을 덮어쓰지 않도록 세대를 올린다
+      sessionRev.current += 1;
+      setRestoring(false);
       setAccessToken(tokens.accessToken);
       setAuthToken(tokens.accessToken); // 보호 API 호출에 쓰이도록 api 레이어에도 넣는다
       refreshTokenRef.current = tokens.refreshToken;
@@ -1280,6 +1294,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    sessionRev.current += 1; // 복원이 늦게 끝나 로그아웃을 되돌리지 않도록
+    setRestoring(false);
     setAccessToken(null);
     setAuthToken(null);
     refreshTokenRef.current = null;
