@@ -117,6 +117,28 @@ export const authApi = {
   /** 이메일 로그인 — 액세스·리프레시 토큰 반환. */
   login: (email: string, password: string) =>
     request<LoginResult>('POST', '/api/v1/users/login', { body: { email, password } }),
+
+  /**
+   * 소셜 로그인. 계정이 없으면 **그 자리에서 자동 가입**한다(별도 가입 API가 없다).
+   * 인증 불필요 — 아직 우리 토큰이 없는 상태로 들어오는 경로다.
+   *
+   * `providerToken`은 제공자마다 종류가 다르다:
+   *   카카오·네이버 → **access token**   /   구글·애플 → **id_token**
+   *
+   * `name`은 **애플 최초 로그인에서만** 보낸다. 애플은 이름을 id_token에 담지 않고 최초
+   * 인가 응답에서 단 한 번만 주므로, 그때 못 받으면 서버가 나중에 물어볼 방법이 없다.
+   */
+  social: (provider: SocialProvider, providerToken: string, name?: string) =>
+    request<SocialLoginResult>('POST', `/api/v1/auth/social/${provider}`, {
+      body: name ? { providerToken, name } : { providerToken },
+    }),
+};
+
+export type SocialProvider = 'kakao' | 'naver' | 'google' | 'apple';
+
+export type SocialLoginResult = LoginResult & {
+  /** 이번 요청으로 계정이 새로 만들어졌으면 true. 온보딩으로 보낼지 판단하는 값 */
+  isNewUser: boolean;
 };
 
 // ─────────────────────────── 반려동물(pets) ───────────────────────────
