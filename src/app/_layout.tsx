@@ -18,11 +18,14 @@ import { AppStoreProvider, useAppStore } from '@/store/app-store';
  * 그 외 임의 화면(시설 상세 등)으로의 이동은 막지 않는다.
  */
 function useAuthGate() {
-  const { session } = useAppStore();
+  const { session, restoring } = useAppStore();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
+    // 저장된 세션을 확인하는 동안은 아무 데로도 보내지 않는다. 여기서 판단하면
+    // 이미 로그인된 사용자가 로그인 화면을 한 번 스쳐 지나간다.
+    if (restoring) return;
     const seg = segments[0];
     // verify-email도 가입 흐름의 일부라 미인증 상태에서 접근을 허용한다
     const onAuth = seg === 'login' || seg === 'signup' || seg === 'verify-email';
@@ -35,7 +38,7 @@ function useAuthGate() {
     } else if (onAuth || onPicker) {
       router.replace(session.activeProfile === 'owner' ? '/owner-dashboard' : '/');
     }
-  }, [session.authed, session.activeProfile, segments, router]);
+  }, [restoring, session.authed, session.activeProfile, segments, router]);
 }
 
 function RootNavigator() {
