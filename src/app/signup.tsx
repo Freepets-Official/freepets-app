@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppLogo } from '@/components/app-logo';
 import { SocialButtons } from '@/components/social-buttons';
+import { useSocialLogin } from '@/hooks/use-social-login';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { ApiError, authApi } from '@/lib/api';
 import { usePalette } from '@/hooks/use-theme';
@@ -25,11 +26,12 @@ import { useAppStore } from '@/store/app-store';
 export default function SignupScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { login, authenticate } = useAppStore();
+  const { authenticate } = useAppStore();
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [agree, setAgree] = useState(false);
+  const social = useSocialLogin();
   // 닉네임은 폼이 아니라 '가입하기' 직후 모달에서 받는다
   const [nickModal, setNickModal] = useState(false);
   const [nickname, setNickname] = useState('');
@@ -150,7 +152,11 @@ export default function SignupScreen() {
               <View style={[styles.line, { backgroundColor: p.line }]} />
             </View>
 
-            <SocialButtons onPress={() => login('social@freepets.app')} />
+            <SocialButtons
+              onPress={social.signIn}
+              available={social.isProviderAvailable}
+              pending={social.pending}
+            />
 
             <View style={styles.bottom}>
               <Text style={[styles.bottomText, { color: p.muted }]}>이미 계정이 있으신가요?</Text>

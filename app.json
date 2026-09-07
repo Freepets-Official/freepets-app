@@ -16,7 +16,8 @@
             }
           }
         }
-      }
+      },
+      "bundleIdentifier": "com.freepets.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -26,7 +27,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "usesCleartextTraffic": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.freepets.app"
     },
     "web": {
       "output": "single",

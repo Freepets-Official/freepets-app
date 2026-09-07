@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppLogo } from '@/components/app-logo';
 import { LoginScene } from '@/components/login-scene';
 import { SocialButtons } from '@/components/social-buttons';
+import { useSocialLogin } from '@/hooks/use-social-login';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { ApiError, authApi } from '@/lib/api';
 import { usePalette } from '@/hooks/use-theme';
@@ -24,11 +25,12 @@ import { useAppStore } from '@/store/app-store';
 
 export default function LoginScreen() {
   const p = usePalette();
-  const { login, authenticate } = useAppStore();
+  const { authenticate } = useAppStore();
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const social = useSocialLogin();
 
   const canSubmit = email.trim().length > 0 && pw.length > 0 && !loading;
 
@@ -126,7 +128,11 @@ export default function LoginScreen() {
             </View>
 
             {/* 소셜 로그인 */}
-            <SocialButtons onPress={() => login('social@freepets.app')} />
+            <SocialButtons
+              onPress={social.signIn}
+              available={social.isProviderAvailable}
+              pending={social.pending}
+            />
 
             {/* 회원가입 */}
             <View style={styles.bottom}>
