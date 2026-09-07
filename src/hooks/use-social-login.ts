@@ -6,6 +6,17 @@ import { useAppStore } from '@/store/app-store';
 import { getProviderToken, isProviderAvailable, readReturnedToken } from './social-provider';
 
 /**
+ * 돌아온 토큰은 화면당 한 번이 아니라 **앱 전체에서 한 번만** 읽는다.
+ * readReturnedToken은 URL 조각을 읽고 지우므로, 이펙트가 두 번 실행되면(개발 모드의
+ * 이중 실행) 두 번째는 빈손이 된다. 프로미스를 모듈에 붙잡아 같은 결과를 나눠 쓴다.
+ */
+let returnedOnce: Promise<Awaited<ReturnType<typeof readReturnedToken>>> | null = null;
+function readReturnedOnce() {
+  returnedOnce ??= readReturnedToken();
+  return returnedOnce;
+}
+
+/**
  * 소셜 로그인의 **공통 합류 지점**.
  *
  * 토큰을 얻는 방법은 플랫폼마다 다르다(웹은 OAuth 리다이렉트, 네이티브는 각 SDK).
@@ -29,13 +40,15 @@ export function useSocialLogin() {
    */
   const resumed = useRef(false);
   useEffect(() => {
-    if (resumed.current) return;
-    resumed.current = true;
     let alive = true;
     void (async () => {
-      const got = await readReturnedToken();
+      // 토큰을 먼저 읽고 나서 표시를 남긴다. 읽기 전에 남기면 이펙트가 두 번 도는 개발
+      // 모드에서 첫 번째가 표시만 남기고 정리되고, 두 번째는 표시 때문에 그냥 빠져나가
+      // 로그인이 조용히 사라진다.
+      const got = await readReturnedOnce();
       // 조각이 없으면 평범한 첫 방문이다 — 대기 상태조차 만들지 않는다
-      if (!got || !alive) return;
+      if (!got || !alive || resumed.current) return;
+      resumed.current = true;
       setPending('naver');
       try {
         const res = await authApi.social('naver', got.providerToken, got.name);
