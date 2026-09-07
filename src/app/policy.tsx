@@ -19,12 +19,12 @@ export default function PolicyScreen() {
       <Stack.Screen options={{ title, headerBackButtonDisplayMode: 'minimal' }} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
-          <Text style={[styles.updated, { color: p.muted }]}>최종 개정 2026-08-03 · 프리펫스</Text>
+          <Text style={[styles.updated, { color: p.muted }]}>최종 개정 2026-08-03 · 반갑꼬리</Text>
 
           {/* 이용약관 */}
           <Section p={p} title="이용약관">
             <Clause p={p} n="제1조 (목적)">
-              본 약관은 프리펫스(이하 “서비스”)가 제공하는 반려동물 동반여행 정보·판별 서비스의
+              본 약관은 반갑꼬리(이하 “서비스”)가 제공하는 반려동물 동반여행 정보·판별 서비스의
               이용 조건과 절차를 정합니다.
             </Clause>
             <Clause p={p} n="제2조 (계정)">

@@ -74,7 +74,7 @@ export function PassportCard({
         <View style={[styles.brandBar, { borderBottomColor: p.line }]}>
           <View style={styles.brand}>
             <Ionicons name="paw" size={13} color={p.accent} />
-            <Text style={[styles.brandText, { color: p.accent }]}>프리펫스 동반 출입증</Text>
+            <Text style={[styles.brandText, { color: p.accent }]}>반갑꼬리 동반 출입증</Text>
           </View>
           {verdict.verifyCode && (
             <Text style={[styles.code, { color: p.muted }]}>{verdict.verifyCode}</Text>

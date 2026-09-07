@@ -217,7 +217,7 @@ export default function SignupScreen() {
                 <ActivityIndicator color={p.onAccent} />
               ) : (
                 <Text style={[styles.primaryLabel, { color: nickOk ? p.onAccent : p.muted }]}>
-                  프리펫스 시작하기
+                  반갑꼬리 시작하기
                 </Text>
               )}
             </Pressable>

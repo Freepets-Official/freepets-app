@@ -49,7 +49,7 @@ export default function SettingsScreen() {
 
   return (
     <Screen
-      eyebrow="프리펫스"
+      eyebrow="반갑꼬리"
       title="설정"
       subtitle="계정·알림·화면을 원하는 대로 맞춰요.">
       {/* 계정 */}
@@ -79,7 +79,7 @@ export default function SettingsScreen() {
       </Group>
 
       {/* 사업자 (앱 특화) */}
-      <Group title="사업자" caption="프리펫스 전용">
+      <Group title="사업자" caption="반갑꼬리 전용">
         <Row
           icon="storefront-outline"
           label="내 매장 조건 등록"
@@ -98,7 +98,7 @@ export default function SettingsScreen() {
       </Group>
 
       {/* 탐색 반경 (앱 특화) */}
-      <Group title="탐색 반경" caption="프리펫스 전용">
+      <Group title="탐색 반경" caption="반갑꼬리 전용">
         <View style={styles.block}>
           <Text style={[styles.blockLabel, { color: p.ink }]}>주변 검색 반경</Text>
           <Text style={[styles.blockHint, { color: p.muted }]}>
@@ -118,7 +118,7 @@ export default function SettingsScreen() {
       </Group>
 
       {/* 탐색 (앱 특화) */}
-      <Group title="탐색 · 판별" caption="프리펫스 전용">
+      <Group title="탐색 · 판별" caption="반갑꼬리 전용">
         <ToggleRow
           icon="paw-outline"
           label="동반 가능만 보기"
@@ -137,7 +137,7 @@ export default function SettingsScreen() {
       </Group>
 
       {/* 캘린더 (앱 특화) */}
-      <Group title="캘린더" caption="프리펫스 전용">
+      <Group title="캘린더" caption="반갑꼬리 전용">
         <ToggleRow
           icon="airplane-outline"
           label="여행 일정 자동 기록"
@@ -234,7 +234,7 @@ export default function SettingsScreen() {
           icon="chatbubble-ellipses-outline"
           label="문의하기"
           sub="freepets.official@gmail.com"
-          onPress={() => Linking.openURL('mailto:freepets.official@gmail.com?subject=프리펫스 문의')}
+          onPress={() => Linking.openURL('mailto:freepets.official@gmail.com?subject=반갑꼬리 문의')}
           chevron
         />
         <Row
@@ -264,7 +264,7 @@ export default function SettingsScreen() {
         />
       </Group>
 
-      <Text style={[styles.footer, { color: p.muted }]}>프리펫스 · 반려동물 동반여행 AI 판별</Text>
+      <Text style={[styles.footer, { color: p.muted }]}>반갑꼬리 · 반려동물 동반여행 AI 판별</Text>
 
       {/* 회원 탈퇴 확인 */}
       <Modal

@@ -61,7 +61,7 @@ export default function RestaurantScreen() {
       maxWeight: null,
       requirements: ['LEASH', 'VACCINATION'],
       conditionRaw:
-        '반려동물 동반 영업장 · 개·고양이 동반 가능(예방접종 필수) · 목줄 착용 · 조리공간 출입 불가. 예방접종은 프리펫스 출입증으로 확인할 수 있어요.',
+        '반려동물 동반 영업장 · 개·고양이 동반 가능(예방접종 필수) · 목줄 착용 · 조리공간 출입 불가. 예방접종은 반갑꼬리 출입증으로 확인할 수 있어요.',
       confirmedAt: new Date().toISOString(),
     });
     setStep('done');
@@ -274,7 +274,7 @@ export default function RestaurantScreen() {
                   <View style={[styles.noticeCard, { backgroundColor: p.successSoft, borderColor: p.success }]}>
                     <Text style={[styles.noticeTitle, { color: p.success }]}>신고 준비가 됐어요</Text>
                     <Text style={[styles.noticeBody, { color: p.ink }]}>
-                      아래 순서로 <Text style={{ fontWeight: '800' }}>새올시스템</Text>에서 직접 신고하시면 돼요. 프리펫스는
+                      아래 순서로 <Text style={{ fontWeight: '800' }}>새올시스템</Text>에서 직접 신고하시면 돼요. 반갑꼬리는
                       안내와 서류 준비만 도와드려요.
                     </Text>
                     <View style={styles.stepList}>
@@ -312,7 +312,7 @@ export default function RestaurantScreen() {
               </View>
               <Text style={[styles.doneTitle, { color: p.ink }]}>동반 음식점이 됐어요</Text>
               <Text style={[styles.doneBody, { color: p.muted }]}>
-                {facility.name}이(가) 프리펫스에 <Text style={{ fontWeight: '800', color: p.success }}>반려동물 동반 가능</Text>{' '}
+                {facility.name}이(가) 반갑꼬리에 <Text style={{ fontWeight: '800', color: p.success }}>반려동물 동반 가능</Text>{' '}
                 음식점으로 등록됐어요. 손님은 앱에서 <Text style={{ fontWeight: '800', color: p.ink }}>확정 정보</Text>로 보게 되고,
                 예방접종은 손님의 <Text style={{ fontWeight: '800', color: p.ink }}>동반 출입증</Text>으로 확인할 수 있어요.
               </Text>
