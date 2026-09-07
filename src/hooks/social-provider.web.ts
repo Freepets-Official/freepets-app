@@ -105,10 +105,31 @@ export async function getProviderToken(provider: SocialProvider): Promise<Provid
   const already = await readStatus(login);
   if (already) return already;
 
-  // 아직이면 네이버 로그인 창으로 보낸다. 페이지가 떠나므로 이 프로미스는 끝나지 않고,
-  // 돌아온 뒤 readReturnedToken이 이어받는다.
-  document.getElementById('naverIdLogin')?.querySelector('a')?.click();
+  // 아직이면 네이버 로그인 창으로 보낸다. SDK는 init() 직후가 아니라 조금 뒤에 링크를
+  // 그리므로, 바로 클릭하면 아무 일도 일어나지 않는다 — 그 상태로 아래 프로미스를
+  // 반환하면 버튼이 영원히 도는 화면이 된다. 링크가 생길 때까지 기다린 뒤 누른다.
+  const anchor = await waitForAnchor();
+  if (!anchor) {
+    throw new Error('네이버 로그인 창을 열지 못했어요. 잠시 후 다시 시도해 주세요.');
+  }
+  anchor.click();
+  // 여기서 페이지가 네이버로 떠난다. 돌아온 뒤는 readReturnedToken이 이어받으므로
+  // 이 프로미스는 의도적으로 끝내지 않는다(대기 표시를 유지한 채 화면이 바뀐다).
   return new Promise<null>(() => {});
+}
+
+/** SDK가 숨은 컨테이너에 링크를 그릴 때까지 기다린다. 못 그리면 null. */
+function waitForAnchor(timeoutMs = 3000): Promise<HTMLAnchorElement | null> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const tick = () => {
+      const el = document.getElementById('naverIdLogin')?.querySelector('a');
+      if (el) return resolve(el as HTMLAnchorElement);
+      if (Date.now() - started >= timeoutMs) return resolve(null);
+      window.setTimeout(tick, 50);
+    };
+    tick();
+  });
 }
 
 function readStatus(login: ReturnType<typeof createNaverLogin>): Promise<ProviderToken | null> {
