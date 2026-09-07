@@ -24,25 +24,36 @@ export function useSocialLogin() {
 
   /**
    * 웹에서 로그인 창을 다녀온 직후를 이어받는다. 리다이렉트는 페이지를 새로 그리므로
-   * signIn의 프로미스가 끊긴다 — 돌아왔을 때 조각(#)에 담긴 토큰을 여기서 주워 마저 진행한다.
+   * signIn의 프로미스가 끊긴다 — 돌아왔을 때 SDK가 조각(#)에 실어 온 토큰을 주워 마저 진행한다.
    * 네이티브에는 리다이렉트가 없어 readReturnedToken이 항상 null이다.
    */
   const resumed = useRef(false);
   useEffect(() => {
     if (resumed.current) return;
-    const got = readReturnedToken();
-    if (!got) return;
     resumed.current = true;
-    // setState를 effect 본문에서 동기로 부르지 않는다(연쇄 렌더 경고).
-    // 어차피 서버 왕복이 있어 한 틱 늦어도 화면 체감은 같다.
-    void Promise.resolve().then(() => setPending('naver'));
-    authApi
-      .social('naver', got.providerToken, got.name)
-      .then((res) => authenticate(got.email ?? '', res))
-      .catch((e) =>
-        setError(e instanceof ApiError ? e.message : '로그인에 실패했어요. 잠시 후 다시 시도해 주세요.'),
-      )
-      .finally(() => setPending(null));
+    let alive = true;
+    void (async () => {
+      const got = await readReturnedToken();
+      // 조각이 없으면 평범한 첫 방문이다 — 대기 상태조차 만들지 않는다
+      if (!got || !alive) return;
+      setPending('naver');
+      try {
+        const res = await authApi.social('naver', got.providerToken, got.name);
+        if (alive) authenticate(got.email ?? '', res);
+      } catch (e) {
+        if (alive)
+          setError(
+            e instanceof ApiError
+              ? e.message
+              : '로그인에 실패했어요. 잠시 후 다시 시도해 주세요.',
+          );
+      } finally {
+        if (alive) setPending(null);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, [authenticate]);
 
   const signIn = useCallback(

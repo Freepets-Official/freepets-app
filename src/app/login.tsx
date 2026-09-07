@@ -31,6 +31,8 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const social = useSocialLogin();
+  // 소셜 로그인 실패도 같은 자리에 보여준다 — 훅이 따로 들고 있으면 화면에 아무것도 안 뜬다
+  const shownError = error ?? social.error;
 
   const canSubmit = email.trim().length > 0 && pw.length > 0 && !loading;
 
@@ -97,7 +99,9 @@ export default function LoginScreen() {
                 />
               </View>
 
-              {error ? <Text style={[styles.error, { color: p.danger }]}>{error}</Text> : null}
+              {shownError ? (
+                <Text style={[styles.error, { color: p.danger }]}>{shownError}</Text>
+              ) : null}
 
               <Pressable
                 onPress={submit}

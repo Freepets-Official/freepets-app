@@ -28,6 +28,6 @@ export async function getProviderToken(_provider: SocialProvider): Promise<Provi
 }
 
 /** 네이티브에는 리다이렉트 왕복이 없다. 웹 구현(.web.ts)과 시그니처만 맞춘다. */
-export function readReturnedToken(): ProviderToken | null {
+export async function readReturnedToken(): Promise<ProviderToken | null> {
   return null;
 }

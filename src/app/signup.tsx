@@ -37,6 +37,8 @@ export default function SignupScreen() {
   const [nickname, setNickname] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 소셜 로그인 실패도 같은 자리에 보여준다 — 훅이 따로 들고 있으면 화면에 아무것도 안 뜬다
+  const shownError = error ?? social.error;
 
   const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim());
   const pwOk = pw.length >= 8 && pw.length <= 64;
@@ -129,8 +131,8 @@ export default function SignupScreen() {
                 </Text>
               </Pressable>
 
-              {error && !nickModal ? (
-                <Text style={[styles.error, { color: p.danger }]}>{error}</Text>
+              {shownError && !nickModal ? (
+                <Text style={[styles.error, { color: p.danger }]}>{shownError}</Text>
               ) : null}
 
               <Pressable
