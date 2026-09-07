@@ -458,7 +458,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const nextEventId = useRef(INITIAL_CAL_EVENTS.length + 1);
   const nextBenefitId = useRef(1);
   const nextPetId = useRef(INITIAL_PETS.length + 1);
-  const nextCheckId = useRef(INITIAL_CHECKS.length + 1);
+  // 로컬 전용 판별은 음수 id를 쓴다 — 서버 checkId와 겹치면 이력 병합이 어긋난다
+  const nextCheckId = useRef(1);
   const nextReportId = useRef(INITIAL_REPORTS.length + 1);
 
   // 최신 pets를 콜백에서 읽기 위한 미러(수정 시 기존 값 + patch 병합용)
@@ -482,6 +483,46 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       .list()
       .then((serverPets) => {
         if (alive) setPets(serverPets);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [session.authed]);
+
+  // 서버에서 판별 이력을 불러온다. 서버가 주는 건 **요약뿐**이라 아이별 판별(verdicts)이
+  // 비어 있다 — checkId로 상세를 되찾는 API가 없다(명세 미구현).
+  //
+  // 그래서 덮어쓰지 않고 **합친다.** 이번 세션에서 방금 판별한 항목은 상세를 갖고 있는데,
+  // 서버 요약으로 덮으면 그 자리에서 출입증이 빈 화면이 된다. 같은 checkId면 로컬을 남긴다.
+  useEffect(() => {
+    if (!session.authed) return;
+    let alive = true;
+    aiApi
+      .history({ limit: 20 })
+      .then(({ items }) => {
+        if (!alive) return;
+        setChecks((prev) => {
+          const local = new Map(prev.map((c) => [c.checkId, c]));
+          const merged = items.map((it): PetCheck => {
+            const mine = local.get(it.checkId);
+            // 요약 필드는 서버를 따르고, 서버에 없는 상세만 로컬에서 가져온다.
+            // 특히 createdAt은 서버 값을 써야 한다 — 로컬은 toISOString()이라 UTC고
+            // 서버는 타임존 없는 현지 시각이라, 섞으면 정렬이 9시간 어긋난다.
+            return mine
+              ? { ...mine, ...it }
+              : { ...it, verdicts: [], checklist: [], tips: [] };
+          });
+          // 서버에 없는 로컬 전용 판별(목 시설·사업자 확정 조건 경로)은 남긴다.
+          // 이들의 checkId는 음수라 서버 항목과 겹치지 않는다.
+          const localOnly = prev.filter((c) => c.checkId < 0);
+          // 문자열이 아니라 시각으로 비교한다. 서버는 타임존 없는 현지시각,
+          // 앱은 toISOString()의 UTC라 형식이 달라 — 문자열로 세우면 9시간 안쪽에서
+          // 더 오래된 항목이 위로 올라온다. Date.parse는 둘 다 올바른 시점으로 읽는다.
+          return [...merged, ...localOnly].sort(
+            (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+          );
+        });
       })
       .catch(() => {});
     return () => {
@@ -555,7 +596,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (isMockFacilityId(facilityId) || reg) {
         const { verdicts, overall, checklist, tips } = judgeGroup(chosen, facility);
         const check: PetCheck = {
-          checkId: nextCheckId.current++,
+          checkId: -nextCheckId.current++,
           facilityId,
           petIds: chosen.map((p) => p.petId),
           verdicts,

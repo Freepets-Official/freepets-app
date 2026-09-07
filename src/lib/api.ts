@@ -624,6 +624,15 @@ type ServerAiCheck = {
     | null;
 };
 
+/** 이력 조회가 주는 만큼만 담은 판별 요약. 상세(verdicts·checklist·tips)는 서버에 없다 */
+export type PetCheckSummary = {
+  checkId: number;
+  facilityId: number;
+  petIds: number[];
+  overall: CheckResult;
+  createdAt: string;
+};
+
 export const aiApi = {
   /**
    * 코스 일괄 판별. 스톱마다 낱개 판별(`/ai/check`)과 **동일한 규칙**을 쓴다 —
@@ -703,6 +712,44 @@ export const aiApi = {
     }
 
     return { checkId: r.checkId, facilityId: r.facilityId, overall: r.overall, verdicts };
+  },
+
+  /**
+   * 내 판별 이력 — **요약만** 온다. 아이별 판별(`verdicts`)과 체크리스트·팁은 담기지 않고,
+   * `checkId`로 상세를 되찾는 API도 없다(명세에 미구현으로 명시).
+   *
+   * 그래서 이 함수가 돌려주는 항목은 "언제 어느 시설을 어떤 아이들로 판별했고 결과가
+   * 무엇이었나"까지다. 출입증처럼 아이별 근거가 필요한 화면은 이 이력만으로는 그릴 수 없다.
+   *
+   * `offset`은 서버 제약상 **`limit`의 배수**여야 한다(아니면 400).
+   */
+  history: async (
+    opts: { facilityId?: number; limit?: number; offset?: number } = {},
+  ): Promise<{ items: PetCheckSummary[]; total: number }> => {
+    const limit = opts.limit ?? 20;
+    const offset = opts.offset ?? 0;
+    const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (opts.facilityId != null) q.set('facilityId', String(opts.facilityId));
+
+    const r = await request<{
+      items: {
+        checkId: number;
+        facilityId: number;
+        petIds: number[] | null;
+        overall: CheckResult;
+        createdAt: string;
+      }[] | null;
+      total: number | null;
+    }>('GET', `/api/v1/pet-checks?${q.toString()}`, { auth: true });
+
+    const items = (r.items ?? []).map((it) => ({
+      checkId: it.checkId,
+      facilityId: it.facilityId,
+      petIds: it.petIds ?? [],
+      overall: it.overall,
+      createdAt: it.createdAt,
+    }));
+    return { items, total: r.total ?? items.length };
   },
 };
 
