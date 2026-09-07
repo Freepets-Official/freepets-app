@@ -624,6 +624,18 @@ type ServerAiCheck = {
     | null;
 };
 
+/**
+ * 서버 시각을 절대 시각으로 고친다.
+ *
+ * 서버는 `2026-09-07T16:07:22.634035`처럼 **타임존을 빼고 UTC**를 준다. 그대로
+ * `new Date()`에 넣으면 자바스크립트가 기기 시간대로 읽어서, 한국 기기에서 9시간
+ * 어긋난다(실측: KST 01:07에 만든 판별이 16:07로 기록됨). 오프셋이 이미 붙어 있으면
+ * 건드리지 않는다 — 서버가 나중에 제대로 내려줘도 그대로 동작한다.
+ */
+function toAbsoluteIso(raw: string): string {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/.test(raw) ? raw : `${raw}Z`;
+}
+
 /** 이력 조회가 주는 만큼만 담은 판별 요약. 상세(verdicts·checklist·tips)는 서버에 없다 */
 export type PetCheckSummary = {
   checkId: number;
@@ -728,6 +740,14 @@ export const aiApi = {
   ): Promise<{ items: PetCheckSummary[]; total: number }> => {
     const limit = opts.limit ?? 20;
     const offset = opts.offset ?? 0;
+    // 서버 제약을 여기서 막는다. 어기면 400이 오는데, 그때는 이미 왕복을 한 뒤라
+    // 화면엔 원인 없는 실패로만 보인다.
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new ApiError('이력 조회 개수는 1~100 사이여야 해요.');
+    }
+    if (!Number.isInteger(offset) || offset < 0 || offset % limit !== 0) {
+      throw new ApiError('이력 조회 위치가 올바르지 않아요.');
+    }
     const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (opts.facilityId != null) q.set('facilityId', String(opts.facilityId));
 
@@ -747,7 +767,7 @@ export const aiApi = {
       facilityId: it.facilityId,
       petIds: it.petIds ?? [],
       overall: it.overall,
-      createdAt: it.createdAt,
+      createdAt: toAbsoluteIso(it.createdAt),
     }));
     return { items, total: r.total ?? items.length };
   },

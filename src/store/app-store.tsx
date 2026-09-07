@@ -458,8 +458,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const nextEventId = useRef(INITIAL_CAL_EVENTS.length + 1);
   const nextBenefitId = useRef(1);
   const nextPetId = useRef(INITIAL_PETS.length + 1);
-  // 로컬 전용 판별은 음수 id를 쓴다 — 서버 checkId와 겹치면 이력 병합이 어긋난다
-  const nextCheckId = useRef(1);
+  // 로컬 전용 판별은 음수 id를 쓴다 — 서버 checkId와 겹치면 이력 병합이 어긋난다.
+  // INITIAL_CHECKS가 이미 -1..-n을 쓰고 있으므로 그 다음부터 발급해야 한다.
+  const nextCheckId = useRef(INITIAL_CHECKS.length + 1);
   const nextReportId = useRef(INITIAL_REPORTS.length + 1);
 
   // 최신 pets를 콜백에서 읽기 위한 미러(수정 시 기존 값 + patch 병합용)
