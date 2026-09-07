@@ -15,10 +15,10 @@ import Animated, {
 
 /**
  * 앱 실행 인트로: 가운데 실사 강아지·고양이 사진이 뜨고,
- * '프리펫스' 네 글자가 왼쪽에서 한 글자씩 튀어 들어와 가운데에 자리잡은 뒤
+ * '반갑꼬리' 네 글자가 왼쪽에서 한 글자씩 튀어 들어와 가운데에 자리잡은 뒤
  * 통째로 사라지며 다음 화면으로 넘어간다.
  */
-const LETTERS = ['프', '리', '펫', '스'];
+const LETTERS = ['반', '갑', '꼬', '리'];
 const PETS = require('../../assets/images/splash-art.png');
 
 const LETTER_START = 620; // 사진이 자리잡은 뒤 글자 시작

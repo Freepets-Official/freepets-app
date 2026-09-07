@@ -19,7 +19,7 @@ export const F6_REQUIREMENTS: ReqItem[] = [
   { key: 'PARTITION', label: '조리장 칸막이', mandatory: true, help: '반려동물이 식품 취급 공간에 못 들어가게 차단. 이동형·접이식도 OK, 재질·크기 제한 없음' },
   { key: 'RESTRAINT', label: '반려동물 고정장치', mandatory: true, help: '목줄 고정장치·케이지·의자 중 1개만 구비하면 됨(일반 의자 가능)' },
   { key: 'TABLE_GAP', label: '식탁 간격', mandatory: true, help: '케이지·안고 있으면 조정 불필요. 목줄 사용 시 이동 거리보다 넓게' },
-  { key: 'VACC_CHECK', label: '예방접종 확인 수단', mandatory: true, help: '증명서·수기대장·QR·사진·앱 인증(프리펫스 출입증) 중 하나' },
+  { key: 'VACC_CHECK', label: '예방접종 확인 수단', mandatory: true, help: '증명서·수기대장·QR·사진·앱 인증(반갑꼬리 출입증) 중 하나' },
   { key: 'SIGNAGE', label: '‘반려동물 동반 영업장’ 안내문', mandatory: true, help: '출입문·외부에 게시' },
   { key: 'HYGIENE_COVER', label: '음식 뚜껑·덮개', mandatory: true, help: '진열·제공 시 덮개 사용' },
   { key: 'WASTE_BIN', label: '반려동물 전용 쓰레기통', mandatory: true, help: '' },

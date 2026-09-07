@@ -28,7 +28,7 @@ export function BiometricGate({ children }: { children: ReactNode }) {
     setAuthing(true);
     try {
       const res = await LocalAuthentication.authenticateAsync({
-        promptMessage: '프리펫스 잠금 해제',
+        promptMessage: '반갑꼬리 잠금 해제',
         cancelLabel: '취소',
       });
       if (res.success) setLocked(false);
