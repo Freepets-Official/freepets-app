@@ -45,3 +45,8 @@ yarn-error.*
 # ── macOS 중복 파일 ─────────────────────────────────
 * 2.*
 *.orig.*
+
+# Firebase iOS 설정 — 푸시(FCM)용. Firebase 콘솔 > 프로젝트 설정 > iOS 앱에서 받는다.
+# 클라이언트에 배포되는 값이라 비밀은 아니지만, .env와 같은 자리에서 관리한다.
+# 없으면 app.config.js가 Firebase 플러그인을 빼고 빌드한다(푸시만 빠진다).
+GoogleService-Info.plist

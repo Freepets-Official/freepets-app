@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
 
 import { clearSession, loadSession, saveSession } from '@/lib/token-store';
 import { clearStamps, loadStamps, saveStamps } from '@/lib/stamp-store';
+import { getFcmToken } from '@/lib/push';
 
 import type { ThemeMode } from '@/constants/theme';
 import { CHECK_RANK, buildChecklist, judgeGroup } from '@/data/judge';
@@ -12,6 +14,7 @@ import {
   denialApi,
   facilitiesApi,
   petsApi,
+  pushApi,
   reviewsApi,
   satisfactionApi,
   setAuthToken,
@@ -1328,6 +1331,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
     void clearSession(); // 남겨두면 다음 실행에 로그아웃한 계정으로 되살아난다
+    // 해제하지 않으면 로그아웃한 기기로 계속 발송을 시도한다. 서버가 나중에 무효 토큰을
+    // 정리하긴 하지만, 그 전까지는 남의 알림이 이 기기로 온다.
+    const pushed = pushTokenRef.current;
+    if (pushed) {
+      pushTokenRef.current = null;
+      void pushApi.unregister(pushed).catch(() => {});
+    }
     // 도장은 서버가 아니라 기기에 있어 계정과 묶여 있지 않다. 안 지우면 다음에 로그인한
     // 사람에게 앞사람의 도장첩·뱃지가 그대로 보인다. 대신 같은 사람이 다시 로그인해도
     // 도장은 돌아오지 않는다 — 2단계에서 서버로 옮기면 해소된다.
@@ -1428,6 +1438,35 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         // 빈 채로 남는 것이 실패의 표시다. 화면(도장 버튼·도장첩)이 그 상태를 안내한다.
       });
+    return () => {
+      alive = false;
+    };
+  }, [accessToken]);
+
+  /**
+   * 푸시 토큰 등록.
+   *
+   * 로그인할 때마다 부른다 — 서버가 upsert로 받으므로 중복 등록이 아니라 소유자 갱신이다.
+   * 기기를 재설치하거나 다른 계정으로 갈아타도 이 호출로 정리된다.
+   *
+   * 실패해도 아무것도 막지 않는다. 푸시가 안 오는 것뿐이고, 거부 경고는 홈 상단의
+   * `GET /me/denial-alerts`로도 볼 수 있다. 다만 해제하려면 그때 등록한 토큰이 필요해서
+   * 값을 들고 있는다.
+   */
+  const pushTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!accessToken) return;
+    let alive = true;
+    (async () => {
+      const token = await getFcmToken();
+      if (!alive || !token) return;
+      try {
+        await pushApi.register(token, Platform.OS === 'ios' ? 'IOS' : 'ANDROID');
+        pushTokenRef.current = token;
+      } catch {
+        // 등록 실패는 알림이 안 오는 것으로 끝난다. 로그인·사용을 막지 않는다.
+      }
+    })();
     return () => {
       alive = false;
     };

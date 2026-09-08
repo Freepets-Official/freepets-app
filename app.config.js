@@ -8,6 +8,9 @@
  * 값은 로컬 `.env`(개발)와 EAS 환경변수(빌드)에서 온다. 없으면 그 플러그인만 빠지고
  * 나머지는 정상 빌드된다 — 키 하나가 없다고 빌드 전체가 죽지 않게 한다.
  */
+const fs = require('fs');
+const path = require('path');
+
 const KAKAO_NATIVE_APP_KEY = process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY;
 const NAVER_URL_SCHEME = process.env.EXPO_PUBLIC_NAVER_URL_SCHEME ?? 'freepets';
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
@@ -47,5 +50,21 @@ module.exports = ({ config }) => {
     plugins.push(['@react-native-google-signin/google-signin', { iosUrlScheme: googleScheme }]);
   }
 
-  return { ...config, plugins };
+  /**
+   * 푸시(FCM)는 `GoogleService-Info.plist`가 있어야 붙는다. 파일이 없으면 Firebase 플러그인을
+   * 넣지 않는다 — 넣으면 **빌드가 그 자리에서 실패**하고, 푸시를 안 쓰는 사람까지 막힌다.
+   *
+   * 이 파일은 Firebase 콘솔 > 프로젝트 설정 > iOS 앱(`com.freepets.app`)에서 받는다.
+   * 클라이언트에 배포되는 값이라 비밀은 아니지만, 저장소에 올리지 않고 로컬·EAS에만 둔다
+   * (`.env`와 같은 취급 — 파일이 늘어나는 걸 한 곳에서 관리하기 위해서다).
+   */
+  const iosFirebaseFile = path.join(__dirname, 'GoogleService-Info.plist');
+  const ios = { ...(config.ios ?? {}) };
+  if (fs.existsSync(iosFirebaseFile)) {
+    ios.googleServicesFile = './GoogleService-Info.plist';
+    plugins.push('@react-native-firebase/app');
+    plugins.push('@react-native-firebase/messaging');
+  }
+
+  return { ...config, ios, plugins };
 };
