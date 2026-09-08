@@ -12,17 +12,25 @@ import type { Stamp } from '@/data/stamps';
  * 저장소를 하나 더 들이면 네이티브 모듈이 늘고, 그러면 개발 빌드를 다시 만들어야 한다.
  * 이미 쓰고 있는 것으로 해결되는 일에 빌드를 한 번 더 태울 이유가 없다.
  *
- * ⚠️ SecureStore는 값 하나가 커지면 안드로이드에서 경고가 난다(2KB 권장). 도장 한 건이
- * 150바이트 안팎이라 수십 개까지는 여유가 있지만, 서버로 옮기기 전에 수백 개가 쌓이는
- * 상황이 오면 그때는 저장소를 바꿔야 한다.
+ * ⚠️ **한계가 생각보다 빠듯하다.** SecureStore의 2KB 권장치는 항목당이 아니라 **키 하나의
+ * 값 전체**에 걸린다. 도장 한 건이 시설명·지역·사진 경로를 합쳐 250~300바이트라
+ * (iOS 피커 경로만 150바이트를 넘는다) **7~8건이면 한계에 닿는다.**
+ * 넘으면 `setItemAsync`가 실패하는데 아래 catch가 삼켜서, 화면은 계속 성공이라고 말한 채
+ * 앱을 다시 켜면 그 이후 도장이 사라져 있다. 웹(localStorage 5MB)에서는 안 나타나는
+ * 네이티브 전용 증상이다. **2단계 서버 이전이 늦어지면 저장소부터 바꿔야 한다.**
  */
 const KEY = 'freepets.stamps';
 
-export async function saveStamps(stamps: Stamp[]): Promise<void> {
+/**
+ * 저장 결과를 **돌려준다.** 실패를 삼키기만 하면 화면은 계속 성공이라고 말하고, 사용자는
+ * 앱을 다시 켠 뒤에야 도장이 사라진 걸 안다. 도장 찍기 자체는 막지 않되 알리기는 한다.
+ */
+export async function saveStamps(stamps: Stamp[]): Promise<boolean> {
   try {
     await SecureStore.setItemAsync(KEY, JSON.stringify(stamps));
+    return true;
   } catch {
-    // 저장에 실패해도 이번 세션의 도장첩은 메모리로 계속 보인다. 도장 찍기를 막지 않는다.
+    return false;
   }
 }
 
@@ -33,11 +41,16 @@ export async function loadStamps(): Promise<Stamp[]> {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     // 저장 형식이 바뀌었거나 값이 깨졌을 때 화면이 터지지 않게 최소 조건만 확인하고 거른다
+    // 화면이 실제로 역참조하는 필드까지 본다. `petIds`가 없으면 홈의 `s.petIds.includes(...)`가
+    // TypeError를 내고 **홈 탭 전체가 죽는다** — 웹 localStorage는 사용자가 직접 고칠 수 있고,
+    // 저장 포맷이 바뀌면 구버전 레코드도 남는다.
     return parsed.filter(
       (s): s is Stamp =>
         typeof s?.facilityId === 'number' &&
         typeof s?.sido === 'string' &&
-        typeof s?.sigungu === 'string',
+        typeof s?.sigungu === 'string' &&
+        Array.isArray(s?.petIds) &&
+        typeof s?.createdAt === 'string',
     );
   } catch {
     return [];

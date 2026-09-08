@@ -9,11 +9,13 @@ import type { Stamp } from '@/data/stamps';
  */
 const KEY = 'freepets.stamps';
 
-export async function saveStamps(stamps: Stamp[]): Promise<void> {
+/** 저장 결과를 돌려준다(네이티브 구현과 같은 계약). 사생활 보호 모드·용량 초과에서 실패한다. */
+export async function saveStamps(stamps: Stamp[]): Promise<boolean> {
   try {
     window.localStorage.setItem(KEY, JSON.stringify(stamps));
+    return true;
   } catch {
-    // 사생활 보호 모드·저장 용량 초과 등. 이번 세션은 메모리로 계속 쓴다.
+    return false;
   }
 }
 
@@ -23,11 +25,16 @@ export async function loadStamps(): Promise<Stamp[]> {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
+    // 화면이 실제로 역참조하는 필드까지 본다. `petIds`가 없으면 홈의 `s.petIds.includes(...)`가
+    // TypeError를 내고 **홈 탭 전체가 죽는다** — 웹 localStorage는 사용자가 직접 고칠 수 있고,
+    // 저장 포맷이 바뀌면 구버전 레코드도 남는다.
     return parsed.filter(
       (s): s is Stamp =>
         typeof s?.facilityId === 'number' &&
         typeof s?.sido === 'string' &&
-        typeof s?.sigungu === 'string',
+        typeof s?.sigungu === 'string' &&
+        Array.isArray(s?.petIds) &&
+        typeof s?.createdAt === 'string',
     );
   } catch {
     return [];

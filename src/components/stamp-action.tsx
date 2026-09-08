@@ -31,7 +31,7 @@ export function StampAction({
 }) {
   const p = usePalette();
   const router = useRouter();
-  const { stamps, stampRegions, addStamp } = useAppStore();
+  const { stamps, stampRegions, addStamp, reloadStampRegions } = useAppStore();
 
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -77,11 +77,8 @@ export function StampAction({
       const made = addStamp({ facilityId, facilityName, address, petIds, photoUri });
       if (!made) {
         // 주소에서 지역을 못 찾았다. 억지로 추측해 엉뚱한 지역에 찍지 않는다.
-        setMessage(
-          stampRegions.length === 0
-            ? '지역 정보를 불러오지 못해 도장을 찍지 못했어요. 잠시 후 다시 시도해 주세요.'
-            : '이 시설의 주소에서 지역을 알아내지 못했어요.',
-        );
+        // 트리가 없는 경우는 버튼 단계에서 이미 걸러진다. 여기 오는 건 주소를 못 읽은 것이다.
+        setMessage('이 시설의 주소에서 지역을 알아내지 못했어요.');
         return;
       }
       setMessage(`${made.sido} ${made.sigungu} 도장을 찍었어요!`);
@@ -93,29 +90,40 @@ export function StampAction({
   };
 
   if (already) {
+    // 방금 찍었으면 그 결과를 여기서 보여준다. 도장을 찍는 순간 이 분기로 넘어오기 때문에,
+    // 메시지를 아래쪽에만 두면 **성공 문구가 한 프레임도 안 보이고** 실패만 보이게 된다.
+    const justStamped = message !== null;
     return (
-      <Pressable
-        onPress={() => router.push('/stamps')}
-        style={({ pressed }) => [
-          styles.button,
-          { borderColor: p.line, backgroundColor: pressed ? p.surface : p.card },
-        ]}>
-        <View style={[styles.icon, { backgroundColor: p.surface }]}>
-          <Ionicons name="checkmark-circle" size={19} color={p.accent} />
-        </View>
-        <View style={styles.texts}>
-          <Text style={[styles.title, { color: p.ink }]}>이미 도장을 찍은 곳이에요</Text>
-          <Text style={[styles.body, { color: p.muted }]}>도장첩에서 모은 지역을 확인해 보세요</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={p.muted} />
-      </Pressable>
+      <View style={styles.wrap}>
+        <Pressable
+          onPress={() => router.push('/stamps')}
+          style={({ pressed }) => [
+            styles.button,
+            { borderColor: justStamped ? p.accent : p.line, backgroundColor: pressed ? p.surface : p.card },
+          ]}>
+          <View style={[styles.icon, { backgroundColor: justStamped ? p.accentSoft : p.surface }]}>
+            <Ionicons name="checkmark-circle" size={19} color={p.accent} />
+          </View>
+          <View style={styles.texts}>
+            <Text style={[styles.title, { color: p.ink }]}>
+              {justStamped ? message : '이미 도장을 찍은 곳이에요'}
+            </Text>
+            <Text style={[styles.body, { color: p.muted }]}>도장첩에서 모은 지역을 확인해 보세요</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={p.muted} />
+        </Pressable>
+      </View>
     );
   }
+
+  // ④ 지역 트리를 못 받았으면 사진부터 찍게 하지 않는다. 촬영까지 시킨 뒤 실패를 알리면
+  // 사용자가 한 일이 통째로 버려진다.
+  const regionsMissing = stampRegions.length === 0;
 
   return (
     <View style={styles.wrap}>
       <Pressable
-        onPress={stamp}
+        onPress={regionsMissing ? () => reloadStampRegions() : stamp}
         disabled={running}
         style={({ pressed }) => [
           styles.button,
@@ -130,10 +138,16 @@ export function StampAction({
         </View>
         <View style={styles.texts}>
           <Text style={[styles.title, { color: p.ink }]}>
-            {running ? '인증샷을 확인하고 있어요' : '여권 도장 찍기'}
+            {running
+              ? '인증샷을 확인하고 있어요'
+              : regionsMissing
+                ? '지역 정보를 불러오지 못했어요'
+                : '여권 도장 찍기'}
           </Text>
           <Text style={[styles.body, { color: p.muted }]}>
-            인증샷을 남기면 이 지역 도장이 도장첩에 쌓여요
+            {regionsMissing
+              ? '눌러서 다시 불러오면 도장을 찍을 수 있어요'
+              : '인증샷을 남기면 이 지역 도장이 도장첩에 쌓여요'}
           </Text>
         </View>
         {!running && <Ionicons name="chevron-forward" size={18} color={p.accent} />}

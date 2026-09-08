@@ -1,8 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { Stack } from 'expo-router';
-import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -26,7 +26,7 @@ import { useAppStore } from '@/store/app-store';
  */
 export default function StampsScreen() {
   const p = usePalette();
-  const { stamps, stampRegions } = useAppStore();
+  const { stamps, stampRegions, reloadStampRegions, stampSaveFailed } = useAppStore();
 
   const progress = useMemo(() => groupBySido(stamps, stampRegions), [stamps, stampRegions]);
   const badges = useMemo(() => badgeState(stamps), [stamps]);
@@ -54,6 +54,13 @@ export default function StampsScreen() {
               <Text style={[styles.summaryLabel, { color: p.muted }]}>이번 달</Text>
             </View>
           </View>
+
+          {/* 기기에 못 남겼으면 알려야 한다. 화면에만 보이는 도장은 앱을 다시 켜면 사라진다 */}
+          {stampSaveFailed && (
+            <Text style={[styles.retryText, { color: p.muted }]}>
+              도장을 이 기기에 저장하지 못했어요. 앱을 다시 켜면 사라질 수 있어요.
+            </Text>
+          )}
 
           {/* 뱃지 — 못 받은 것도 흐리게 보여준다. 다음 목표가 보여야 다음 도장을 찍는다 */}
           <Text style={[styles.sectionTitle, { color: p.ink }]}>뱃지</Text>
@@ -86,6 +93,23 @@ export default function StampsScreen() {
 
           {/* 지역별 진도 */}
           <Text style={[styles.sectionTitle, { color: p.ink }]}>지역별 진도</Text>
+          {/*
+            트리를 못 받으면 분모가 사라져 "3 / 25"가 조용히 "3곳"이 된다. 그대로 두면
+            사용자는 서버 장애를 "원래 이런 화면"으로 읽는다. 실패를 실패라고 말한다.
+          */}
+          {stampRegions.length === 0 && stamps.length > 0 && (
+            <Pressable
+              onPress={() => reloadStampRegions()}
+              style={({ pressed }) => [
+                styles.retryRow,
+                { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
+              ]}>
+              <Ionicons name="refresh" size={15} color={p.muted} />
+              <Text style={[styles.retryText, { color: p.muted }]}>
+                지역 정보를 못 불러와 진도를 계산하지 못했어요. 눌러서 다시 시도하기
+              </Text>
+            </Pressable>
+          )}
           {progress.length === 0 ? (
             <View style={[styles.empty, { borderColor: p.line, backgroundColor: p.card }]}>
               <Ionicons name="footsteps-outline" size={22} color={p.muted} />
@@ -132,6 +156,12 @@ export default function StampsScreen() {
               {stamps.slice(0, 12).map((s) => (
                 <StampRow key={`${s.facilityId}-${s.createdAt}`} stamp={s} />
               ))}
+              {/* 잘린 것을 말하지 않으면 13번째부터는 사라진 것처럼 보인다 */}
+              {stamps.length > 12 && (
+                <Text style={[styles.retryText, { color: p.muted }]}>
+                  외 {stamps.length - 12}개는 지역별 진도에 반영돼 있어요
+                </Text>
+              )}
             </>
           )}
         </View>
@@ -142,6 +172,9 @@ export default function StampsScreen() {
 
 function StampRow({ stamp }: { stamp: Stamp }) {
   const p = usePalette();
+  // 웹 피커가 주는 `blob:` URI는 새로고침하면 죽고, 네이티브 캐시 경로도 OS가 회수할 수 있다.
+  // 저장된 문자열만 보고 <Image>를 그리면 빈 사각형이 남아 사진 없는 도장보다 더 망가져 보인다.
+  const [photoBroken, setPhotoBroken] = useState(false);
   // 저장된 값이 깨져도 줄 하나가 비칠 뿐 목록은 살린다
   const d = new Date(stamp.createdAt);
   const date = Number.isNaN(d.getTime())
@@ -150,8 +183,13 @@ function StampRow({ stamp }: { stamp: Stamp }) {
 
   return (
     <View style={[styles.stampRow, { borderColor: p.line, backgroundColor: p.card }]}>
-      {stamp.photoUri ? (
-        <Image source={{ uri: stamp.photoUri }} style={styles.thumb} contentFit="cover" />
+      {stamp.photoUri && !photoBroken ? (
+        <Image
+          source={{ uri: stamp.photoUri }}
+          style={styles.thumb}
+          contentFit="cover"
+          onError={() => setPhotoBroken(true)}
+        />
       ) : (
         <View style={[styles.thumb, styles.thumbEmpty, { backgroundColor: p.surface }]}>
           <Ionicons name="paw" size={16} color={p.muted} />
@@ -212,6 +250,11 @@ const styles = StyleSheet.create({
     alignItems: 'center', gap: 6,
     borderWidth: 1, borderRadius: Radius.md, padding: Spacing.xl,
   },
+  retryRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: 1, borderRadius: Radius.md, paddingVertical: 10, paddingHorizontal: Spacing.lg,
+  },
+  retryText: { fontSize: 11.5, flexShrink: 1 },
   emptyTitle: { fontSize: 13.5, fontWeight: '800' },
   emptyBody: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
 

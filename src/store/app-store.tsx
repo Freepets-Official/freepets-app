@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { clearSession, loadSession, saveSession } from '@/lib/token-store';
-import { loadStamps, saveStamps } from '@/lib/stamp-store';
+import { clearStamps, loadStamps, saveStamps } from '@/lib/stamp-store';
 
 import type { ThemeMode } from '@/constants/theme';
 import { CHECK_RANK, buildChecklist, judgeGroup } from '@/data/judge';
@@ -339,7 +339,6 @@ interface AppStore {
   reportedReviewIds: Set<number>;
   reportReview: (reviewId: number, reason: ReviewReportReason, facilityId?: number) => void;
 
-  /** 반려동물 개인 만족도 (사업자 리뷰와 분리, 본인만 조회) */
   /** 여권 도장 (게임 요소 1단계). 서버 API가 없어 기기에만 남는다 */
   stamps: Stamp[];
   /**
@@ -355,7 +354,12 @@ interface AppStore {
   }) => Stamp | null;
   /** 도장첩이 지역 이름을 알아내는 데 쓰는 지역 트리. 못 받았으면 빈 배열 */
   stampRegions: CourseRegion[];
+  /** 지역 트리 재조회. 못 받으면 도장을 찍을 수 없어 화면에 재시도 경로가 필요하다 */
+  reloadStampRegions: () => Promise<void>;
+  /** 도장을 기기에 남기지 못했다. 이번 세션에는 보이지만 앱을 다시 켜면 사라진다 */
+  stampSaveFailed: boolean;
 
+  /** 반려동물 개인 만족도 (사업자 리뷰와 분리, 본인만 조회) */
   satisfactions: PetSatisfaction[];
   satisfactionOf: (petId: number, facilityId: number) => number | null;
   /** 슬라이더 값 변경 — 로컬은 즉시, 서버 POST(upsert)는 드래그가 멈춘 뒤 디바운스 */
@@ -1325,6 +1329,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
     void clearSession(); // 남겨두면 다음 실행에 로그아웃한 계정으로 되살아난다
+    // 도장은 서버가 아니라 기기에 있어 계정과 묶여 있지 않다. 안 지우면 다음에 로그인한
+    // 사람에게 앞사람의 도장첩·뱃지가 그대로 보인다. 대신 같은 사람이 다시 로그인해도
+    // 도장은 돌아오지 않는다 — 2단계에서 서버로 옮기면 해소된다.
+    setStamps([]);
+    void clearStamps();
   }, []);
 
   const selectProfile = useCallback((kind: ProfileKind) => {
@@ -1366,19 +1375,43 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // ── 여권 도장 (게임 요소 1단계) ─────────────────────────────────────
   // 기기에서 복원한다. 실패해도 빈 도장첩으로 시작할 뿐 앱을 막지 않는다.
+  //
+  // `stampsLoaded`는 **복원이 끝나기 전에 저장하지 않기 위한** 표시다. 없으면 아래 저장
+  // 이펙트가 초기 빈 배열을 그대로 기기에 써서 복원 대상을 지워버린다.
+  const stampsLoaded = useRef(false);
   useEffect(() => {
     let alive = true;
     loadStamps().then((list) => {
-      if (alive) setStamps(list);
+      if (!alive) return;
+      setStamps(list);
+      stampsLoaded.current = true;
     });
     return () => {
       alive = false;
     };
   }, []);
 
+  /**
+   * 도장을 기기에 남긴다. **상태가 바뀔 때마다 따라 쓴다** — 도장을 만드는 쪽이 직접
+   * 저장하면 그쪽이 들고 있던 배열이 옛 스냅샷일 때 디스크만 뒤처진다.
+   *
+   * 저장 실패는 삼키지 않는다. 이 저장소는 한계가 빠듯해서(`stamp-store.ts` 참고) 실제로
+   * 실패할 수 있고, 그때 화면이 계속 성공이라고 말하면 사용자는 앱을 다시 켠 뒤에야 안다.
+   */
+  const [stampSaveFailed, setStampSaveFailed] = useState(false);
+  useEffect(() => {
+    if (!stampsLoaded.current) return;
+    let alive = true;
+    saveStamps(stamps).then((ok) => {
+      if (alive) setStampSaveFailed(!ok);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [stamps]);
+
   // 지역 트리는 도장을 찍을 때 주소를 해석하는 데 쓴다. 로그인 없이 열리는 API다.
-  // 못 받으면 도장 찍기가 막히므로(지역을 모르면 안 찍는다) 실패를 조용히 넘기지 않고
-  // 빈 배열로 두되, 화면이 그 상태를 안내한다.
+  // 못 받으면 도장을 아예 못 찍으므로, 실패를 조용히 넘기지 않고 화면이 재시도 경로를 준다.
   useEffect(() => {
     let alive = true;
     coursesApi
@@ -1386,12 +1419,32 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       .then((r) => {
         if (alive) setStampRegions(r);
       })
-      .catch(() => {});
+      .catch(() => {
+        // 빈 채로 남는 것이 실패의 표시다. 화면(도장 버튼·도장첩)이 그 상태를 안내한다.
+      });
     return () => {
       alive = false;
     };
   }, []);
 
+  /** 지역 트리 재조회. 화면의 재시도 버튼이 쓴다 — 없으면 앱을 다시 켤 때까지 도장을 못 찍는다. */
+  const reloadStampRegions = useCallback(async () => {
+    try {
+      setStampRegions(await coursesApi.regions());
+    } catch {
+      // 실패하면 빈 배열이 그대로 남는다. 화면이 계속 재시도를 안내한다.
+    }
+  }, []);
+
+  /**
+   * 도장을 찍는다.
+   *
+   * **반드시 함수형 업데이트로 쓴다.** 이 함수가 불리는 시점과 실제 실행 사이에는 카메라
+   * 대기와 목 판별을 합쳐 1초 넘는 틈이 있다. 그 사이에 기기에서 도장을 복원하는
+   * `loadStamps`가 끝나면, 캡처된 옛 `stamps`(빈 배열)로 덮어써서 **복원된 도장이 상태에서도
+   * 디스크에서도 통째로 사라진다.** 로컬이 유일한 보관처라 복구 경로가 없다.
+   * 중복 검사도 같은 이유로 업데이터 안에서 해야 한다.
+   */
   const addStamp = useCallback(
     (input: {
       facilityId: number;
@@ -1400,10 +1453,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       petIds: number[];
       photoUri: string | null;
     }): Stamp | null => {
-      // 이미 찍은 시설이면 그대로 둔다. 같은 곳을 반복해 세면 "정복"이 아니게 된다.
-      const existing = stamps.find((s2) => s2.facilityId === input.facilityId);
-      if (existing) return existing;
-
       const region = matchRegion(input.address, stampRegions);
       // 지역을 모르면 안 찍는다. 잘못 찍힌 도장은 사용자가 지울 방법이 없다.
       if (!region) return null;
@@ -1417,13 +1466,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         photoUri: input.photoUri,
         createdAt: new Date().toISOString(),
       };
-      const next = [stamp, ...stamps];
-      setStamps(next);
-      // 저장 실패는 이번 세션의 도장첩을 막지 않는다(stamp-store가 삼킨다)
-      saveStamps(next);
+
+      setStamps((prev) => {
+        // 이미 찍은 시설이면 그대로 둔다. 같은 곳을 반복해 세면 "정복"이 아니게 된다.
+        if (prev.some((s2) => s2.facilityId === input.facilityId)) return prev;
+        return [stamp, ...prev];
+      });
       return stamp;
     },
-    [stamps, stampRegions],
+    [stampRegions],
   );
 
   const value = useMemo(
@@ -1458,6 +1509,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       stamps,
       addStamp,
       stampRegions,
+      reloadStampRegions,
+      stampSaveFailed,
       satisfactions,
       satisfactionOf,
       setSatisfaction,
@@ -1537,6 +1590,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       stamps,
       addStamp,
       stampRegions,
+      reloadStampRegions,
+      stampSaveFailed,
       satisfactions,
       satisfactionOf,
       setSatisfaction,

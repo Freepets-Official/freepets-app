@@ -40,8 +40,9 @@ export function regionKey(sido: string, sigungu: string): string {
  *
  * 세종특별자치시는 시도와 시군구가 같은 이름이다(트리에서도 시군구가 자기 자신 하나뿐).
  *
- * 지역을 못 찾으면 `null`을 준다 — 억지로 추측해서 엉뚱한 지역에 도장을 찍는 것보다,
- * 도장을 못 찍는 편이 낫다. 잘못 찍힌 도장은 사용자가 지울 방법이 없다.
+ * **시도든 시군구든 못 찾으면 `null`이다.** 억지로 추측해 엉뚱한 지역에 찍는 것보다 못 찍는
+ * 편이 낫다 — 잘못 찍힌 도장은 사용자가 지울 방법이 없고, 뱃지 수까지 부풀린다.
+ * 예외는 시군구 목록이 비어 있는 시도 하나뿐이다(그 시도가 곧 하나의 지역인 경우).
  */
 export function matchRegion(
   address: string,
@@ -58,8 +59,14 @@ export function matchRegion(
   const sigungu = [...sido.sigungus]
     .sort((a, b) => b.length - a.length)
     .find((s) => address.includes(s));
-  // 시군구를 못 찾아도 시도는 안다. 세종처럼 시군구가 시도와 같은 곳이 있어 시도로 대신한다.
-  return { sido: sido.sido, sigungu: sigungu ?? sido.sido };
+  if (sigungu) return { sido: sido.sido, sigungu };
+
+  // 시군구 목록이 아예 비어 있는 시도는 그 시도가 곧 하나의 지역이다. 그때만 시도로 대신한다.
+  if (sido.sigungus.length === 0) return { sido: sido.sido, sigungu: sido.sido };
+
+  // 목록이 있는데 못 찾았다면 모르는 것이다. 시도 이름을 시군구 자리에 넣으면
+  // "경기도 안의 경기도"라는 없는 지역이 생기고, 그 가짜 지역이 뱃지 수를 부풀린다.
+  return null;
 }
 
 /** 도장첩의 한 줄 — 시도 하나와 그 안에서 모은 시군구. */
@@ -67,7 +74,10 @@ export interface RegionProgress {
   sido: string;
   /** 도장을 찍은 시군구 (이름순) */
   collected: string[];
-  /** 이 시도의 전체 시군구 수. 지역 트리를 못 받았으면 0 */
+  /**
+   * 분모로 쓰는 시군구 수. **전체 행정구역이 아니라 서버 지역 트리에 있는 수**다.
+   * 시설 데이터가 늘면 분모도 늘어 진도가 뒤로 갈 수 있다. 트리를 못 받았으면 0.
+   */
   total: number;
   /** 0~1. total이 0이면 0 */
   ratio: number;
@@ -133,7 +143,11 @@ export function badgeState(stamps: Stamp[]): {
   };
 }
 
-/** 이번 달에 찍은 도장. 계획의 "이번 달 함께 간 곳 N"이다. */
+/**
+ * 이번 달에 찍은 도장. 계획의 "이번 달 함께 간 곳 N"이다.
+ * `now`를 인자로 받는 이유는 호출부가 렌더 시점을 고정하기 때문이다 — 앱을 켜둔 채
+ * 월이 바뀌면 값이 갱신되지 않는다. 그 정도는 다음 렌더에 맞춰지므로 감수한다.
+ */
 export function stampsThisMonth(stamps: Stamp[], now = new Date()): Stamp[] {
   const y = now.getFullYear();
   const m = now.getMonth();
