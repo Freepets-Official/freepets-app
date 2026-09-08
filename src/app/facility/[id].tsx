@@ -14,6 +14,7 @@ import { OwnerPromotionSection } from '@/components/owner-promotion-section';
 import { PawBadge } from '@/components/paw-badge';
 import { ReviewSection } from '@/components/review-section';
 import { SatisfactionSection } from '@/components/satisfaction-section';
+import { StampAction } from '@/components/stamp-action';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
@@ -571,6 +572,21 @@ export default function FacilityDetailScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={p.accent} />
               </Pressable>
+            </Animated.View>
+          )}
+
+          {/*
+            여권 도장 — 판별을 한 뒤에만 보여준다. 거부된 곳에는 다녀왔을 리 없고,
+            판별 없이 도장부터 찍게 하면 "다녀온 기록"이 아니라 아무 데나 찍는 버튼이 된다.
+          */}
+          {check.overall !== 'DENIED' && (
+            <Animated.View entering={FadeInDown.duration(320).delay(160)}>
+              <StampAction
+                facilityId={facility.facilityId}
+                facilityName={facility.name}
+                address={facility.address ?? ''}
+                petIds={check.petIds}
+              />
             </Animated.View>
           )}
 

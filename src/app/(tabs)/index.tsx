@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -20,6 +20,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { FACILITIES } from '@/data/mock';
 import { CATEGORY_LABEL, satisfactionMood, type Pet } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
+import { uniqueRegionCount } from '@/data/stamps';
 import { useAppStore } from '@/store/app-store';
 
 function formatDate(iso: string): string {
@@ -71,7 +72,9 @@ function NotificationBell({
 export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { pets, checks, plannedDenialAlerts, upcomingVaccinations } = useAppStore();
+  const { pets, checks, plannedDenialAlerts, upcomingVaccinations, stamps } = useAppStore();
+  // 뱃지 기준과 같은 값(서로 다른 시군구 수)을 쓴다 — 홈과 도장첩이 다른 숫자를 보이면 안 된다
+  const stampCount = useMemo(() => uniqueRegionCount(stamps), [stamps]);
   const alerts = plannedDenialAlerts();
   const vax = upcomingVaccinations();
 
@@ -107,6 +110,30 @@ export default function HomeScreen() {
       ) : (
         <PetStack pets={pets} />
       )}
+
+      {/*
+        여권 도장첩 — 모은 지역 수를 캡션으로 보여준다. 진도가 보여야 다음 도장을 찍는다.
+        도장이 없어도 카드는 남긴다. 기능이 있다는 걸 알아야 첫 도장을 찍는다.
+      */}
+      <Pressable
+        onPress={() => router.push('/stamps')}
+        style={({ pressed }) => [
+          styles.stampEntry,
+          { borderColor: p.line, backgroundColor: p.card, opacity: pressed ? 0.92 : 1 },
+        ]}>
+        <View style={[styles.stampEntryIcon, { backgroundColor: p.accentSoft }]}>
+          <Ionicons name="footsteps" size={18} color={p.accent} />
+        </View>
+        <View style={styles.stampEntryTexts}>
+          <Text style={[styles.stampEntryTitle, { color: p.ink }]}>여권 도장첩</Text>
+          <Text style={[styles.stampEntryBody, { color: p.muted }]}>
+            {stampCount > 0
+              ? `${stampCount}개 지역을 모았어요`
+              : '다녀온 곳에서 인증샷을 남기고 지역을 모아보세요'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={p.muted} />
+      </Pressable>
 
       {checks.length > 0 && (
         <>
@@ -281,15 +308,17 @@ function petProgress(xpRaw: number) {
 function PetCardBody({ pet }: { pet: Pet }) {
   const p = usePalette();
   const router = useRouter();
-  const { topPlacesForPet, satisfactions, checks } = useAppStore();
+  const { topPlacesForPet, satisfactions, checks, stamps } = useAppStore();
   const top = topPlacesForPet(pet.petId, 3);
 
   const medal = ['🥇', '🥈', '🥉'];
 
-  // 활동 기반 XP(임시): 만족도 남긴 곳 ×12 + 판별 함께한 횟수 ×6
+  // 활동 기반 XP(임시): 만족도 남긴 곳 ×12 + 판별 함께한 횟수 ×6 + 여권 도장 ×15
+  // 도장이 가장 큰 이유는 실제로 다녀와야 찍히기 때문이다 — 손이 제일 많이 간 활동이다
   const visits = satisfactions.filter((s) => s.petId === pet.petId).length;
   const judged = checks.filter((c) => c.petIds.includes(pet.petId)).length;
-  const { level, into, step, ratio, title } = petProgress(visits * 12 + judged * 6);
+  const stamped = stamps.filter((s) => s.petIds.includes(pet.petId)).length;
+  const { level, into, step, ratio, title } = petProgress(visits * 12 + judged * 6 + stamped * 15);
 
   return (
     <>
@@ -509,6 +538,18 @@ const styles = StyleSheet.create({
     paddingVertical: 56,
   },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  stampEntry: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, marginTop: 4,
+  },
+  stampEntryIcon: {
+    width: 36, height: 36, borderRadius: Radius.sm,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stampEntryTexts: { flexShrink: 1, gap: 2 },
+  stampEntryTitle: { fontSize: 13.5, fontWeight: '800' },
+  stampEntryBody: { fontSize: 11.5 },
+
   histList: { gap: Spacing.sm },
   histCard: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.lg, gap: 5 },
   histTop: {

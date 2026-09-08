@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { clearSession, loadSession, saveSession } from '@/lib/token-store';
+import { loadStamps, saveStamps } from '@/lib/stamp-store';
 
 import type { ThemeMode } from '@/constants/theme';
 import { CHECK_RANK, buildChecklist, judgeGroup } from '@/data/judge';
@@ -10,6 +11,7 @@ import {
   aiApi,
   denialApi,
   facilitiesApi,
+  coursesApi,
   petsApi,
   reviewsApi,
   satisfactionApi,
@@ -19,9 +21,11 @@ import {
 import type { Coords } from '@/lib/location';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, pawGradeOf, vaccinationDday } from '@/data/types';
+import { matchRegion, type Stamp } from '@/data/stamps';
 import type {
   CalendarEvent,
   Confidence,
+  CourseRegion,
   ConfidenceSource,
   Facility,
   FacilityReviewData,
@@ -336,6 +340,22 @@ interface AppStore {
   reportReview: (reviewId: number, reason: ReviewReportReason, facilityId?: number) => void;
 
   /** 반려동물 개인 만족도 (사업자 리뷰와 분리, 본인만 조회) */
+  /** 여권 도장 (게임 요소 1단계). 서버 API가 없어 기기에만 남는다 */
+  stamps: Stamp[];
+  /**
+   * 도장을 찍는다. 지역을 못 알아내면 `null`을 준다 — 엉뚱한 지역에 찍는 것보다 안 찍는 게 낫다.
+   * 같은 시설에 이미 찍혀 있으면 그 도장을 그대로 돌려주고 새로 만들지 않는다.
+   */
+  addStamp: (input: {
+    facilityId: number;
+    facilityName: string;
+    address: string;
+    petIds: number[];
+    photoUri: string | null;
+  }) => Stamp | null;
+  /** 도장첩이 지역 이름을 알아내는 데 쓰는 지역 트리. 못 받았으면 빈 배열 */
+  stampRegions: CourseRegion[];
+
   satisfactions: PetSatisfaction[];
   satisfactionOf: (petId: number, facilityId: number) => number | null;
   /** 슬라이더 값 변경 — 로컬은 즉시, 서버 POST(upsert)는 드래그가 멈춘 뒤 디바운스 */
@@ -441,6 +461,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [reportedReviewIds, setReportedReviewIds] = useState<Set<number>>(new Set());
   // 시설 상세 진입 시 그 시설분을 서버에서 채운다(실서비스엔 목 시드가 없다).
   const [satisfactions, setSatisfactions] = useState<PetSatisfaction[]>([]);
+  // 여권 도장(게임 요소 1단계). 서버 API가 없어 기기에만 남는다.
+  const [stamps, setStamps] = useState<Stamp[]>([]);
+  // 도장의 지역 이름을 알아내는 트리. 주소 문자열만으로는 "고양시 덕양구"를 못 가른다.
+  const [stampRegions, setStampRegions] = useState<CourseRegion[]>([]);
   // 반려동물별 좋아한 곳 TOP3 (홈) — 서버가 시설명·카테고리까지 계산해 내려준다
   const [topPlaces, setTopPlaces] = useState<Record<number, TopPlace[]>>({});
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -1340,6 +1364,68 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       .catch(() => {});
   }, []);
 
+  // ── 여권 도장 (게임 요소 1단계) ─────────────────────────────────────
+  // 기기에서 복원한다. 실패해도 빈 도장첩으로 시작할 뿐 앱을 막지 않는다.
+  useEffect(() => {
+    let alive = true;
+    loadStamps().then((list) => {
+      if (alive) setStamps(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 지역 트리는 도장을 찍을 때 주소를 해석하는 데 쓴다. 로그인 없이 열리는 API다.
+  // 못 받으면 도장 찍기가 막히므로(지역을 모르면 안 찍는다) 실패를 조용히 넘기지 않고
+  // 빈 배열로 두되, 화면이 그 상태를 안내한다.
+  useEffect(() => {
+    let alive = true;
+    coursesApi
+      .regions()
+      .then((r) => {
+        if (alive) setStampRegions(r);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const addStamp = useCallback(
+    (input: {
+      facilityId: number;
+      facilityName: string;
+      address: string;
+      petIds: number[];
+      photoUri: string | null;
+    }): Stamp | null => {
+      // 이미 찍은 시설이면 그대로 둔다. 같은 곳을 반복해 세면 "정복"이 아니게 된다.
+      const existing = stamps.find((s2) => s2.facilityId === input.facilityId);
+      if (existing) return existing;
+
+      const region = matchRegion(input.address, stampRegions);
+      // 지역을 모르면 안 찍는다. 잘못 찍힌 도장은 사용자가 지울 방법이 없다.
+      if (!region) return null;
+
+      const stamp: Stamp = {
+        facilityId: input.facilityId,
+        facilityName: input.facilityName,
+        sido: region.sido,
+        sigungu: region.sigungu,
+        petIds: input.petIds,
+        photoUri: input.photoUri,
+        createdAt: new Date().toISOString(),
+      };
+      const next = [stamp, ...stamps];
+      setStamps(next);
+      // 저장 실패는 이번 세션의 도장첩을 막지 않는다(stamp-store가 삼킨다)
+      saveStamps(next);
+      return stamp;
+    },
+    [stamps, stampRegions],
+  );
+
   const value = useMemo(
     () => ({
       myUserId: MY_USER_ID,
@@ -1369,6 +1455,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       myDenialOf,
       reportedReviewIds,
       reportReview,
+      stamps,
+      addStamp,
+      stampRegions,
       satisfactions,
       satisfactionOf,
       setSatisfaction,
@@ -1445,6 +1534,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       myDenialOf,
       reportedReviewIds,
       reportReview,
+      stamps,
+      addStamp,
+      stampRegions,
       satisfactions,
       satisfactionOf,
       setSatisfaction,
