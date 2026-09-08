@@ -521,9 +521,12 @@ export const INITIAL_REPORTS: Report[] = [
  * 테라로사(시설 10)를 이미 판별해 둔 상태로 두면, 그 시설에 들어온 거부 제보(INITIAL_REPORTS)와
  * 맞물려 홈에서 "가려던 곳에 거부가 떴어요" 알림이 바로 보인다. 실제로는 사용자의 실제 판별 이력.
  */
+// checkId가 **음수**인 것은 서버에 없는 로컬 전용 판별이라는 뜻이다.
+// 서버 이력의 checkId는 1부터 올라가므로 양수를 쓰면 합칠 때 엉뚱한 항목끼리 매칭된다.
+// (반려동물의 임시 id를 음수로 두는 것과 같은 규칙)
 export const INITIAL_CHECKS: PetCheck[] = [
   {
-    checkId: 1,
+    checkId: -1,
     facilityId: mockId(10), // 테라로사 커피공장 — 판별받고 가려던 곳
     petIds: [1, 2],
     verdicts: [

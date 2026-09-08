@@ -624,6 +624,27 @@ type ServerAiCheck = {
     | null;
 };
 
+/**
+ * 서버 시각을 절대 시각으로 고친다.
+ *
+ * 서버는 `2026-09-07T16:07:22.634035`처럼 **타임존을 빼고 UTC**를 준다. 그대로
+ * `new Date()`에 넣으면 자바스크립트가 기기 시간대로 읽어서, 한국 기기에서 9시간
+ * 어긋난다(실측: KST 01:07에 만든 판별이 16:07로 기록됨). 오프셋이 이미 붙어 있으면
+ * 건드리지 않는다 — 서버가 나중에 제대로 내려줘도 그대로 동작한다.
+ */
+function toAbsoluteIso(raw: string): string {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/.test(raw) ? raw : `${raw}Z`;
+}
+
+/** 이력 조회가 주는 만큼만 담은 판별 요약. 상세(verdicts·checklist·tips)는 서버에 없다 */
+export type PetCheckSummary = {
+  checkId: number;
+  facilityId: number;
+  petIds: number[];
+  overall: CheckResult;
+  createdAt: string;
+};
+
 export const aiApi = {
   /**
    * 코스 일괄 판별. 스톱마다 낱개 판별(`/ai/check`)과 **동일한 규칙**을 쓴다 —
@@ -703,6 +724,52 @@ export const aiApi = {
     }
 
     return { checkId: r.checkId, facilityId: r.facilityId, overall: r.overall, verdicts };
+  },
+
+  /**
+   * 내 판별 이력 — **요약만** 온다. 아이별 판별(`verdicts`)과 체크리스트·팁은 담기지 않고,
+   * `checkId`로 상세를 되찾는 API도 없다(명세에 미구현으로 명시).
+   *
+   * 그래서 이 함수가 돌려주는 항목은 "언제 어느 시설을 어떤 아이들로 판별했고 결과가
+   * 무엇이었나"까지다. 출입증처럼 아이별 근거가 필요한 화면은 이 이력만으로는 그릴 수 없다.
+   *
+   * `offset`은 서버 제약상 **`limit`의 배수**여야 한다(아니면 400).
+   */
+  history: async (
+    opts: { facilityId?: number; limit?: number; offset?: number } = {},
+  ): Promise<{ items: PetCheckSummary[]; total: number }> => {
+    const limit = opts.limit ?? 20;
+    const offset = opts.offset ?? 0;
+    // 서버 제약을 여기서 막는다. 어기면 400이 오는데, 그때는 이미 왕복을 한 뒤라
+    // 화면엔 원인 없는 실패로만 보인다.
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      throw new ApiError('이력 조회 개수는 1~100 사이여야 해요.');
+    }
+    if (!Number.isInteger(offset) || offset < 0 || offset % limit !== 0) {
+      throw new ApiError('이력 조회 위치가 올바르지 않아요.');
+    }
+    const q = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (opts.facilityId != null) q.set('facilityId', String(opts.facilityId));
+
+    const r = await request<{
+      items: {
+        checkId: number;
+        facilityId: number;
+        petIds: number[] | null;
+        overall: CheckResult;
+        createdAt: string;
+      }[] | null;
+      total: number | null;
+    }>('GET', `/api/v1/pet-checks?${q.toString()}`, { auth: true });
+
+    const items = (r.items ?? []).map((it) => ({
+      checkId: it.checkId,
+      facilityId: it.facilityId,
+      petIds: it.petIds ?? [],
+      overall: it.overall,
+      createdAt: toAbsoluteIso(it.createdAt),
+    }));
+    return { items, total: r.total ?? items.length };
   },
 };
 
