@@ -37,14 +37,25 @@ export default function PassportScreen() {
 
   const pageWidth = Math.min(width, MaxContentWidth);
 
-  if (!facility || !check) {
+  // 아이별 판별 근거가 있어야 출입증이 된다. 서버에서 불러온 이력은 요약뿐이라
+  // verdicts가 비어 있고(상세 조회 API 없음), 그대로 두면 빈 캐러셀이 그려진다.
+  const cards = (check?.verdicts ?? [])
+    .map((v) => ({ verdict: v, pet: pets.find((x) => x.petId === v.petId) }))
+    .filter((c): c is { verdict: typeof c.verdict; pet: NonNullable<typeof c.pet> } => !!c.pet);
+
+  if (!facility || !check || cards.length === 0) {
+    // 판별한 적이 없는 경우와, 이력은 있는데 상세가 없는 경우를 나눠 안내한다.
+    // 후자는 사용자 잘못이 아니라 다시 판별하면 바로 해결되는 상태다.
+    const stale = !!facility && !!check;
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
         <Stack.Screen options={{ title: '동반 출입증' }} />
         <View style={styles.empty}>
           <Ionicons name="document-text-outline" size={34} color={p.muted} />
           <Text style={[styles.emptyText, { color: p.muted }]}>
-            먼저 AI 출입 판별을 해주세요.{'\n'}판별 결과로 출입증이 만들어져요.
+            {stale
+              ? `판별 기록은 있지만 출입증에 담을 상세 정보가 없어요.\n한 번 더 판별하면 바로 만들어져요.`
+              : `먼저 AI 출입 판별을 해주세요.\n판별 결과로 출입증이 만들어져요.`}
           </Text>
         </View>
       </SafeAreaView>
@@ -52,9 +63,6 @@ export default function PassportScreen() {
   }
 
   const conf = confidenceOf(facility);
-  const cards = check.verdicts
-    .map((v) => ({ verdict: v, pet: pets.find((x) => x.petId === v.petId) }))
-    .filter((c): c is { verdict: typeof c.verdict; pet: NonNullable<typeof c.pet> } => !!c.pet);
 
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.surface }]}>

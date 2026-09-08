@@ -114,7 +114,8 @@ export default function HomeScreen() {
           <View style={styles.histList}>
             {checks.slice(0, 5).map((c) => {
               const facility = FACILITIES.find((f) => f.facilityId === c.facilityId);
-              const names = c.verdicts.map((v) => pets.find((x) => x.petId === v.petId)?.name).filter(Boolean);
+              // petIds를 쓴다 — 서버에서 불러온 이력엔 verdicts가 없어서 이름이 통째로 비어버린다
+              const names = c.petIds.map((id) => pets.find((x) => x.petId === id)?.name).filter(Boolean);
               return (
                 <Pressable
                   key={c.checkId}
@@ -287,7 +288,7 @@ function PetCardBody({ pet }: { pet: Pet }) {
 
   // 활동 기반 XP(임시): 만족도 남긴 곳 ×12 + 판별 함께한 횟수 ×6
   const visits = satisfactions.filter((s) => s.petId === pet.petId).length;
-  const judged = checks.filter((c) => c.verdicts.some((v) => v.petId === pet.petId)).length;
+  const judged = checks.filter((c) => c.petIds.includes(pet.petId)).length;
   const { level, into, step, ratio, title } = petProgress(visits * 12 + judged * 6);
 
   return (
