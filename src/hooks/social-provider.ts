@@ -111,12 +111,21 @@ export async function getProviderToken(provider: SocialProvider): Promise<Provid
     }
 
     case 'apple': {
-      const cred = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
+      // 애플만 취소를 예외로 던진다(다른 셋은 취소를 값으로 알려준다). 그대로 두면
+      // 사용자가 시트를 닫았을 뿐인데 "로그인에 실패했어요"가 뜬다 — 이 함수의 계약은
+      // "창을 닫으면 null"이므로 여기서 취소만 골라내고 나머지 오류는 그대로 올린다.
+      let cred: AppleAuthentication.AppleAuthenticationCredential;
+      try {
+        cred = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+        });
+      } catch (e) {
+        if ((e as { code?: string })?.code === 'ERR_REQUEST_CANCELED') return null;
+        throw e;
+      }
       if (!cred.identityToken) return null;
       // 애플은 이름을 id_token에 담지 않고 **최초 인가 응답에서 한 번만** 준다.
       // 여기서 못 받으면 서버가 나중에 물어볼 방법이 없어, 그 한 번을 반드시 실어 보낸다.
