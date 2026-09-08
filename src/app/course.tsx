@@ -27,6 +27,7 @@ import {
   type CourseTheme,
   type LikedCourse,
   type PresetCourse,
+  type PublicCourse,
   type SavedCourse,
   type SimilarCourse,
 } from '@/data/types';
@@ -86,9 +87,23 @@ export default function CourseScreen() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
+  // ── 둘러보기 (다른 사람이 공개한 코스) ────────────────────────────
+  // 로그인 없이도 보이는 목록이라 내 코스와 따로 싣는다. 실패를 빈 목록과 구분해서
+  // 들고 있어야 "아직 없어요"와 "못 불러왔어요"를 다르게 안내할 수 있다.
+  const [publicCourses, setPublicCourses] = useState<PublicCourse[] | null>(null);
+  const [publicError, setPublicError] = useState(false);
+  const [publicPendingId, setPublicPendingId] = useState<number | null>(null);
+
   /** 목록 새로고침. 실패하면 던진다 — 호출자가 "무엇이 실패했는지" 구분해 안내해야 한다. */
   const reloadSaved = useCallback(async () => {
     setSavedCourses(await coursesApi.list());
+  }, []);
+
+  /** 둘러보기 새로고침. 성공하면 오류 표시를 걷는다 — 한 번 실패한 뒤 복구를 반영하기 위해서다. */
+  const reloadPublic = useCallback(async () => {
+    const r = await coursesApi.publicList({ size: 10 });
+    setPublicCourses(r.items);
+    setPublicError(false);
   }, []);
 
   // 초기 로드는 effect 안에서 직접 받는다. reloadSaved를 그대로 부르면 effect 본문에서
@@ -102,6 +117,29 @@ export default function CourseScreen() {
       })
       .catch(() => {
         // 저장된 코스를 못 받아도 추천·판별은 그대로 쓸 수 있어야 한다
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // 둘러보기는 인증이 없어 로그인 전에도 뜬다. 내 코스와 분리해 실패가 서로를 가리지 않게 한다.
+  useEffect(() => {
+    let active = true;
+    coursesApi
+      .publicList({ size: 10 })
+      .then((r) => {
+        if (active) {
+          setPublicCourses(r.items);
+          setPublicError(false);
+        }
+      })
+      .catch(() => {
+        // 못 불러온 것을 "공개된 코스가 없다"로 보여주면 서비스가 빈 것처럼 읽힌다
+        if (active) {
+          setPublicCourses([]);
+          setPublicError(true);
+        }
       });
     return () => {
       active = false;
@@ -140,6 +178,34 @@ export default function CourseScreen() {
       reloadSaved().catch(() => {});
     } catch {
       setSaveMessage('코스를 삭제하지 못했어요');
+    }
+  };
+
+  /**
+   * 내 코스를 공개/비공개로 바꾼다. 서버 `PUT /courses/{id}`는 부분 수정이 아니라 **전체 교체**라
+   * 이름·설명·스톱을 그대로 다시 실어 보낸다 — 빠뜨리면 코스가 지워진 채로 저장된다.
+   */
+  const togglePublic = async (course: SavedCourse) => {
+    const next = !course.isPublic;
+    setPublicPendingId(course.courseId);
+    setSaveMessage(null);
+    try {
+      const updated = await coursesApi.update(course.courseId, {
+        name: course.name,
+        description: course.description ?? undefined,
+        stopIds: course.stopIds,
+        isPublic: next,
+      });
+      setSavedCourses((prev) => prev.map((c) => (c.courseId === updated.courseId ? updated : c)));
+      setSaveMessage(
+        next ? `'${course.name}'을(를) 공개했어요` : `'${course.name}'을(를) 비공개로 바꿨어요`,
+      );
+      // 방금 공개한 코스가 둘러보기에도 바로 보이게 한다. 실패해도 공개 자체는 성공이다
+      reloadPublic().catch(() => {});
+    } catch (e) {
+      setSaveMessage(e instanceof Error ? e.message : '공개 설정을 바꾸지 못했어요');
+    } finally {
+      setPublicPendingId(null);
     }
   };
 
@@ -499,13 +565,69 @@ export default function CourseScreen() {
                       <Text style={[styles.savedMeta, { color: p.muted, marginLeft: 'auto' }]}>
                         {c.stopIds.length}곳
                       </Text>
-                      <Pressable onPress={() => removeCourse(c.courseId)} hitSlop={8}>
+                      {/* 공개 토글 — 켜면 둘러보기 목록에 뜬다. 되돌릴 수 있으니 확인은 묻지 않는다 */}
+                      {publicPendingId === c.courseId ? (
+                        <ActivityIndicator color={p.muted} size="small" />
+                      ) : (
+                        <Pressable
+                          onPress={() => togglePublic(c)}
+                          hitSlop={8}
+                          accessibilityRole="switch"
+                          accessibilityState={{ checked: c.isPublic }}
+                          accessibilityLabel={c.isPublic ? '코스 비공개로 바꾸기' : '코스 공개하기'}>
+                          <Ionicons
+                            name={c.isPublic ? 'earth' : 'lock-closed-outline'}
+                            size={16}
+                            color={c.isPublic ? p.accent : p.muted}
+                          />
+                        </Pressable>
+                      )}
+                      <Pressable
+                        onPress={() => removeCourse(c.courseId)}
+                        hitSlop={8}
+                        accessibilityLabel="코스 삭제">
                         <Ionicons name="trash-outline" size={16} color={p.muted} />
                       </Pressable>
                     </View>
                   ))}
                 </View>
               )}
+              {/*
+                둘러보기 — 다른 사람이 공개한 코스. 못 불러온 것과 아직 없는 것을 나눠서 안내한다.
+                로딩 중(null)에는 자리만 비워둔다 — 빈 상태를 먼저 보여주면 없는 줄 알고 지나친다.
+              */}
+              {publicCourses !== null && (publicCourses.length > 0 || publicError) && (
+                <View style={styles.presetBlock}>
+                  <Text style={[styles.blockLabel, { color: p.ink }]}>
+                    다른 집사의 코스 둘러보기
+                  </Text>
+                  {publicError ? (
+                    <Text style={[styles.presetStateText, { color: p.muted }]}>
+                      공개 코스를 못 불러왔어요. 잠시 후 다시 시도해 주세요.
+                    </Text>
+                  ) : (
+                    publicCourses.map((c) => (
+                      <View key={c.courseId} style={[styles.savedRow, { borderColor: p.line }]}>
+                        <Ionicons name="earth" size={15} color={p.accent} />
+                        <View style={styles.publicTexts}>
+                          <Text style={[styles.savedName, { color: p.ink }]} numberOfLines={1}>
+                            {c.name}
+                          </Text>
+                          {c.ownerNickname !== '' && (
+                            <Text style={[styles.savedMeta, { color: p.muted }]} numberOfLines={1}>
+                              {c.ownerNickname}
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={[styles.savedMeta, { color: p.muted, marginLeft: 'auto' }]}>
+                          {c.stopIds.length}곳
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+              )}
+
               {saveMessage && (
                 <Text style={[styles.presetStateText, { color: p.muted }]}>{saveMessage}</Text>
               )}
@@ -1172,6 +1294,8 @@ const styles = StyleSheet.create({
   },
   savedName: { fontSize: 13.5, fontWeight: '700', flexShrink: 1 },
   savedMeta: { fontSize: 11.5 },
+  // 공개 코스는 이름 아래에 올린 사람을 함께 보여준다 — 남의 코스라는 게 한눈에 보여야 한다
+  publicTexts: { flexShrink: 1, gap: 1 },
   courseCheckBtn: {
     borderWidth: 1, borderRadius: Radius.md,
     paddingVertical: 9, alignItems: 'center', marginTop: 4,
