@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -91,19 +91,54 @@ export default function CourseScreen() {
   // 로그인 없이도 보이는 목록이라 내 코스와 따로 싣는다. 실패를 빈 목록과 구분해서
   // 들고 있어야 "아직 없어요"와 "못 불러왔어요"를 다르게 안내할 수 있다.
   const [publicCourses, setPublicCourses] = useState<PublicCourse[] | null>(null);
+  const [publicTotal, setPublicTotal] = useState(0);
+  const [publicLoading, setPublicLoading] = useState(false);
   const [publicError, setPublicError] = useState(false);
   const [publicPendingId, setPublicPendingId] = useState<number | null>(null);
+
+  /**
+   * 둘러보기에서 **내 코스를 걸러낸다.**
+   *
+   * `GET /courses/public`은 인증이 없어 서버가 호출자를 모른다. 그래서 내가 공개한 코스도
+   * 그대로 내려온다 — 거르지 않으면 같은 코스가 "내 코스"와 "다른 집사의 코스"에 동시에 뜨고,
+   * 내 닉네임이 남의 것처럼 붙는다(실서버에서 확인).
+   *
+   * 로그인 전에는 `savedCourses`가 비어 거를 대상이 없다. 그때는 전부 남의 코스가 맞다.
+   */
+  const otherCourses = useMemo(() => {
+    if (publicCourses === null) return null;
+    const mine = new Set(savedCourses.map((c) => c.courseId));
+    return publicCourses.filter((c) => !mine.has(c.courseId));
+  }, [publicCourses, savedCourses]);
+
 
   /** 목록 새로고침. 실패하면 던진다 — 호출자가 "무엇이 실패했는지" 구분해 안내해야 한다. */
   const reloadSaved = useCallback(async () => {
     setSavedCourses(await coursesApi.list());
   }, []);
 
-  /** 둘러보기 새로고침. 성공하면 오류 표시를 걷는다 — 한 번 실패한 뒤 복구를 반영하기 위해서다. */
+  /**
+   * 둘러보기 새로고침. 화면에 재시도 버튼이 걸려 있다.
+   *
+   * 늦게 온 응답이 새 응답을 덮지 않게 요청마다 번호를 매긴다 — 실패 후 두 번 누르면
+   * 먼저 보낸 요청이 나중에 도착할 수 있고, 그러면 옛 목록이 최종 화면이 된다.
+   */
+  const publicReqRef = useRef(0);
   const reloadPublic = useCallback(async () => {
-    const r = await coursesApi.publicList({ size: 10 });
-    setPublicCourses(r.items);
-    setPublicError(false);
+    const seq = ++publicReqRef.current;
+    setPublicLoading(true);
+    try {
+      const r = await coursesApi.publicList({ size: 10 });
+      if (seq !== publicReqRef.current) return;
+      setPublicCourses(r.items);
+      setPublicTotal(r.total);
+      setPublicError(false);
+    } catch {
+      if (seq !== publicReqRef.current) return;
+      setPublicError(true);
+    } finally {
+      if (seq === publicReqRef.current) setPublicLoading(false);
+    }
   }, []);
 
   // 초기 로드는 effect 안에서 직접 받는다. reloadSaved를 그대로 부르면 effect 본문에서
@@ -131,15 +166,14 @@ export default function CourseScreen() {
       .then((r) => {
         if (active) {
           setPublicCourses(r.items);
+          setPublicTotal(r.total);
           setPublicError(false);
         }
       })
       .catch(() => {
-        // 못 불러온 것을 "공개된 코스가 없다"로 보여주면 서비스가 빈 것처럼 읽힌다
-        if (active) {
-          setPublicCourses([]);
-          setPublicError(true);
-        }
+        // 못 불러온 것을 "공개된 코스가 없다"로 보여주면 서비스가 빈 것처럼 읽힌다.
+        // 목록은 null로 남긴다 — []로 떨어뜨리면 length===0만 보는 코드가 장애를 빈 목록으로 읽는다.
+        if (active) setPublicError(true);
       });
     return () => {
       active = false;
@@ -200,12 +234,13 @@ export default function CourseScreen() {
       setSaveMessage(
         next ? `'${course.name}'을(를) 공개했어요` : `'${course.name}'을(를) 비공개로 바꿨어요`,
       );
-      // 방금 공개한 코스가 둘러보기에도 바로 보이게 한다. 실패해도 공개 자체는 성공이다
-      reloadPublic().catch(() => {});
+      // 둘러보기를 다시 부르지 않는다. 내 코스는 그 목록에서 걸러지므로 바뀔 게 없고,
+      // 부르면 늦게 온 응답이 새 목록을 덮는 경합만 생긴다.
     } catch (e) {
       setSaveMessage(e instanceof Error ? e.message : '공개 설정을 바꾸지 못했어요');
     } finally {
-      setPublicPendingId(null);
+      // 다른 코스의 토글이 이미 자리를 차지했으면 그쪽 스피너를 끄지 않는다
+      setPublicPendingId((cur) => (cur === course.courseId ? null : cur));
     }
   };
 
@@ -596,17 +631,39 @@ export default function CourseScreen() {
                 둘러보기 — 다른 사람이 공개한 코스. 못 불러온 것과 아직 없는 것을 나눠서 안내한다.
                 로딩 중(null)에는 자리만 비워둔다 — 빈 상태를 먼저 보여주면 없는 줄 알고 지나친다.
               */}
-              {publicCourses !== null && (publicCourses.length > 0 || publicError) && (
+              {(otherCourses !== null || publicError) && (
                 <View style={styles.presetBlock}>
                   <Text style={[styles.blockLabel, { color: p.ink }]}>
                     다른 집사의 코스 둘러보기
+                    {otherCourses !== null && otherCourses.length > 0 && !publicError
+                      ? ` · ${publicTotal}개`
+                      : ''}
                   </Text>
                   {publicError ? (
+                    // 재시도 경로를 준다. 없으면 앱을 다시 켤 때까지 실패 화면이 고정된다
+                    <Pressable
+                      onPress={() => reloadPublic()}
+                      disabled={publicLoading}
+                      style={({ pressed }) => [
+                        styles.retryRow,
+                        { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
+                      ]}>
+                      {publicLoading ? (
+                        <ActivityIndicator size="small" color={p.muted} />
+                      ) : (
+                        <Ionicons name="refresh" size={15} color={p.muted} />
+                      )}
+                      <Text style={[styles.presetStateText, { color: p.muted }]}>
+                        공개 코스를 못 불러왔어요. 눌러서 다시 시도하기
+                      </Text>
+                    </Pressable>
+                  ) : otherCourses !== null && otherCourses.length === 0 ? (
+                    // 실패와 다르다. 서비스가 빈 게 아니라 아직 공개된 코스가 없는 상태다
                     <Text style={[styles.presetStateText, { color: p.muted }]}>
-                      공개 코스를 못 불러왔어요. 잠시 후 다시 시도해 주세요.
+                      아직 공개된 코스가 없어요. 내 코스를 공개하면 여기에 처음으로 올라가요.
                     </Text>
                   ) : (
-                    publicCourses.map((c) => (
+                    (otherCourses ?? []).map((c) => (
                       <View key={c.courseId} style={[styles.savedRow, { borderColor: p.line }]}>
                         <Ionicons name="earth" size={15} color={p.accent} />
                         <View style={styles.publicTexts}>
@@ -1296,6 +1353,10 @@ const styles = StyleSheet.create({
   savedMeta: { fontSize: 11.5 },
   // 공개 코스는 이름 아래에 올린 사람을 함께 보여준다 — 남의 코스라는 게 한눈에 보여야 한다
   publicTexts: { flexShrink: 1, gap: 1 },
+  retryRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: 1, borderRadius: Radius.md, paddingVertical: 10, paddingHorizontal: Spacing.lg,
+  },
   courseCheckBtn: {
     borderWidth: 1, borderRadius: Radius.md,
     paddingVertical: 9, alignItems: 'center', marginTop: 4,

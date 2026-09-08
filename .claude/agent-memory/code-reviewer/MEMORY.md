@@ -1,0 +1,4 @@
+- [웹/네이티브 짝 검증](web-parity-picker-uri.md) — 웹도 실배포 타깃. expo-image-picker 웹은 새로고침에 죽는 blob: URI, SecureStore는 2KB 한계
+- [courses/regions는 부분 트리](courses-regions-partial-tree.md) — 시설이 있는 (시도,시군구) 조합만 온다. 분모·주소 파싱 사전으로 쓰면 틀어진다
+- [courses API 계약 함정](api-courses-contract.md) — `/courses/public`은 무인증이라 내 코스도 섞인다 · SaveRequest에 `public`/`isPublic` 두 이름
+- [docs/02는 낡았다](docs-02-is-stale.md) — 02·09는 설계 초안 그대로. 어긋남을 PR 결함으로 올리기 전에 누적 부채인지 구분
