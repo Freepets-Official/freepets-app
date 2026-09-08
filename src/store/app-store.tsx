@@ -11,7 +11,6 @@ import {
   aiApi,
   denialApi,
   facilitiesApi,
-  coursesApi,
   petsApi,
   reviewsApi,
   satisfactionApi,
@@ -25,7 +24,6 @@ import { matchRegion, type Stamp } from '@/data/stamps';
 import type {
   CalendarEvent,
   Confidence,
-  CourseRegion,
   ConfidenceSource,
   Facility,
   FacilityReviewData,
@@ -33,6 +31,7 @@ import type {
   PetCheck,
   PetSatisfaction,
   PetVerdictResult,
+  Region,
   Requirement,
   Review,
   ReviewTag,
@@ -352,8 +351,8 @@ interface AppStore {
     petIds: number[];
     photoUri: string | null;
   }) => Stamp | null;
-  /** 도장첩이 지역 이름을 알아내는 데 쓰는 지역 트리. 못 받았으면 빈 배열 */
-  stampRegions: CourseRegion[];
+  /** 도장첩이 지역을 알아내는 데 쓰는 트리(TourAPI 코드 포함). 못 받았으면 빈 배열 */
+  stampRegions: Region[];
   /** 지역 트리 재조회. 못 받으면 도장을 찍을 수 없어 화면에 재시도 경로가 필요하다 */
   reloadStampRegions: () => Promise<void>;
   /** 도장을 기기에 남기지 못했다. 이번 세션에는 보이지만 앱을 다시 켜면 사라진다 */
@@ -468,7 +467,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 여권 도장(게임 요소 1단계). 서버 API가 없어 기기에만 남는다.
   const [stamps, setStamps] = useState<Stamp[]>([]);
   // 도장의 지역 이름을 알아내는 트리. 주소 문자열만으로는 "고양시 덕양구"를 못 가른다.
-  const [stampRegions, setStampRegions] = useState<CourseRegion[]>([]);
+  const [stampRegions, setStampRegions] = useState<Region[]>([]);
   // 반려동물별 좋아한 곳 TOP3 (홈) — 서버가 시설명·카테고리까지 계산해 내려준다
   const [topPlaces, setTopPlaces] = useState<Record<number, TopPlace[]>>({});
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -1410,11 +1409,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     };
   }, [stamps]);
 
-  // 지역 트리는 도장을 찍을 때 주소를 해석하는 데 쓴다. 로그인 없이 열리는 API다.
-  // 못 받으면 도장을 아예 못 찍으므로, 실패를 조용히 넘기지 않고 화면이 재시도 경로를 준다.
+  // 지역 트리는 도장을 찍을 때 주소를 해석하는 데 쓴다.
+  //
+  // `facilities/regions`를 쓰는 이유는 이쪽만 **관광공사 TourAPI 코드**(sidoCode·sigunguCode)를
+  // 함께 주기 때문이다. `courses/regions`는 이름 문자열만 준다. 도장에 코드를 남겨야
+  // 나중에 그 지역의 관광 정보와 이어붙일 수 있다.
+  //
+  // 다만 이 API는 인증이 필요해서 토큰이 생긴 뒤에 부른다 — 앱이 뜨자마자 부르면 401이다.
+  // 못 받으면 도장을 아예 못 찍으므로, 화면이 재시도 경로를 준다.
   useEffect(() => {
+    if (!accessToken) return;
     let alive = true;
-    coursesApi
+    facilitiesApi
       .regions()
       .then((r) => {
         if (alive) setStampRegions(r);
@@ -1425,12 +1431,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [accessToken]);
 
   /** 지역 트리 재조회. 화면의 재시도 버튼이 쓴다 — 없으면 앱을 다시 켤 때까지 도장을 못 찍는다. */
   const reloadStampRegions = useCallback(async () => {
     try {
-      setStampRegions(await coursesApi.regions());
+      setStampRegions(await facilitiesApi.regions());
     } catch {
       // 실패하면 빈 배열이 그대로 남는다. 화면이 계속 재시도를 안내한다.
     }
@@ -1462,6 +1468,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         facilityName: input.facilityName,
         sido: region.sido,
         sigungu: region.sigungu,
+        sidoCode: region.sidoCode,
+        sigunguCode: region.sigunguCode,
         petIds: input.petIds,
         photoUri: input.photoUri,
         createdAt: new Date().toISOString(),

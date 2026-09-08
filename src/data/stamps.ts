@@ -1,4 +1,4 @@
-import type { CourseRegion } from './types';
+import type { Region } from './types';
 
 /**
  * 여권 도장 (게임 요소 1단계) — 아이와 다녀온 곳을 지역 단위로 모은다.
@@ -18,6 +18,18 @@ export interface Stamp {
   facilityName: string;
   sido: string;
   sigungu: string;
+  /**
+   * 관광공사 TourAPI의 지역 코드. `areaCode`(시도)·`sigunguCode`(시군구)와 같은 값이라,
+   * 이 도장이 어느 관광 지역의 것인지 이름이 아니라 코드로 가리킬 수 있다.
+   *
+   * ⚠️ **`sigunguCode`는 시도 안에서만 유일하다** — 서울 종로구·부산 중구·목포시가 전부
+   * `110`이다. 지역을 가리킬 때는 반드시 `(sidoCode, sigunguCode)` 쌍으로 다뤄야 한다.
+   *
+   * 지역 트리를 못 받은 상태에서 찍힌 옛 도장은 이 값이 없다. 그래서 집계 키는 이름을
+   * 쓰고(이름은 항상 있다) 코드는 표시와 2단계 서버 이전에 쓴다.
+   */
+  sidoCode: string | null;
+  sigunguCode: string | null;
   /** 함께 간 아이들 */
   petIds: number[];
   /** 인증샷. 1단계에서는 검사하지 않고 도장첩에만 쓴다 */
@@ -46,8 +58,8 @@ export function regionKey(sido: string, sigungu: string): string {
  */
 export function matchRegion(
   address: string,
-  regions: CourseRegion[],
-): { sido: string; sigungu: string } | null {
+  regions: Region[],
+): { sido: string; sigungu: string; sidoCode: string | null; sigunguCode: string | null } | null {
   if (!address) return null;
 
   // 시도도 이름이 긴 쪽을 먼저 본다. "전남광주통합특별시"가 "전남"보다 앞서야 한다.
@@ -57,12 +69,22 @@ export function matchRegion(
   if (!sido) return null;
 
   const sigungu = [...sido.sigungus]
-    .sort((a, b) => b.length - a.length)
-    .find((s) => address.includes(s));
-  if (sigungu) return { sido: sido.sido, sigungu };
+    .sort((a, b) => b.sigungu.length - a.sigungu.length)
+    .find((s) => address.includes(s.sigungu));
+  if (sigungu) {
+    return {
+      sido: sido.sido,
+      sigungu: sigungu.sigungu,
+      sidoCode: sido.sidoCode,
+      sigunguCode: sigungu.sigunguCode,
+    };
+  }
 
-  // 시군구 목록이 아예 비어 있는 시도는 그 시도가 곧 하나의 지역이다. 그때만 시도로 대신한다.
-  if (sido.sigungus.length === 0) return { sido: sido.sido, sigungu: sido.sido };
+  // 시군구 목록이 아예 비어 있는 시도는 그 시도가 곧 하나의 지역이다. 그때만 시도로 대신하되
+  // 시군구 코드는 비운다 — 없는 코드를 지어내면 TourAPI 조회가 빗나간다.
+  if (sido.sigungus.length === 0) {
+    return { sido: sido.sido, sigungu: sido.sido, sidoCode: sido.sidoCode, sigunguCode: null };
+  }
 
   // 목록이 있는데 못 찾았다면 모르는 것이다. 시도 이름을 시군구 자리에 넣으면
   // "경기도 안의 경기도"라는 없는 지역이 생기고, 그 가짜 지역이 뱃지 수를 부풀린다.
@@ -72,6 +94,8 @@ export function matchRegion(
 /** 도장첩의 한 줄 — 시도 하나와 그 안에서 모은 시군구. */
 export interface RegionProgress {
   sido: string;
+  /** 관광공사 TourAPI `areaCode`. 지역 트리를 못 받았으면 null */
+  sidoCode: string | null;
   /** 도장을 찍은 시군구 (이름순) */
   collected: string[];
   /**
@@ -84,7 +108,7 @@ export interface RegionProgress {
 }
 
 /** 도장을 시도별로 묶는다. 도장이 하나도 없는 시도는 넣지 않는다 — 빈 줄이 화면을 채우면 진도가 안 보인다. */
-export function groupBySido(stamps: Stamp[], regions: CourseRegion[]): RegionProgress[] {
+export function groupBySido(stamps: Stamp[], regions: Region[]): RegionProgress[] {
   const bySido = new Map<string, Set<string>>();
   for (const s of stamps) {
     const set = bySido.get(s.sido) ?? new Set<string>();
@@ -94,9 +118,16 @@ export function groupBySido(stamps: Stamp[], regions: CourseRegion[]): RegionPro
 
   return [...bySido.entries()]
     .map(([sido, set]) => {
-      const total = regions.find((r) => r.sido === sido)?.sigungus.length ?? 0;
+      const tree = regions.find((r) => r.sido === sido);
+      const total = tree?.sigungus.length ?? 0;
       const collected = [...set].sort((a, b) => a.localeCompare(b, 'ko'));
-      return { sido, collected, total, ratio: total > 0 ? collected.length / total : 0 };
+      return {
+        sido,
+        sidoCode: tree?.sidoCode ?? null,
+        collected,
+        total,
+        ratio: total > 0 ? collected.length / total : 0,
+      };
     })
     .sort((a, b) => b.collected.length - a.collected.length || a.sido.localeCompare(b.sido, 'ko'));
 }
