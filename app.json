@@ -12,7 +12,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.freepets.app"
+      "bundleIdentifier": "com.freepets.app",
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
