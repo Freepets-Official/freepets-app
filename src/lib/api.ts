@@ -16,6 +16,7 @@ import type {
   PetVerdictResult,
   PresetCourse,
   RankingItem,
+  PublicCourse,
   SavedCourse,
   SimilarCourse,
   SimilarStop,
@@ -895,6 +896,29 @@ function personalQuery(params: CoursePersonalParams): string {
   return q.toString();
 }
 
+/** 서버가 보내는 모양. 필드별로 빠질 수 있음을 타입에 적어야 방어가 실제로 필요한지 드러난다. */
+type ServerPublicCourse = {
+  courseId: number;
+  name: string | null;
+  description: string | null;
+  ownerNickname: string | null;
+  stopIds: number[] | null;
+  createdAt: string;
+};
+
+function toPublicCourse(c: ServerPublicCourse): PublicCourse {
+  return {
+    courseId: c.courseId,
+    // 이름이 비면 행이 아이콘과 "N곳"만 남은 빈 줄이 된다. 소유자와 같은 기준으로 막는다.
+    name: c.name ?? '이름 없는 코스',
+    description: c.description ?? null,
+    // 소유자를 못 채워 보내도 목록이 깨지지 않게 한다. 빈 문자열이면 화면에서 숨긴다
+    ownerNickname: c.ownerNickname ?? '',
+    stopIds: c.stopIds ?? [],
+    createdAt: c.createdAt,
+  };
+}
+
 function toSavedCourse(c: SavedCourse): SavedCourse {
   return {
     courseId: c.courseId,
@@ -922,9 +946,8 @@ export const coursesApi = {
   /**
    * 스톱 간 최대 거리 선택지. 연속값이 아니라 고정 구간만 받는다(캐시 적중률 때문).
    *
-   * ⚠️ 명세(`api-specs/course.md`)는 "인증 불필요"라고 적었지만 **실제로는 401이 온다**
-   * (2026-09-07 라이브 확인). 셋 중 이것만 다르다 — regions·themes·preset은 토큰 없이 된다.
-   * 서버가 나중에 명세대로 열어도 토큰을 함께 보내는 건 무해하므로 auth를 붙여둔다.
+   * 한때 명세와 달리 401이 왔지만 **2026-09-08 백엔드 PR #65로 열렸다**(optimize-order도 같이).
+   * 토큰을 보내는 건 무해하고 로그인 사용자를 식별할 여지도 남으므로 auth는 그대로 둔다.
    */
   distanceOptions: async (): Promise<CourseDistanceOption[]> => {
     const r = await request<{ options: CourseDistanceOption[] | null }>(
@@ -1010,7 +1033,14 @@ export const coursesApi = {
   }): Promise<SavedCourse> =>
     toSavedCourse(await request<SavedCourse>('POST', '/api/v1/courses', { body: input, auth: true })),
 
-  /** stopIds **전체를 교체**한다. 한 곳만 바꾸려면 replaceStop을 쓴다. */
+  /**
+   * stopIds **전체를 교체**한다. 한 곳만 바꾸려면 replaceStop을 쓴다.
+   *
+   * ⚠️ 서버 스키마에 공개 여부가 `isPublic`과 `public` **두 이름으로** 노출돼 있다
+   * (Jackson의 boolean 게터 네이밍 부작용). 지금은 `isPublic`으로 왕복을 확인했지만,
+   * 백엔드가 record로 바꾸거나 `@JsonProperty`를 붙이면 **200을 받고도 공개가 안 되는**
+   * 형태로 조용히 깨진다. 응답 DTO는 `isPublic` 하나뿐이라 읽기 쪽은 안전하다.
+   */
   update: async (
     courseId: number,
     input: { name: string; description?: string; stopIds: number[]; isPublic?: boolean },
@@ -1038,8 +1068,8 @@ export const coursesApi = {
    * 스톱 순서만 최근접 이웃으로 다듬는다. **아무것도 저장하지 않는다** — 결과를 저장하려면
    * 반환된 순서를 코스 저장/수정 API에 다시 넣어야 한다.
    *
-   * ⚠️ 명세는 "인증 불필요(순수 계산)"라고 적었지만 **실제로는 401이 온다**(2026-09-07 확인).
-   * distance-options와 같은 불일치다. 토큰을 함께 보내는 건 무해하므로 auth를 붙인다.
+   * 한때 명세와 달리 401이 왔지만 **2026-09-08 백엔드 PR #65로 열렸다**(distance-options도 같이).
+   * 토큰을 보내는 건 무해하고 로그인 사용자를 식별할 여지도 남으므로 auth는 그대로 둔다.
    */
   optimizeOrder: async (stopIds: number[]): Promise<number[]> => {
     const r = await request<{ stopIds: number[] | null }>('POST', '/api/v1/courses/optimize-order', {
@@ -1048,6 +1078,29 @@ export const coursesApi = {
     });
     // 서버가 순서를 못 주면 원래 순서를 그대로 쓴다 — 동선이 덜 다듬어질 뿐 코스는 유효하다
     return r.stopIds ?? stopIds;
+  },
+
+  /**
+   * 다른 사람이 공개한 코스 목록(`GET /courses/public`). 인증이 필요 없어 로그인 전에도 쓴다.
+   *
+   * 서버가 `items`를 못 주면 빈 배열로 떨어뜨리되 **호출 자체의 실패는 그대로 던진다** —
+   * 장애를 "아직 공개된 코스가 없어요"로 안내하면 사용자가 서비스가 빈 것으로 오해한다.
+   */
+  publicList: async (params: { page?: number; size?: number } = {}): Promise<{
+    items: PublicCourse[];
+    total: number;
+  }> => {
+    const q = new URLSearchParams();
+    q.set('page', String(params.page ?? 0));
+    q.set('size', String(params.size ?? 10));
+
+    const r = await request<{ items: ServerPublicCourse[] | null; total: number | null }>(
+      'GET',
+      `/api/v1/courses/public?${q.toString()}`,
+    );
+    const items = (r.items ?? []).map(toPublicCourse);
+    // total이 비면 받은 개수로 대신한다. 0으로 떨어뜨리면 항목이 있는데 "0개"로 보인다
+    return { items, total: r.total ?? items.length };
   },
 
   preset: async (params: {

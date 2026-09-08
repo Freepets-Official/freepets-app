@@ -310,6 +310,23 @@ export interface SavedCourse {
   isPublic: boolean;
 }
 
+/**
+ * 다른 사용자가 공개해둔 코스(`GET /courses/public`).
+ *
+ * `SavedCourse`와 따로 두는 이유는 필드가 실제로 다르기 때문이다 — 남의 코스에는
+ * `ownerNickname`이 붙고 `isPublic`이 없다(공개 목록에 있다는 것 자체가 공개라는 뜻이다).
+ * 한 타입으로 합치면 내 코스에도 없는 소유자가 있는 것처럼 보인다.
+ */
+export interface PublicCourse {
+  courseId: number;
+  name: string;
+  description: string | null;
+  /** 코스를 공개한 사람의 닉네임 */
+  ownerNickname: string;
+  stopIds: number[];
+  createdAt: string;
+}
+
 /** 코스 일괄 판별의 스톱 하나(`POST /ai/course-check`). */
 export interface CourseCheckStop {
   facility: { facilityId: number; name: string; category: Category };
