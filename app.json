@@ -10,13 +10,7 @@
     "userInterfaceStyle": "light",
     "ios": {
       "infoPlist": {
-        "NSAppTransportSecurity": {
-          "NSExceptionDomains": {
-            "54.116.37.26": {
-              "NSExceptionAllowsInsecureHTTPLoads": true
-            }
-          }
-        }
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.freepets.app"
     },
