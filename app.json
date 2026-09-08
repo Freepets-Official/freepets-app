@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "반갑꼬리",
-    "slug": "freepets",
+    "owner": "jvvjvvs-team",
+    "slug": "kkori",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -54,6 +55,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a9c3ebd2-7cfb-4a3a-b357-e8d7c32de57a"
+      }
     }
   }
 }
