@@ -123,6 +123,12 @@ export default function StampsScreen() {
               <View key={r.sido} style={[styles.regionCard, { borderColor: p.line, backgroundColor: p.card }]}>
                 <View style={styles.regionHead}>
                   <Text style={[styles.regionName, { color: p.ink }]}>{r.sido}</Text>
+                  {/* 관광공사 areaCode. 이 도장이 어느 관광 지역인지 코드로 가리킨다 */}
+                  {r.sidoCode && (
+                    <Text style={[styles.regionCode, { color: p.muted, borderColor: p.line }]}>
+                      {r.sidoCode}
+                    </Text>
+                  )}
                   <Text style={[styles.regionCount, { color: p.muted }]}>
                     {/* 지역 트리를 못 받으면 분모를 못 쓴다. 그때는 모은 개수만 보여준다 */}
                     {r.total > 0 ? `${r.collected.length} / ${r.total}` : `${r.collected.length}곳`}
@@ -147,6 +153,12 @@ export default function StampsScreen() {
                 </View>
               </View>
             ))
+          )}
+
+          {progress.length > 0 && (
+            <Text style={[styles.source, { color: p.muted }]}>
+              지역 구분과 코드는 한국관광공사 TourAPI 기준이에요
+            </Text>
           )}
 
           {/* 최근 도장 */}
@@ -239,6 +251,11 @@ const styles = StyleSheet.create({
   regionCard: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, gap: 8 },
   regionHead: { flexDirection: 'row', alignItems: 'center' },
   regionName: { fontSize: 13.5, fontWeight: '800' },
+  regionCode: {
+    fontSize: 10, fontWeight: '700', marginLeft: 6,
+    borderWidth: 1, borderRadius: Radius.sm, paddingHorizontal: 5, paddingVertical: 1,
+  },
+  source: { fontSize: 11, marginTop: 2 },
   regionCount: { fontSize: 11.5, marginLeft: 'auto' },
   barTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 3 },
