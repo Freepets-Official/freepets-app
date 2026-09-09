@@ -112,6 +112,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.1,
     textTransform: 'uppercase',
   },
-  title: { fontSize: 30, fontWeight: '900', letterSpacing: -1 },
+  title: { fontSize: 30, lineHeight: 40, fontWeight: '900', letterSpacing: -1 },
   subtitle: { fontSize: 14, lineHeight: 21, marginTop: 2 },
 });

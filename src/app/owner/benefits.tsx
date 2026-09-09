@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.xl, paddingTop: Spacing.sm },
   head: { gap: 4 },
   eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  title: { fontSize: 26, fontWeight: '900', letterSpacing: -1 },
+  title: { fontSize: 26, lineHeight: 35, fontWeight: '900', letterSpacing: -1 },
   sub: { fontSize: 13, lineHeight: 20, marginTop: 4 },
   addCard: { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: Spacing.sm },
   input: {

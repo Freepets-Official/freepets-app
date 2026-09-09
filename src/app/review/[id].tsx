@@ -231,7 +231,7 @@ export default function ReviewWriteScreen() {
 const styles = StyleSheet.create({
   head: { gap: 4, paddingTop: Spacing.sm },
   eyebrow: { fontSize: 11.5, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase' },
-  title: { fontSize: 26, fontWeight: '900', letterSpacing: -1 },
+  title: { fontSize: 26, lineHeight: 35, fontWeight: '900', letterSpacing: -1 },
   sub: { fontSize: 13.5, lineHeight: 20, marginTop: 2 },
   card: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.xl, gap: Spacing.lg },
   divider: { height: 1 },

@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingTop: Spacing.sm },
   headerText: { gap: 2 },
   eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
-  title: { fontSize: 28, fontWeight: '900', letterSpacing: -1 },
+  title: { fontSize: 28, lineHeight: 38, fontWeight: '900', letterSpacing: -1 },
   switchBtn: {
     flexDirection: 'row',
     alignItems: 'center',

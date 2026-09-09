@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.sm,
   },
   eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  month: { fontSize: 26, fontWeight: '900', letterSpacing: -0.8 },
+  month: { fontSize: 26, lineHeight: 35, fontWeight: '900', letterSpacing: -0.8 },
   navBtns: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   todayBtn: { borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 7, marginRight: 2 },
   todayText: { fontSize: 12.5, fontWeight: '800' },
