@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Radius } from '@/constants/theme';
 import { PAW_MIN_REVIEWS, type PawGrade } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';

@@ -4,9 +4,10 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/text';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';

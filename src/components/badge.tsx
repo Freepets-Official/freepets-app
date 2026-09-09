@@ -1,5 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Radius } from '@/constants/theme';
 import { RESULT_LABEL, type CheckResult } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';

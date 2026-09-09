@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { EvidencePicker, type Evidence } from '@/components/evidence-picker';
 import { Screen } from '@/components/screen';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';

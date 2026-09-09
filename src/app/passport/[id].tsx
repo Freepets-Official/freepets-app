@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/text';
 import { DenialReport } from '@/components/denial-report';
 import { PassportCard } from '@/components/passport-card';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';

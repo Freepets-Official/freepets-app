@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Radius } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 

@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { type ComponentProps } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Radius } from '@/constants/theme';
 import type { SocialProvider } from '@/lib/api';
 

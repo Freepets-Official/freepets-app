@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import type { Pet } from '@/data/types';
 
 /** petId로 고정 배정되는 파스텔 아바타 배경 */

@@ -28,6 +28,7 @@ import type {
   CalendarEvent,
   Confidence,
   ConfidenceSource,
+  FontSizeMode,
   Facility,
   FacilityReviewData,
   Pet,
@@ -128,6 +129,8 @@ export interface AppSettings {
   autoTravelLog: boolean;
   /** 앱 잠금 — 실행/복귀 시 생체인증 요구 (네이티브만) */
   appLock: boolean;
+  /** 글씨 크기 — 앱 전체 텍스트에 같은 배율로 걸린다 */
+  fontSize: FontSizeMode;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -141,6 +144,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   notifMarketing: false,
   autoTravelLog: true,
   appLock: false,
+  fontSize: 'normal',
 };
 
 /**

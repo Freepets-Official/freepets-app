@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
+import { Text, AnimatedText } from '@/components/text';
 import { PetAllowedBadge, ResultBadge } from '@/components/badge';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { ConfidencePanel } from '@/components/confidence-panel';
@@ -220,18 +221,18 @@ export default function FacilityDetailScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           {/* 카드에서 이어지는 shared element — 카테고리·이름·발자국 3개가 함께 흐른다 */}
-          <Animated.Text
+          <AnimatedText
             sharedTransitionTag={`fac-cat-${facility.facilityId}`}
             style={[styles.category, { color: p.accent }]}>
             {CATEGORY_LABEL[facility.category]}
-          </Animated.Text>
+          </AnimatedText>
           <PetAllowedBadge allowed={facility.petAllowed} />
         </View>
-        <Animated.Text
+        <AnimatedText
           sharedTransitionTag={`fac-name-${facility.facilityId}`}
           style={[styles.name, { color: p.ink }]}>
           {facility.name}
-        </Animated.Text>
+        </AnimatedText>
         <Animated.View sharedTransitionTag={`fac-paw-${facility.facilityId}`} style={styles.pawRow}>
           <PawBadge grade={reviewData?.grade ?? EMPTY_GRADE} />
         </Animated.View>

@@ -1,10 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/text';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { FACILITIES, formatDistance } from '@/data/mock';

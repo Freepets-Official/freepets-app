@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
 import { FacilityCard } from '@/components/facility-card';
 import { RankingView } from '@/components/ranking-view';

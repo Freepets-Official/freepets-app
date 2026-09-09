@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AppState, Platform, Pressable, StyleSheet, Text, View, type AppStateStatus } from 'react-native';
+import { AppState, Platform, Pressable, StyleSheet, View, type AppStateStatus } from 'react-native';
 
+import { Text } from '@/components/text';
 import { AppLogo } from '@/components/app-logo';
 import { Radius, Spacing } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';

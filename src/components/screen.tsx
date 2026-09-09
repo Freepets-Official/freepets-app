@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/text';
 import { PullPaws } from '@/components/pull-paws';
 import { useTabChrome } from '@/components/tab-bar';
 import { MaxContentWidth, Spacing } from '@/constants/theme';

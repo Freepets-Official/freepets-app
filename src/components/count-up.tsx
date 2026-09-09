@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Text, type TextProps } from 'react-native';
+import { type TextProps } from 'react-native';
+import { Text } from '@/components/text';
 
 /**
  * 0에서 목표 숫자까지 굴러 올라가는 카운트업. 대시보드·통계 지표에 생동감을 준다.

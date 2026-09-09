@@ -8,6 +8,7 @@ import { BiometricGate } from '@/components/biometric-gate';
 import { CallConfirmSheet } from '@/components/call-confirm-sheet';
 import { PawTouches } from '@/components/paw-touches';
 import { AppThemeProvider, usePalette, useColorScheme } from '@/hooks/use-theme';
+import { FontScaleProvider } from '@/components/text';
 import { onNotificationTap } from '@/lib/push';
 import { AppStoreProvider, useAppStore } from '@/store/app-store';
 
@@ -137,9 +138,24 @@ export default function RootLayout() {
   return (
     <AppStoreProvider>
       <AppThemeProvider>
-        <ThemedRoot />
+        <ScaledTextRoot />
       </AppThemeProvider>
     </AppStoreProvider>
+  );
+}
+
+/**
+ * 글씨 크기 배율을 트리 전체에 내린다.
+ *
+ * 스토어 안쪽에 둬야 설정을 읽을 수 있고, 화면보다 바깥에 둬야 모든 텍스트가 덮인다.
+ * 배율만 담은 컨텍스트라 설정이 실제로 바뀔 때만 아래가 다시 그려진다.
+ */
+function ScaledTextRoot() {
+  const { settings } = useAppStore();
+  return (
+    <FontScaleProvider mode={settings.fontSize}>
+      <ThemedRoot />
+    </FontScaleProvider>
   );
 }
 

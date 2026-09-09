@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/text';
 import { CountUp } from '@/components/count-up';
 import { PawBadge } from '@/components/paw-badge';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';

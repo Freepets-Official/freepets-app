@@ -3,8 +3,9 @@ import { Image } from 'expo-image';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Badge } from '@/components/badge';
 import { Chip } from '@/components/chip';
 import { PetAvatar } from '@/components/pet-avatar';

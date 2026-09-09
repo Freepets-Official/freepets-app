@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { PawBadge } from '@/components/paw-badge';
 import { SectionTitle } from '@/components/section-title';
 import { StarsDisplay } from '@/components/star-rating';

@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/text';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore, type ProfileKind } from '@/store/app-store';

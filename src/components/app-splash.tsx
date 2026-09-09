@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { AnimatedText } from '@/components/text';
 import Animated, {
   Easing,
   interpolate,
@@ -85,7 +86,7 @@ function Letter({ children, index }: { children: string; index: number }) {
     ],
   }));
 
-  return <Animated.Text style={[styles.letter, s]}>{children}</Animated.Text>;
+  return <AnimatedText style={[styles.letter, s]}>{children}</AnimatedText>;
 }
 
 const styles = StyleSheet.create({

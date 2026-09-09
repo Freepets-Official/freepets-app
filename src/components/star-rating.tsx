@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { usePalette } from '@/hooks/use-theme';
 
 /** 읽기 전용 별점 표시 (반개 단위 반올림) */
