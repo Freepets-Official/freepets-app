@@ -13,6 +13,9 @@ export default function TabLayout() {
         tabBar={(props) => <GlassTabBar {...(props as any)} />}
         screenOptions={{
           headerShown: false,
+          // 탭은 기본이 즉시 전환이라 딱딱하다. 페이드를 주면 화면이 갈리는 순간이 부드러워진다.
+          // 좌우로 미는 shift는 탭 순서를 의식하게 만들어, 순서에 의미가 없는 우리 탭엔 안 맞는다.
+          animation: 'fade',
           tabBarActiveTintColor: p.accent,
           tabBarInactiveTintColor: p.muted,
         }}>
