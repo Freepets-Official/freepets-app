@@ -1,5 +1,4 @@
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 /**
@@ -13,25 +12,48 @@ import { Platform } from 'react-native';
  * 웹에는 붙이지 않는다. 웹 푸시는 서비스 워커와 VAPID 키가 따로 필요하고 서버에도 그
  * 설정이 없다. 웹에서는 홈 상단의 거부 경고(`GET /me/denial-alerts`)가 그 자리를 대신한다.
  *
- * ⚠️ **Firebase를 파일 최상단에서 import하지 않는다.** `@react-native-firebase/messaging`은
- * import되는 순간 네이티브 모듈(`NativeRNFBTurboApp`)을 찾는데, 그게 없는 빌드에서는
- * 거기서 예외가 나고 **앱 전체가 뜨지 않는다.** 이 파일은 스토어 → 테마 → 탭 레이아웃으로
- * 이어지는 최상위 의존이라 화면 하나가 아니라 앱이 통째로 죽는다.
+ * ⚠️ **네이티브 모듈을 파일 최상단에서 import하지 않는다.**
  *
- * 실제로 그렇게 됐다 — Firebase를 넣기 전에 만든 개발 빌드에 새 JS를 물리자마자
- * `Native module NativeRNFBTurboApp is not registered`로 시작조차 못 했다.
- * 그래서 **토큰을 실제로 받을 때만** 안에서 require한다. 없으면 푸시만 빠진다.
+ * `expo-notifications`와 `@react-native-firebase/messaging`은 import되는 순간 네이티브
+ * 모듈을 찾는다. 그게 없는 빌드에서는 거기서 예외가 나는데, 이 파일은
+ * 스토어 → 테마 → 탭 레이아웃으로 이어지는 **최상위 의존**이라 화면 하나가 아니라
+ * **앱이 통째로 뜨지 않는다.**
+ *
+ * 실제로 두 번 겪었다. 푸시를 넣기 전에 만든 개발 빌드에 새 JS를 물리자
+ * `Native module NativeRNFBTurboApp is not registered`로, 그걸 고치자 이번엔
+ * `Cannot find native module 'ExpoPushTokenManager'`로 시작조차 못 했다.
+ *
+ * 그래서 **실제로 쓸 때만** 안에서 require하고, 실패하면 푸시 기능만 꺼진 채로 앱은 돈다.
+ * 새 빌드를 만들면 당장은 풀리지만, 팀원이 옛 빌드를 쓰거나 프로덕션에서 모듈 초기화가
+ * 실패할 때 같은 일이 반복된다 — 구조로 막는 게 맞다.
  */
 
-/** 알림을 앱이 떠 있을 때도 배너로 띄운다. 거부 경고는 지금 보여야 의미가 있다. */
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
-});
+type NotificationsModule = typeof import('expo-notifications');
+
+/** `undefined` = 아직 안 불러봄, `null` = 이 빌드에 없음. 한 번 실패하면 다시 시도하지 않는다. */
+let notifications: NotificationsModule | null | undefined;
+
+function loadNotifications(): NotificationsModule | null {
+  if (notifications !== undefined) return notifications;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('expo-notifications') as NotificationsModule;
+    // 앱이 떠 있을 때도 배너로 띄운다. 거부 경고는 지금 보여야 의미가 있다.
+    // 모듈을 처음 여는 이 자리에서 한 번만 건다.
+    mod.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }),
+    });
+    notifications = mod;
+  } catch {
+    notifications = null;
+  }
+  return notifications;
+}
 
 /** 시뮬레이터·웹에서는 푸시 토큰이 발급되지 않는다. 부르기 전에 걸러 헛된 실패를 만들지 않는다. */
 export function isPushSupported(): boolean {
@@ -47,18 +69,21 @@ export function isPushSupported(): boolean {
 export async function getFcmToken(): Promise<string | null> {
   if (!isPushSupported()) return null;
 
+  const Notifications = loadNotifications();
+  if (!Notifications) return null;
+
   try {
     const settings = await Notifications.getPermissionsAsync();
-    let granted = settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+    let granted =
+      settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
 
     if (!granted && settings.canAskAgain) {
       const asked = await Notifications.requestPermissionsAsync();
-      granted = asked.granted || asked.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+      granted =
+        asked.granted || asked.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
     }
     if (!granted) return null;
 
-    // 여기서 처음 로드한다. 네이티브 모듈이 없는 빌드에서는 이 require가 던지고,
-    // 아래 catch가 받아 null을 돌려준다 — 앱은 그대로 돈다.
     // v22부터 modular API만 있다(`messaging()` 기본 export 없음).
     const {
       getMessaging,
@@ -92,6 +117,9 @@ export type PushData = { facilityId?: string };
  */
 export function onNotificationTap(handler: (data: PushData) => void): () => void {
   if (!isPushSupported()) return () => {};
+
+  const Notifications = loadNotifications();
+  if (!Notifications) return () => {};
 
   const sub = Notifications.addNotificationResponseReceivedListener((response) => {
     handler((response.notification.request.content.data ?? {}) as PushData);
