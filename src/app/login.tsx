@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  wordmark: { fontSize: 28, fontWeight: '900', letterSpacing: -1 },
+  wordmark: { fontSize: 28, lineHeight: 38, fontWeight: '900', letterSpacing: -1 },
   tagline: { fontSize: 13.5, textAlign: 'center', lineHeight: 20, paddingHorizontal: 20 },
   form: { gap: 10 },
   field: {

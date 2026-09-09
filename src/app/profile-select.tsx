@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     gap: Spacing.xxl,
   },
   head: { alignItems: 'center', gap: 8 },
-  title: { fontSize: 24, fontWeight: '900', letterSpacing: -0.8 },
+  title: { fontSize: 24, lineHeight: 32, fontWeight: '900', letterSpacing: -0.8 },
   sub: { fontSize: 13.5, textAlign: 'center', lineHeight: 20 },
   grid: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.lg },
   tile: {

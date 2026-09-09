@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
   },
   levelText: { fontSize: 11, fontWeight: '900', letterSpacing: -0.2 },
   bannerInfo: { flex: 1, gap: 5 },
-  gameName: { fontSize: 21, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 },
+  gameName: { fontSize: 21, lineHeight: 28, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 },
   rankChip: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     gap: Spacing.xl,
   },
   head: { alignItems: 'center', gap: 8 },
-  title: { fontSize: 22, fontWeight: '900', letterSpacing: -0.6, marginTop: 4 },
+  title: { fontSize: 22, lineHeight: 30, fontWeight: '900', letterSpacing: -0.6, marginTop: 4 },
   sub: { fontSize: 13.5, textAlign: 'center', lineHeight: 20, paddingHorizontal: 12 },
   boxes: { flexDirection: 'row', justifyContent: 'center', gap: 9 },
   box: {

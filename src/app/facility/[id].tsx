@@ -694,7 +694,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  name: { fontSize: 28, fontWeight: '900', letterSpacing: -1, marginBottom: 4 },
+  name: { fontSize: 28, lineHeight: 38, fontWeight: '900', letterSpacing: -1, marginBottom: 4 },
   pawRow: { marginBottom: 8 },
   passButton: {
     flexDirection: 'row',

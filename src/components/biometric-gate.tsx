@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     zIndex: 200,
     paddingHorizontal: Spacing.xl,
   },
-  title: { fontSize: 20, fontWeight: '900', letterSpacing: -0.5, marginTop: 10 },
+  title: { fontSize: 20, lineHeight: 27, fontWeight: '900', letterSpacing: -0.5, marginTop: 10 },
   sub: { fontSize: 13.5, marginTop: 4, textAlign: 'center' },
   btn: {
     flexDirection: 'row',

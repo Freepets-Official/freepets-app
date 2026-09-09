@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.lg, paddingTop: Spacing.sm },
   head: { gap: 4 },
   eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  title: { fontSize: 26, fontWeight: '900', letterSpacing: -1 },
+  title: { fontSize: 26, lineHeight: 35, fontWeight: '900', letterSpacing: -1 },
   kpis: { flexDirection: 'row', gap: Spacing.sm },
   kpi: {
     flex: 1,

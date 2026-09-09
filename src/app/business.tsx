@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
 
   doneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md, padding: Spacing.xl },
   doneIcon: { width: 76, height: 76, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
-  doneTitle: { fontSize: 21, fontWeight: '900', letterSpacing: -0.5 },
+  doneTitle: { fontSize: 21, lineHeight: 28, fontWeight: '900', letterSpacing: -0.5 },
   doneBody: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
   doneCard: {
     width: '100%',

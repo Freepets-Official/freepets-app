@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.xl, paddingTop: Spacing.md },
   updated: { fontSize: 12, fontWeight: '600' },
   section: { gap: Spacing.sm },
-  sectionTitle: { fontSize: 20, fontWeight: '900', letterSpacing: -0.6, marginBottom: 2 },
+  sectionTitle: { fontSize: 20, lineHeight: 27, fontWeight: '900', letterSpacing: -0.6, marginBottom: 2 },
   clause: { borderRadius: Radius.md, paddingVertical: 6, paddingHorizontal: 4, gap: 3 },
   clauseTitle: { fontSize: 13.5, fontWeight: '800' },
   clauseBody: { fontSize: 13, lineHeight: 20 },
