@@ -1,5 +1,6 @@
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import { requireOptionalNativeModule } from 'expo-modules-core';
+import { Platform, TurboModuleRegistry } from 'react-native';
 
 /**
  * 푸시 알림 — 거부 제보가 들어오면 그 시설을 판별해봤던 사람들에게 서버가 보낸다.
@@ -26,7 +27,28 @@ import { Platform } from 'react-native';
  * 그래서 **실제로 쓸 때만** 안에서 require하고, 실패하면 푸시 기능만 꺼진 채로 앱은 돈다.
  * 새 빌드를 만들면 당장은 풀리지만, 팀원이 옛 빌드를 쓰거나 프로덕션에서 모듈 초기화가
  * 실패할 때 같은 일이 반복된다 — 구조로 막는 게 맞다.
+ *
+ * ⚠️ **try/catch만으로는 부족하다.** 없는 모듈을 require하면 Metro가 그 실패를 기록해
+ * 개발 모드 에러 화면을 띄운다 — 예외를 잡아도 화면은 이미 떠 있다. 그래서 **require 전에**
+ * 네이티브 모듈이 실제로 있는지 확인한다. 확인용 API는 둘 다 던지지 않고 null을 준다.
  */
+
+/**
+ * 이 빌드에 푸시에 필요한 네이티브 모듈이 들어 있는지.
+ *
+ * `expo-notifications`는 expo-modules 경유(`ExpoPushTokenManager`), Firebase는 TurboModule
+ * 직접 등록(`NativeRNFBTurboApp`)이라 확인 방법이 다르다. 둘 중 하나만 있어도 푸시는 못 쓴다.
+ */
+function hasPushNativeModules(): boolean {
+  try {
+    return (
+      requireOptionalNativeModule('ExpoPushTokenManager') != null &&
+      TurboModuleRegistry.get('NativeRNFBTurboApp') != null
+    );
+  } catch {
+    return false;
+  }
+}
 
 type NotificationsModule = typeof import('expo-notifications');
 
@@ -57,7 +79,7 @@ function loadNotifications(): NotificationsModule | null {
 
 /** 시뮬레이터·웹에서는 푸시 토큰이 발급되지 않는다. 부르기 전에 걸러 헛된 실패를 만들지 않는다. */
 export function isPushSupported(): boolean {
-  return Platform.OS !== 'web' && Device.isDevice;
+  return Platform.OS !== 'web' && Device.isDevice && hasPushNativeModules();
 }
 
 /**
