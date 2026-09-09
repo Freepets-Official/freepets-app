@@ -259,6 +259,31 @@ export const accountApi = {
   },
 };
 
+/**
+ * 푸시 토큰 등록·해제(`/users/push-tokens`).
+ *
+ * 서버가 받는 건 **FCM 등록 토큰**이다. 발송은 Firebase Admin SDK가 하므로 APNs 토큰을
+ * 보내면 그 기기에는 알림이 가지 않는다 — 등록 자체는 200으로 성공한다는 게 함정이다.
+ *
+ * 등록은 upsert다. 같은 토큰이 다른 유저로 저장돼 있었으면 그쪽에서 떼어내고 요청한
+ * 유저에게 붙인다(기기 재설치·계정 전환 대응). 그래서 로그인할 때마다 불러도 된다.
+ */
+export const pushApi = {
+  register: (token: string, platform: 'IOS' | 'ANDROID') =>
+    request<Record<string, never>>('POST', '/api/v1/users/push-tokens', {
+      body: { token, platform },
+      auth: true,
+    }),
+
+  /** 로그아웃·앱 삭제 시. 없는 토큰이어도 서버가 조용히 넘어간다(200). */
+  unregister: (token: string) =>
+    request<Record<string, never>>(
+      'DELETE',
+      `/api/v1/users/push-tokens?token=${encodeURIComponent(token)}`,
+      { auth: true },
+    ),
+};
+
 // ─────────────────────────── 시설(facilities) ───────────────────────────
 // POST /facilities/search — 내 주변·키워드 검색 공용. 데이터 출처: 한국관광공사 국문 관광정보(약 4.8만건).
 // 서버 category는 8종(TOUR/CULTURE/FESTIVAL/LEISURE/STAY/SHOPPING/RESTAURANT/CAFE) — 앱 6종으로 매핑.

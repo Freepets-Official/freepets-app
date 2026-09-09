@@ -8,6 +8,7 @@ import { BiometricGate } from '@/components/biometric-gate';
 import { CallConfirmSheet } from '@/components/call-confirm-sheet';
 import { PawTouches } from '@/components/paw-touches';
 import { AppThemeProvider, usePalette, useColorScheme } from '@/hooks/use-theme';
+import { onNotificationTap } from '@/lib/push';
 import { AppStoreProvider, useAppStore } from '@/store/app-store';
 
 /**
@@ -41,8 +42,31 @@ function useAuthGate() {
   }, [restoring, session.authed, session.activeProfile, segments, router]);
 }
 
+/**
+ * 알림을 탭하면 그 시설 상세로 보낸다.
+ *
+ * 서버는 data payload에 `facilityId`만 싣는다. 로그인 전에는 보내지 않는다 —
+ * 인증 게이트가 곧바로 로그인 화면으로 되돌려 이동이 헛돌기 때문이다.
+ */
+function usePushDeepLink() {
+  const router = useRouter();
+  const { session } = useAppStore();
+
+  useEffect(() => {
+    if (!session.authed) return;
+    return onNotificationTap((data) => {
+      const id = Number(data.facilityId);
+      // 서버가 문자열로 보내므로 숫자로 바꾼다. 값이 깨졌으면 아무 데도 보내지 않는다.
+      if (Number.isFinite(id) && id > 0) {
+        router.push({ pathname: '/facility/[id]', params: { id: String(id) } });
+      }
+    });
+  }, [session.authed, router]);
+}
+
 function RootNavigator() {
   useAuthGate();
+  usePushDeepLink();
   const p = usePalette();
   return (
     <Stack
