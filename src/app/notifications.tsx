@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 48 },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.md, paddingTop: Spacing.sm },
   head: { gap: 4, paddingBottom: Spacing.xs },
-  title: { fontSize: 26, fontWeight: '900', letterSpacing: -1 },
+  title: { fontSize: 26, lineHeight: 35, fontWeight: '900', letterSpacing: -1 },
   sub: { fontSize: 13.5, lineHeight: 20 },
   empty: { alignItems: 'center', gap: Spacing.md, paddingVertical: 72 },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 21 },

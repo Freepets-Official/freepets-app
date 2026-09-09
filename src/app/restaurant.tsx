@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
 
   doneWrap: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xxl },
   doneIcon: { width: 74, height: 74, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
-  doneTitle: { fontSize: 21, fontWeight: '900', letterSpacing: -0.5 },
+  doneTitle: { fontSize: 21, lineHeight: 28, fontWeight: '900', letterSpacing: -0.5 },
   doneBody: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
   doneCard: { width: '100%', borderRadius: Radius.lg, borderWidth: 1.5, padding: Spacing.xl, gap: 8, marginTop: 4 },
   doneCardHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexWrap: 'wrap' },
