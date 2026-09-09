@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
+import { Text } from '@/components/text';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { PetAvatar } from '@/components/pet-avatar';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';

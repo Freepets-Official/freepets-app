@@ -2,8 +2,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Radius, Spacing } from '@/constants/theme';
 import { hasStamp } from '@/data/stamps';
 import { usePalette } from '@/hooks/use-theme';

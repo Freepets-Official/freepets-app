@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/text';
 import { PullPaws } from '@/components/pull-paws';
 import { useTabChrome } from '@/components/tab-bar';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -19,9 +20,24 @@ interface ScreenProps {
   headerRight?: ReactNode;
   /** 넘기면 당겨서 새로고침(발자국) 활성화. 데모는 연출용, 백엔드 연동 시 실 새로고침. */
   onRefresh?: () => void | Promise<void>;
+  /**
+   * 네비게이션 헤더가 보이는 화면이면 `true`.
+   *
+   * 헤더가 이미 상단 노치·상태바를 차지하므로, 그 위에 SafeArea의 top inset을 또 주면
+   * 여백이 두 번 들어가 화면이 아래로 밀린다. 탭 화면은 헤더가 없어 기본값(false)이 맞다.
+   */
+  hasNavHeader?: boolean;
 }
 
-export function Screen({ children, title, eyebrow, subtitle, headerRight, onRefresh }: ScreenProps) {
+export function Screen({
+  children,
+  title,
+  eyebrow,
+  subtitle,
+  headerRight,
+  onRefresh,
+  hasNavHeader = false,
+}: ScreenProps) {
   const p = usePalette();
   const chrome = useTabChrome();
   const [pull, setPull] = useState(0);
@@ -52,7 +68,9 @@ export function Screen({ children, title, eyebrow, subtitle, headerRight, onRefr
   };
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
+    <SafeAreaView
+      edges={hasNavHeader ? ['bottom'] : ['top']}
+      style={[styles.safe, { backgroundColor: p.bg }]}>
       {onRefresh && (pull > 0 || refreshing) ? (
         <View style={styles.pullArea}>
           <PullPaws progress={pull / PULL_THRESHOLD} refreshing={refreshing} />

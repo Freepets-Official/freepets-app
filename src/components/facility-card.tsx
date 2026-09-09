@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
+import { Text, AnimatedText } from '@/components/text';
 import { PetAllowedBadge } from '@/components/badge';
 import { PressableScale } from '@/components/pressable-scale';
 import { DenialAlert } from '@/components/denial-alert';
@@ -30,20 +31,20 @@ export function FacilityCard({ facility }: { facility: Facility }) {
       }
       style={[styles.card, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
       <View style={styles.topRow}>
-        <Animated.Text
+        <AnimatedText
           sharedTransitionTag={`fac-cat-${facility.facilityId}`}
           style={[styles.category, { color: p.accent }]}>
           {CATEGORY_LABEL[facility.category]}
-        </Animated.Text>
+        </AnimatedText>
         <PetAllowedBadge allowed={facility.petAllowed} />
       </View>
 
       {/* 카드→상세 shared element — 이름이 그대로 이어지며 커진다(네이티브 전용) */}
-      <Animated.Text
+      <AnimatedText
         sharedTransitionTag={`fac-name-${facility.facilityId}`}
         style={[styles.name, { color: p.ink }]}>
         {facility.name}
-      </Animated.Text>
+      </AnimatedText>
       {grade.level !== null && (
         <Animated.View sharedTransitionTag={`fac-paw-${facility.facilityId}`} style={styles.pawRow}>
           <PawBadge grade={grade} size="sm" showLabel={false} />

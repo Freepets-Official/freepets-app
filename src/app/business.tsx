@@ -1,10 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/text';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { FACILITIES, formatDistance } from '@/data/mock';
@@ -108,8 +109,8 @@ export default function BusinessScreen() {
   if (done && facility) {
     const already = businessRegOf(facility.facilityId);
     return (
-      <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
-        <Stack.Screen options={{ title: '사업자 등록' }} />
+      <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
+        <Stack.Screen options={{ title: '사업자 등록', headerBackButtonDisplayMode: 'minimal'}} />
         <View style={styles.doneWrap}>
           <View style={[styles.doneIcon, { backgroundColor: p.successSoft }]}>
             <Ionicons name="shield-checkmark" size={34} color={p.success} />
@@ -158,7 +159,7 @@ export default function BusinessScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
+    <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
       <Stack.Screen options={{ title: '사업자 등록' }} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>

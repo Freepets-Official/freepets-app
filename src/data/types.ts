@@ -1,3 +1,24 @@
+/**
+ * 글씨 크기 — 앱 전체 텍스트에 같은 배율로 걸린다.
+ *
+ * 시스템 동적 타입(iOS 설정)과 별개로 앱 안에서 고르게 한다. 시스템 설정을 따라가면
+ * 다른 앱까지 함께 바뀌어, "이 앱만 크게 보고 싶다"는 요구를 못 받는다.
+ */
+export type FontSizeMode = 'small' | 'normal' | 'large';
+
+/** 배율. 1.15는 큰 제목이 두 줄로 접히기 시작하기 직전 값으로 잡았다. */
+export const FONT_SCALE: Record<FontSizeMode, number> = {
+  small: 0.9,
+  normal: 1,
+  large: 1.15,
+};
+
+export const FONT_SIZE_LABEL: Record<FontSizeMode, string> = {
+  small: '작게',
+  normal: '보통',
+  large: '크게',
+};
+
 export type Category = 'TOUR' | 'STAY' | 'CAFE' | 'LEISURE' | 'SHOPPING' | 'RESTAURANT';
 export type BreedSize = 'SMALL' | 'MEDIUM' | 'LARGE';
 

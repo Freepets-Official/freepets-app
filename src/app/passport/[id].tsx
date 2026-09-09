@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/text';
 import { DenialReport } from '@/components/denial-report';
 import { PassportCard } from '@/components/passport-card';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -49,7 +50,7 @@ export default function PassportScreen() {
     const stale = !!facility && !!check;
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
-        <Stack.Screen options={{ title: '동반 출입증' }} />
+        <Stack.Screen options={{ title: '동반 출입증', headerBackButtonDisplayMode: 'minimal'}} />
         <View style={styles.empty}>
           <Ionicons name="document-text-outline" size={34} color={p.muted} />
           <Text style={[styles.emptyText, { color: p.muted }]}>

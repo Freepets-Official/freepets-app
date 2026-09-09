@@ -2,9 +2,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { Stack } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Text } from '@/components/text';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import {
   CONQUEROR_BADGES,
@@ -34,7 +35,7 @@ export default function StampsScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]} edges={['bottom']}>
-      <Stack.Screen options={{ title: '여권 도장첩' }} />
+      <Stack.Screen options={{ title: '여권 도장첩', headerBackButtonDisplayMode: 'minimal'}} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.wrap}>
           {/* 요약 — 지금까지 무엇을 모았는지 한 줄로 */}

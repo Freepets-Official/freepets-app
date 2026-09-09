@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Screen } from '@/components/screen';
 import { StarInput } from '@/components/star-rating';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
@@ -41,7 +42,7 @@ export default function ReviewWriteScreen() {
 
   if (!facility) {
     return (
-      <Screen>
+      <Screen hasNavHeader>
         <Text style={{ color: p.muted, textAlign: 'center', paddingVertical: 48 }}>
           시설을 찾을 수 없어요.
         </Text>
@@ -85,8 +86,8 @@ export default function ReviewWriteScreen() {
   };
 
   return (
-    <Screen>
-      <Stack.Screen options={{ title: '리뷰 쓰기' }} />
+    <Screen hasNavHeader>
+      <Stack.Screen options={{ title: '리뷰 쓰기', headerBackButtonDisplayMode: 'minimal'}} />
 
       <View style={styles.head}>
         <Text style={[styles.eyebrow, { color: p.accent }]}>방문 리뷰</Text>

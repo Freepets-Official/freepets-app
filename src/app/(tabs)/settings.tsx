@@ -2,11 +2,13 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter } from 'expo-router';
 import { useState, type ComponentProps, type ReactNode } from 'react';
-import { Alert, Linking, Modal, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Linking, Modal, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
 import { Screen } from '@/components/screen';
 import { CardShadow, Radius, Spacing, type ThemeMode } from '@/constants/theme';
+import { FONT_SIZE_LABEL, type FontSizeMode } from '@/data/types';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -95,6 +97,26 @@ export default function SettingsScreen() {
           chevron
           last
         />
+      </Group>
+
+      {/* 글씨 크기 — 앱 전체 텍스트에 같은 배율로 걸린다 */}
+      <Group title="화면" caption="반갑꼬리 전용">
+        <View style={styles.block}>
+          <Text style={[styles.blockLabel, { color: p.ink }]}>글씨 크기</Text>
+          <Text style={[styles.blockHint, { color: p.muted }]}>
+            앱 전체 글씨가 함께 커지거나 작아져요.
+          </Text>
+          <View style={styles.chips}>
+            {(['small', 'normal', 'large'] as FontSizeMode[]).map((mode) => (
+              <Chip
+                key={mode}
+                label={FONT_SIZE_LABEL[mode]}
+                selected={settings.fontSize === mode}
+                onPress={() => updateSettings({ fontSize: mode })}
+              />
+            ))}
+          </View>
+        </View>
       </Group>
 
       {/* 탐색 반경 (앱 특화) */}

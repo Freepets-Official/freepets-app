@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { Text } from '@/components/text';
 import { SectionTitle } from '@/components/section-title';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
