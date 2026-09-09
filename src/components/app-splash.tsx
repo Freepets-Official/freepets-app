@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Dimensions, StyleSheet, View } from 'react-native';
 import { AnimatedText } from '@/components/text';
 import Animated, {
   Easing,
@@ -89,6 +89,14 @@ function Letter({ children, index }: { children: string; index: number }) {
   return <AnimatedText style={[styles.letter, s]}>{children}</AnimatedText>;
 }
 
+/**
+ * 스플래시 그림 크기 — 화면 너비의 62%, 최대 340.
+ *
+ * 240 고정이었는데 큰 화면에서 그림이 가운데 조그맣게 떠 있어 첫인상이 허전했다.
+ * 상한을 두는 건 아이패드·가로 모드에서 그림만 커지는 걸 막기 위해서다.
+ */
+const PHOTO_SIZE = Math.min(Dimensions.get('window').width * 0.62, 340);
+
 const styles = StyleSheet.create({
   wrap: {
     backgroundColor: '#FFFFFF',
@@ -98,10 +106,11 @@ const styles = StyleSheet.create({
     zIndex: 100,
     pointerEvents: 'none',
   },
-  // 테두리·배경 없이 그림만 — 흰 배경에 동화된다
+  // 테두리·배경 없이 그림만 — 흰 배경에 동화된다.
+  // 화면 너비에 비례시킨다. 고정값이면 작은 기기에서 넘치고 큰 기기에서 허전하다.
   photoCard: {
-    width: 240,
-    height: 240,
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE,
   },
   photo: { width: '100%', height: '100%' },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
