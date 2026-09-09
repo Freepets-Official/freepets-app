@@ -68,8 +68,8 @@ export default function RestaurantScreen() {
   };
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
-      <Stack.Screen options={{ title: '동반 음식점 등록' }} />
+    <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
+      <Stack.Screen options={{ title: '동반 음식점 등록', headerBackButtonDisplayMode: 'minimal'}} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           {/* 진행 표시 (완료 화면 제외) */}

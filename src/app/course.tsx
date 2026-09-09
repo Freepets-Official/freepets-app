@@ -464,8 +464,8 @@ export default function CourseScreen() {
   const available = FACILITIES.filter((f) => !stopIds.includes(f.facilityId));
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
-      <Stack.Screen options={{ title: '여행 코스' }} />
+    <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
+      <Stack.Screen options={{ title: '여행 코스', headerBackButtonDisplayMode: 'minimal'}} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           <View style={styles.head}>

@@ -34,7 +34,7 @@ export default function StampsScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]} edges={['bottom']}>
-      <Stack.Screen options={{ title: '여권 도장첩' }} />
+      <Stack.Screen options={{ title: '여권 도장첩', headerBackButtonDisplayMode: 'minimal'}} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.wrap}>
           {/* 요약 — 지금까지 무엇을 모았는지 한 줄로 */}

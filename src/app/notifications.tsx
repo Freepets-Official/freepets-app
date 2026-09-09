@@ -22,8 +22,8 @@ export default function NotificationsScreen() {
   const empty = denials.length === 0 && vax.length === 0;
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
-      <Stack.Screen options={{ title: '알림' }} />
+    <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
+      <Stack.Screen options={{ title: '알림', headerBackButtonDisplayMode: 'minimal'}} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           <View style={styles.head}>

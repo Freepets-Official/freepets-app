@@ -47,7 +47,7 @@ export default function PromotionScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
+    <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
       <Stack.Screen options={{ title: '매장 소개·홍보', headerBackButtonDisplayMode: 'minimal' }} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>

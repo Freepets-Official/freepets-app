@@ -51,7 +51,7 @@ export default function ReportScreen() {
 
   if (!facility) {
     return (
-      <Screen>
+      <Screen hasNavHeader>
         <Text style={{ color: p.muted, textAlign: 'center', paddingVertical: 48 }}>
           시설을 찾을 수 없어요.
         </Text>
@@ -69,8 +69,8 @@ export default function ReportScreen() {
 
   if (sent) {
     return (
-      <Screen>
-        <Stack.Screen options={{ title: '제보하기' }} />
+      <Screen hasNavHeader>
+        <Stack.Screen options={{ title: '제보하기', headerBackButtonDisplayMode: 'minimal'}} />
         <View style={styles.doneWrap}>
           <View style={[styles.doneIcon, { backgroundColor: p.successSoft }]}>
             <Ionicons name="checkmark" size={30} color={p.success} />
@@ -87,7 +87,7 @@ export default function ReportScreen() {
   }
 
   return (
-    <Screen>
+    <Screen hasNavHeader>
       <Stack.Screen options={{ title: '제보하기' }} />
 
       <View style={styles.head}>

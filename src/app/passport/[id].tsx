@@ -49,7 +49,7 @@ export default function PassportScreen() {
     const stale = !!facility && !!check;
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
-        <Stack.Screen options={{ title: '동반 출입증' }} />
+        <Stack.Screen options={{ title: '동반 출입증', headerBackButtonDisplayMode: 'minimal'}} />
         <View style={styles.empty}>
           <Ionicons name="document-text-outline" size={34} color={p.muted} />
           <Text style={[styles.emptyText, { color: p.muted }]}>

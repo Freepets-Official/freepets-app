@@ -121,7 +121,7 @@ export default function FacilityDetailScreen() {
 
   if (!facility) {
     return (
-      <Screen>
+      <Screen hasNavHeader>
         <Text style={{ color: p.muted, textAlign: 'center', paddingVertical: 48 }}>
           시설을 찾을 수 없어요.
         </Text>
@@ -216,7 +216,7 @@ export default function FacilityDetailScreen() {
       : '아직 확정 전 · 방문 전 확인을 권장해요';
 
   return (
-    <Screen>
+    <Screen hasNavHeader>
       <View style={styles.header}>
         <View style={styles.headerTop}>
           {/* 카드에서 이어지는 shared element — 카테고리·이름·발자국 3개가 함께 흐른다 */}

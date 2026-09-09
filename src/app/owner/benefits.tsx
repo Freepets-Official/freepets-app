@@ -39,7 +39,7 @@ export default function BenefitsScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
+    <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
       <Stack.Screen options={{ title: '방문 혜택 안내', headerBackButtonDisplayMode: 'minimal' }} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>

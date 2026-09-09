@@ -56,7 +56,7 @@ export default function CalendarEventScreen() {
   };
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
+    <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
       <Stack.Screen
         options={{ title: editing ? '일정 수정' : '일정 추가', headerBackButtonDisplayMode: 'minimal' }}
       />

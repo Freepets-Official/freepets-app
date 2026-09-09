@@ -15,7 +15,7 @@ export default function PolicyScreen() {
   const title = tab === 'privacy' ? '개인정보처리방침' : '이용약관';
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
+    <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
       <Stack.Screen options={{ title, headerBackButtonDisplayMode: 'minimal' }} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>

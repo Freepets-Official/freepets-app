@@ -54,7 +54,7 @@ export default function ProfileEditScreen() {
   const initial = nickname.trim()[0] ?? '나';
 
   return (
-    <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
+    <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
       <Stack.Screen options={{ title: '프로필 관리', headerBackButtonDisplayMode: 'minimal' }} />
       <View style={styles.inner}>
         {/* 아바타 */}

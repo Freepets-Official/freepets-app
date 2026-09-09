@@ -41,7 +41,7 @@ export default function ReviewWriteScreen() {
 
   if (!facility) {
     return (
-      <Screen>
+      <Screen hasNavHeader>
         <Text style={{ color: p.muted, textAlign: 'center', paddingVertical: 48 }}>
           시설을 찾을 수 없어요.
         </Text>
@@ -85,8 +85,8 @@ export default function ReviewWriteScreen() {
   };
 
   return (
-    <Screen>
-      <Stack.Screen options={{ title: '리뷰 쓰기' }} />
+    <Screen hasNavHeader>
+      <Stack.Screen options={{ title: '리뷰 쓰기', headerBackButtonDisplayMode: 'minimal'}} />
 
       <View style={styles.head}>
         <Text style={[styles.eyebrow, { color: p.accent }]}>방문 리뷰</Text>
