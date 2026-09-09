@@ -1,9 +1,3 @@
-import {
-  getMessaging,
-  getToken,
-  isDeviceRegisteredForRemoteMessages,
-  registerDeviceForRemoteMessages,
-} from '@react-native-firebase/messaging';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
@@ -18,6 +12,15 @@ import { Platform } from 'react-native';
  *
  * 웹에는 붙이지 않는다. 웹 푸시는 서비스 워커와 VAPID 키가 따로 필요하고 서버에도 그
  * 설정이 없다. 웹에서는 홈 상단의 거부 경고(`GET /me/denial-alerts`)가 그 자리를 대신한다.
+ *
+ * ⚠️ **Firebase를 파일 최상단에서 import하지 않는다.** `@react-native-firebase/messaging`은
+ * import되는 순간 네이티브 모듈(`NativeRNFBTurboApp`)을 찾는데, 그게 없는 빌드에서는
+ * 거기서 예외가 나고 **앱 전체가 뜨지 않는다.** 이 파일은 스토어 → 테마 → 탭 레이아웃으로
+ * 이어지는 최상위 의존이라 화면 하나가 아니라 앱이 통째로 죽는다.
+ *
+ * 실제로 그렇게 됐다 — Firebase를 넣기 전에 만든 개발 빌드에 새 JS를 물리자마자
+ * `Native module NativeRNFBTurboApp is not registered`로 시작조차 못 했다.
+ * 그래서 **토큰을 실제로 받을 때만** 안에서 require한다. 없으면 푸시만 빠진다.
  */
 
 /** 알림을 앱이 떠 있을 때도 배너로 띄운다. 거부 경고는 지금 보여야 의미가 있다. */
@@ -54,7 +57,17 @@ export async function getFcmToken(): Promise<string | null> {
     }
     if (!granted) return null;
 
+    // 여기서 처음 로드한다. 네이티브 모듈이 없는 빌드에서는 이 require가 던지고,
+    // 아래 catch가 받아 null을 돌려준다 — 앱은 그대로 돈다.
     // v22부터 modular API만 있다(`messaging()` 기본 export 없음).
+    const {
+      getMessaging,
+      getToken,
+      isDeviceRegisteredForRemoteMessages,
+      registerDeviceForRemoteMessages,
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+    } = require('@react-native-firebase/messaging') as typeof import('@react-native-firebase/messaging');
+
     const app = getMessaging();
 
     // iOS는 APNs 등록이 끝나야 FCM 토큰이 나온다. 순서를 지키지 않으면 빈 값이 온다.
