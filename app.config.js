@@ -69,7 +69,18 @@ module.exports = ({ config }) => {
   const ios = { ...(config.ios ?? {}) };
   if (fs.existsSync(iosFirebaseFile)) {
     ios.googleServicesFile = iosFirebaseFile;
-    plugins.push('@react-native-firebase/app');
+    /**
+     * `disableSPM`이 없으면 pod 설치 단계에서 빌드가 깨진다.
+     *
+     * RN 0.75부터 Firebase iOS SDK를 **Swift Package Manager**로 푸는 게 기본인데,
+     * SPM은 `use_frameworks! :linkage => :dynamic`을 요구한다. 그런데 그 설정은 Podfile
+     * 전체에 걸려서 **모든 네이티브 모듈의 링크 방식이 바뀐다** — 이미 실기기에서 검증을
+     * 끝낸 소셜 로그인 4종(카카오·네이버·구글·애플)을 전부 다시 확인해야 한다.
+     *
+     * 그래서 Firebase만 CocoaPods로 되돌린다. CocoaPods 모드는 static·dynamic 둘 다
+     * 지원해서 나머지 모듈의 링크 방식을 건드리지 않는다.
+     */
+    plugins.push(['@react-native-firebase/app', { ios: { disableSPM: true } }]);
     plugins.push('@react-native-firebase/messaging');
   }
 
