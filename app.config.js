@@ -55,13 +55,20 @@ module.exports = ({ config }) => {
    * 넣지 않는다 — 넣으면 **빌드가 그 자리에서 실패**하고, 푸시를 안 쓰는 사람까지 막힌다.
    *
    * 이 파일은 Firebase 콘솔 > 프로젝트 설정 > iOS 앱(`com.freepets.app`)에서 받는다.
-   * 클라이언트에 배포되는 값이라 비밀은 아니지만, 저장소에 올리지 않고 로컬·EAS에만 둔다
-   * (`.env`와 같은 취급 — 파일이 늘어나는 걸 한 곳에서 관리하기 위해서다).
+   * 클라이언트에 배포되는 값이라 비밀은 아니지만 저장소에 올리지 않는다(`.env`와 같은 취급).
+   *
+   * ⚠️ **그래서 EAS 클라우드 빌드에는 이 파일이 올라가지 않는다** — EAS는 gitignore된 파일을
+   * 빼고 업로드한다. 로컬만 보고 판단하면 **빌드는 성공하는데 푸시만 조용히 빠진다.**
+   * EAS에서는 파일 타입 환경변수(`GOOGLE_SERVICES_INFO_PLIST`)로 받아 그 경로를 쓴다:
+   *
+   *   eas env:create --name GOOGLE_SERVICES_INFO_PLIST --type file \
+   *     --value ./GoogleService-Info.plist --visibility sensitive --environment production
    */
-  const iosFirebaseFile = path.join(__dirname, 'GoogleService-Info.plist');
+  const iosFirebaseFile =
+    process.env.GOOGLE_SERVICES_INFO_PLIST ?? path.join(__dirname, 'GoogleService-Info.plist');
   const ios = { ...(config.ios ?? {}) };
   if (fs.existsSync(iosFirebaseFile)) {
-    ios.googleServicesFile = './GoogleService-Info.plist';
+    ios.googleServicesFile = iosFirebaseFile;
     plugins.push('@react-native-firebase/app');
     plugins.push('@react-native-firebase/messaging');
   }
