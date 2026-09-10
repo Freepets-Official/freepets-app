@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DateField } from '@/components/date-field';
 import { Text } from '@/components/text';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import {
@@ -113,28 +114,17 @@ export default function CalendarEventScreen() {
             ))}
           </View>
 
-          {/* 날짜·시간 */}
-          <View style={styles.pairRow}>
-            <View style={styles.pairCol}>
-              <Text style={[styles.label, { color: p.ink }]}>날짜</Text>
-              <TextInput
-                value={date}
-                onChangeText={setDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={p.muted}
-                style={[styles.input, { backgroundColor: p.surface, borderColor: p.line, color: p.ink }]}
-              />
-            </View>
-            <View style={styles.pairCol}>
-              <Text style={[styles.label, { color: p.ink }]}>시간 (선택)</Text>
-              <TextInput
-                value={time}
-                onChangeText={setTime}
-                placeholder="09:00"
-                placeholderTextColor={p.muted}
-                style={[styles.input, { backgroundColor: p.surface, borderColor: p.line, color: p.ink }]}
-              />
-            </View>
+          {/*
+            날짜·시간은 휠로 고른다. 형식을 손으로 맞추게 하면 오타가 나고, 키보드가
+            아래쪽 입력을 가린다. 세로로 쌓은 이유는 휠이 펼쳐질 자리가 필요해서다.
+          */}
+          <View style={styles.dateCol}>
+            <Text style={[styles.label, { color: p.ink }]}>날짜</Text>
+            <DateField value={date} onChange={setDate} placeholder="날짜 선택" />
+          </View>
+          <View style={styles.dateCol}>
+            <Text style={[styles.label, { color: p.ink }]}>시간 (선택)</Text>
+            <DateField value={time} onChange={setTime} placeholder="시간 선택" mode="time" />
           </View>
 
           {/* 반복 */}
@@ -238,8 +228,7 @@ const styles = StyleSheet.create({
   petRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   chip: { borderWidth: 1.5, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 8 },
   chipText: { fontSize: 13, fontWeight: '700' },
-  pairRow: { flexDirection: 'row', gap: Spacing.md },
-  pairCol: { flex: 1 },
+  dateCol: { gap: 6 },
   reminderRow: {
     flexDirection: 'row',
     alignItems: 'center',
