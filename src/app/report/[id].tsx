@@ -108,7 +108,6 @@ export default function ReportScreen() {
     addReport(facilityId, type, content.trim(), weight, evidence !== null);
     setSending(false);
     setSent(true);
-    setTimeout(() => router.back(), 1600);
   };
 
   if (sent) {
@@ -131,6 +130,18 @@ export default function ReportScreen() {
               ? '들어가셨다니 다행이에요.\n남겨주신 내용은 다음 판별을 다듬는 데 씁니다.'
               : '같은 곳을 보려는 다른 집사에게 경고로 전해져요.\n더 정확한 정보를 만들어 주셔서 고마워요.'}
           </Text>
+          {/*
+            예전에는 1.6초 뒤 저절로 닫혔다. 무엇이 어떻게 됐는지 읽기도 전에 화면이
+            사라져서, 제보가 갔는지 확인할 방법이 없었다. 닫는 건 사용자가 정한다.
+          */}
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [
+              styles.doneBtn,
+              { backgroundColor: pressed ? p.accentDark : p.accent },
+            ]}>
+            <Text style={[styles.doneBtnText, { color: p.onAccent }]}>확인</Text>
+          </Pressable>
         </View>
       </Screen>
     );
@@ -275,5 +286,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   doneTitle: { fontSize: 19, fontWeight: '900', letterSpacing: -0.5 },
+  doneBtn: {
+    alignSelf: 'stretch', alignItems: 'center',
+    borderRadius: Radius.full, paddingVertical: 14, marginTop: Spacing.lg,
+  },
+  doneBtnText: { fontSize: 15.5, fontWeight: '800' },
   doneBody: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
 });
