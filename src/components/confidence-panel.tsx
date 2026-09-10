@@ -1,5 +1,4 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
@@ -21,7 +20,6 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
   const callFacility = useCallFacility();
   const { confidence, source, confirmedAt } = confidenceOf(facility);
 
-  const [requested, setRequested] = useState(false);
   const fresh = freshnessText(confirmedAt);
   const isConfirmed = confidence === 'CONFIRMED';
 
@@ -78,22 +76,14 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
             </Pressable>
           )}
 
-          <Pressable
-            onPress={() => setRequested(true)}
-            disabled={requested}
-            style={({ pressed }) => [
-              styles.action,
-              { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
-            ]}>
-            <Ionicons
-              name={requested ? 'checkmark-circle' : 'business'}
-              size={16}
-              color={requested ? p.success : p.muted}
-            />
-            <Text style={[styles.actionText, { color: requested ? p.success : p.ink }]}>
-              {requested ? '사업자에게 확인 요청을 보냈어요' : '사업자에게 조건 확인 요청'}
-            </Text>
-          </Pressable>
+          {/*
+            「사업자에게 조건 확인 요청」 버튼이 여기 있었다. 눌러도 **아무 데도 가지 않으면서**
+            "보냈어요"라고 말하고 있었다 — 서버에 그런 엔드포인트가 없다(라이브 44개 확인).
+            보내지 않은 것을 보냈다고 하는 화면은 두면 안 되고, 동작하지 않는 기능은 앱 심사
+            거절 사유이기도 하다. 백엔드에 요청 API가 생기면 그때 되살린다.
+
+            바로 위 전화 확인이 실제로 동작하는 대안이라 이 자리는 비워둔다.
+          */}
         </View>
       )}
     </View>
