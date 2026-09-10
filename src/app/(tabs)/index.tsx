@@ -245,9 +245,17 @@ function StackCard({
     sc.value = withSpring(Math.max(0.9, 1 - pos * 0.03), STACK_SPRING);
   }, [pos, total, tY, sc]);
 
+  /**
+   * 뒤 카드를 **투명하게 만들지 않는다.**
+   *
+   * 예전에는 `opacity`로 깊이를 줬는데, 카드가 반투명해지면서 **뒤 카드의 내용이 앞
+   * 카드에 비쳐 보였다.** 아이가 여럿이면 이름·레벨·XP 바가 겹쳐 읽혀 지저분하다.
+   * 다크에서 특히 두드러진다.
+   *
+   * 깊이는 이미 `scale`과 `translateY`가 만들고 있어서 투명도까지 쓸 이유가 없다.
+   */
   const anim = useAnimatedStyle(() => ({
     transform: [{ translateY: tY.value }, { scale: sc.value }],
-    opacity: 1 - Math.min(pos, 3) * 0.06,
   }));
 
   const isFront = pos === 0;

@@ -123,7 +123,9 @@ export function GlassTabBar(props: TabBarProps) {
           styles.bar,
           {
             borderColor: p.line,
-            backgroundColor: scheme === 'dark' ? 'rgba(33,28,40,0.72)' : 'rgba(255,255,255,0.72)',
+            // 다크는 배경(#15121A)보다 더 가라앉힌다. 바탕이 어두울수록 로즈핑크
+            // 활성 탭이 또렷해지고, 비활성 회색도 대비를 얻는다.
+            backgroundColor: scheme === 'dark' ? 'rgba(12,10,16,0.88)' : 'rgba(255,255,255,0.72)',
           },
         ]}>
         {state.routes.map((route, index) => {
