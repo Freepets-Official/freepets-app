@@ -80,6 +80,15 @@ export function Screen({
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        /**
+         * 키보드가 올라오면 그만큼 스크롤 여백을 자동으로 준다.
+         *
+         * 없으면 화면 아래쪽 입력칸이 키보드에 가린 채 남는다 — 사용자가 지금 뭘 치고
+         * 있는지 안 보인다. `KeyboardAvoidingView`로 감싸는 방법도 있지만 그건 화면 전체를
+         * 밀어올려서 헤더까지 따라 올라가고, 스크롤 위치와 어긋나기 쉽다.
+         */
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
         scrollEventThrottle={16}
         onScroll={handleScroll}
         onScrollEndDrag={handleEndDrag}

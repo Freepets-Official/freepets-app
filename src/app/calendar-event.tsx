@@ -61,7 +61,9 @@ export default function CalendarEventScreen() {
       <Stack.Screen
         options={{ title: editing ? '일정 수정' : '일정 추가', headerBackButtonDisplayMode: 'minimal' }}
       />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive" contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           {/* 종류 */}
           <Text style={[styles.label, { color: p.ink }]}>종류</Text>

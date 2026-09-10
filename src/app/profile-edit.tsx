@@ -4,7 +4,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
@@ -57,6 +57,10 @@ export default function ProfileEditScreen() {
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
       <Stack.Screen options={{ title: '프로필 관리', headerBackButtonDisplayMode: 'minimal' }} />
+      {/* 입력이 한두 개뿐이라 스크롤을 들이지 않고 화면째 밀어올린다 */}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.inner}>
         {/* 아바타 */}
         <Pressable onPress={pickPhoto} style={styles.avatarPick}>
@@ -106,11 +110,13 @@ export default function ProfileEditScreen() {
           <Text style={[styles.saveText, { color: p.onAccent }]}>저장하기</Text>
         </Pressable>
       </View>
+    </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   safe: { flex: 1 },
   inner: {
     width: '100%',
