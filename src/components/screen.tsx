@@ -1,8 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
+import { useScrollToTop } from 'expo-router';
+
 import { PullPaws } from '@/components/pull-paws';
 import { useTabChrome } from '@/components/tab-bar';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -40,6 +42,15 @@ export function Screen({
 }: ScreenProps) {
   const p = usePalette();
   const chrome = useTabChrome();
+
+  /**
+   * 이미 열려 있는 탭을 다시 누르면 맨 위로 올린다(SNS·유튜브에서 익숙한 동작).
+   *
+   * 커스텀 탭바가 `tabPress`를 emit하고 있어 이 훅이 그걸 받는다. 탭이 아닌 화면
+   * (시설 상세·리뷰·제보)에서는 들을 이벤트가 없어 아무 일도 하지 않는다.
+   */
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -77,6 +88,7 @@ export function Screen({
         </View>
       ) : null}
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}

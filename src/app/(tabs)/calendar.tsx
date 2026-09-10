@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useRouter, useScrollToTop } from 'expo-router';
+import { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -25,6 +25,10 @@ export default function CalendarScreen() {
   const p = usePalette();
   const router = useRouter();
   const chrome = useTabChrome();
+  // 캘린더 탭을 다시 누르면 아래 일정 목록을 맨 위로 올린다(다른 탭과 같은 동작)
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
+
   const { pets, eventsOn, toggleEventReminder, removeCalendarEvent, toggleMedTaken, isMedTaken } =
     useAppStore();
 
@@ -192,6 +196,7 @@ export default function CalendarScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.panel}
         contentContainerStyle={styles.panelContent}
         showsVerticalScrollIndicator={false}
