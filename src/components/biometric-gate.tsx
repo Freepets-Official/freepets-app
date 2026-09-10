@@ -103,6 +103,7 @@ const styles = StyleSheet.create({
   btn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
     borderRadius: Radius.full,
     paddingHorizontal: 22,

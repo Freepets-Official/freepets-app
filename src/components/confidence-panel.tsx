@@ -110,11 +110,14 @@ const styles = StyleSheet.create({
   action: {
     flexDirection: 'row',
     alignItems: 'center',
+    // 아이콘·글씨가 한 덩어리로 가운데 모이게 한다. 예전에는 글씨에 `flex: 1`이 걸려
+    // 왼쪽으로 밀렸는데, 오른쪽 화살표가 없는 버튼은 그만큼 오른쪽이 비어 허전했다.
+    justifyContent: 'center',
     gap: 8,
     borderWidth: 1.5,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.lg,
     paddingVertical: 12,
   },
-  actionText: { fontSize: 13.5, fontWeight: '700', flex: 1 },
+  actionText: { fontSize: 13.5, fontWeight: '700' },
 });
