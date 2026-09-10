@@ -562,12 +562,34 @@ export interface CalendarEvent {
   title: string;
   /** YYYY-MM-DD (시작일) */
   date: string;
+  /**
+   * YYYY-MM-DD (종료일). 여행처럼 며칠에 걸치는 일정에만 있다.
+   *
+   * 접종·복용·검진은 하루에 끝나므로 비워둔다. 서버 캘린더 API(백엔드 PR #69)에는 아직
+   * 이 필드가 없어 로컬에만 있다 — 연동할 때 백엔드에 추가를 요청해야 한다.
+   */
+  endDate: string | null;
   /** HH:MM, 없으면 종일 */
   time: string | null;
   repeat: CalRepeat;
   /** 알림 켜짐 여부 (실제 푸시는 백엔드/expo-notifications 연동 시) */
   reminder: boolean;
   notes: string | null;
+}
+
+/**
+ * 기간 일정이 그날 어디쯤인지. 막대의 모서리를 어느 쪽만 둥글게 할지 정하는 데 쓴다.
+ * 기간 일정이 아니면 `null`.
+ */
+export function spanPosition(
+  e: CalendarEvent,
+  target: string,
+): 'start' | 'middle' | 'end' | 'single' | null {
+  if (!e.endDate || e.endDate <= e.date) return null;
+  if (target < e.date || target > e.endDate) return null;
+  if (target === e.date) return 'start';
+  if (target === e.endDate) return 'end';
+  return 'middle';
 }
 
 /** 이벤트 종류별 표시 메타 — 앱 파스텔 팔레트에 맞춘 귀여운 색 */
@@ -599,6 +621,9 @@ export function ymd(d: Date): string {
 /** 반복을 고려해 이벤트가 특정 날짜(YYYY-MM-DD)에 발생하는지 */
 export function eventOccursOn(e: CalendarEvent, target: string): boolean {
   if (e.date === target) return true;
+  // 기간 일정(여행)은 시작·종료 사이 모든 날에 걸린다. 문자열 비교로 충분하다 —
+  // YYYY-MM-DD는 사전순이 곧 날짜순이라 Date로 바꿀 이유가 없다.
+  if (e.endDate && target > e.date && target <= e.endDate) return true;
   if (e.repeat === 'NONE' || target < e.date) return false;
   const d = new Date(`${target}T00:00:00`);
   const s = new Date(`${e.date}T00:00:00`);

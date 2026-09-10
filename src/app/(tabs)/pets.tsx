@@ -41,6 +41,7 @@ export default function PetsScreen() {
       title: `${species} 예방접종`,
       date,
       time: null,
+      endDate: null,
       repeat: 'NONE',
       reminder: true,
       notes: '다음 접종 예정 — 정확한 일정은 동물병원 확인',

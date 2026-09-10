@@ -38,6 +38,7 @@ export default function CalendarEventScreen() {
   const [repeat, setRepeat] = useState<CalRepeat>(editing?.repeat ?? 'NONE');
   const [reminder, setReminder] = useState(editing?.reminder ?? true);
   const [notes, setNotes] = useState(editing?.notes ?? '');
+  const [endDate, setEndDate] = useState(editing?.endDate ?? '');
 
   const canSave = title.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date);
 
@@ -48,6 +49,9 @@ export default function CalendarEventScreen() {
       type,
       title: title.trim(),
       date,
+      // 종료일은 여행에만 둔다. 다른 종류로 바꿔 저장하면 남아 있던 값을 버린다 —
+      // 안 그러면 화면에 안 보이는 기간이 데이터에만 남아 캘린더에 막대가 그려진다.
+      endDate: type === 'TRAVEL' && endDate && endDate > date ? endDate : null,
       time: time.trim() || null,
       repeat,
       reminder,
@@ -121,9 +125,25 @@ export default function CalendarEventScreen() {
             아래쪽 입력을 가린다. 세로로 쌓은 이유는 휠이 펼쳐질 자리가 필요해서다.
           */}
           <View style={styles.dateCol}>
-            <Text style={[styles.label, { color: p.ink }]}>날짜</Text>
+            <Text style={[styles.label, { color: p.ink }]}>{type === 'TRAVEL' ? '시작일' : '날짜'}</Text>
             <DateField value={date} onChange={setDate} placeholder="날짜 선택" />
           </View>
+          {/*
+            여행만 며칠에 걸친다. 접종·복용·검진은 하루에 끝나므로 종료일을 묻지 않는다 —
+            안 쓰는 칸을 늘어놓으면 무엇을 채워야 하는지가 흐려진다.
+          */}
+          {type === 'TRAVEL' && (
+            <View style={styles.dateCol}>
+              <Text style={[styles.label, { color: p.ink }]}>종료일 (선택)</Text>
+              <DateField
+                value={endDate}
+                onChange={setEndDate}
+                placeholder="당일치기면 비워두세요"
+                // 시작일보다 이르면 기간이 성립하지 않는다
+                minimumDate={date ? new Date(`${date}T00:00:00`) : undefined}
+              />
+            </View>
+          )}
           <View style={styles.dateCol}>
             <Text style={[styles.label, { color: p.ink }]}>시간 (선택)</Text>
             <DateField value={time} onChange={setTime} placeholder="시간 선택" mode="time" />
