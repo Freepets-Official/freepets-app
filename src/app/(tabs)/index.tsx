@@ -76,11 +76,20 @@ export default function HomeScreen() {
   const { pets, checks, plannedDenialAlerts, upcomingVaccinations, stamps, facilityById, loadFacility } =
     useAppStore();
 
-  // 이력에 담긴 시설을 캐시에 채운다. 이름을 보여주려면 시설을 알아야 하는데, 판별 이력에는
-  // facilityId만 들어 있다. 캐시에 이미 있으면 loadFacility가 알아서 넘어간다.
+  /**
+   * 이력에 담긴 시설을 캐시에 채운다. 이름을 보여주려면 시설을 알아야 하는데 판별 이력에는
+   * facilityId만 들어 있다.
+   *
+   * **한 번 시도한 시설은 다시 부르지 않는다.** 서버에 없는 시설이면 캐시가 끝내 비어 있어
+   * 리렌더마다 같은 요청을 반복하게 된다 — 탭을 오갈 때마다 실패할 요청이 쌓인다.
+   */
+  const triedFacilities = useRef<Set<number>>(new Set());
   useEffect(() => {
     for (const c of checks.slice(0, 5)) {
-      if (!facilityById(c.facilityId)) void loadFacility(c.facilityId);
+      if (triedFacilities.current.has(c.facilityId)) continue;
+      if (facilityById(c.facilityId)) continue;
+      triedFacilities.current.add(c.facilityId);
+      void loadFacility(c.facilityId);
     }
   }, [checks, facilityById, loadFacility]);
   // 뱃지 기준과 같은 값(서로 다른 시군구 수)을 쓴다 — 홈과 도장첩이 다른 숫자를 보이면 안 된다
