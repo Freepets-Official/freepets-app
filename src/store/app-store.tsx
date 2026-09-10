@@ -357,6 +357,8 @@ interface AppStore {
     address: string;
     petIds: number[];
     photoUri: string | null;
+    /** 찍을 때 시설 근처에 있었는지. 강제하지 않고 표시만 한다 */
+    verifiedOnSite: boolean;
   }) => Stamp | null;
   /** 도장첩이 지역을 알아내는 데 쓰는 트리(TourAPI 코드 포함). 못 받았으면 빈 배열 */
   stampRegions: Region[];
@@ -1501,6 +1503,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       address: string;
       petIds: number[];
       photoUri: string | null;
+      verifiedOnSite: boolean;
     }): Stamp | null => {
       const region = matchRegion(input.address, stampRegions);
       // 지역을 모르면 안 찍는다. 잘못 찍힌 도장은 사용자가 지울 방법이 없다.
@@ -1515,6 +1518,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         sigunguCode: region.sigunguCode,
         petIds: input.petIds,
         photoUri: input.photoUri,
+        verifiedOnSite: input.verifiedOnSite,
         createdAt: new Date().toISOString(),
       };
 

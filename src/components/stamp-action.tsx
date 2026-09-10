@@ -7,6 +7,7 @@ import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-
 import { Text } from '@/components/text';
 import { Radius, Spacing } from '@/constants/theme';
 import { hasStamp } from '@/data/stamps';
+import { ON_SITE_RADIUS_M, distanceMeters, getCurrentLocation } from '@/lib/location';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -24,11 +25,16 @@ export function StampAction({
   facilityName,
   address,
   petIds,
+  latitude,
+  longitude,
 }: {
   facilityId: number;
   facilityName: string;
   address: string;
   petIds: number[];
+  /** 시설 좌표. 없으면 현장 확인을 건너뛴다(도장은 그대로 찍힌다) */
+  latitude?: number | null;
+  longitude?: number | null;
 }) {
   const p = usePalette();
   const router = useRouter();
@@ -71,18 +77,39 @@ export function StampAction({
       // 사용자가 창을 닫은 것은 실패가 아니다. 오류를 띄우지 않는다.
       if (photoUri === undefined) return;
 
+      /**
+       * 현장에 있었는지 확인한다. **막지는 않는다.**
+       *
+       * 위치를 거부했거나 멀리서 찍어도 도장은 남고 배지만 안 붙는다. 강제하면 그 자리에
+       * 갈 수 없는 사람이 기능을 아예 못 쓴다 — 앱 심사자가 그렇다. 부정 방지가 아니라
+       * 집에서 찍은 것과 구분하는 게 목적이다.
+       *
+       * 사진이 없으면 위치도 묻지 않는다. 아무것도 안 내는 사람에게 권한만 물으면 성가시다.
+       */
+      let verifiedOnSite = false;
+      if (photoUri && latitude != null && longitude != null) {
+        const here = await getCurrentLocation();
+        if (here) {
+          verifiedOnSite = distanceMeters(here, { latitude, longitude }) <= ON_SITE_RADIUS_M;
+        }
+      }
+
       // 목 판정 — 실제로는 서버 비전 API가 들어올 자리다. 즉시 통과시키면 검사한 것처럼
       // 보이지 않아 오히려 흐름이 어색해, 확인하는 시간만큼만 기다린다.
       await new Promise((r) => setTimeout(r, 900));
 
-      const made = addStamp({ facilityId, facilityName, address, petIds, photoUri });
+      const made = addStamp({ facilityId, facilityName, address, petIds, photoUri, verifiedOnSite });
       if (!made) {
         // 주소에서 지역을 못 찾았다. 억지로 추측해 엉뚱한 지역에 찍지 않는다.
         // 트리가 없는 경우는 버튼 단계에서 이미 걸러진다. 여기 오는 건 주소를 못 읽은 것이다.
         setMessage('이 시설의 주소에서 지역을 알아내지 못했어요.');
         return;
       }
-      setMessage(`${made.sido} ${made.sigungu} 도장을 찍었어요!`);
+      setMessage(
+        made.verifiedOnSite
+          ? `${made.sido} ${made.sigungu} 도장을 찍었어요! 현장에서 확인됐어요`
+          : `${made.sido} ${made.sigungu} 도장을 찍었어요!`,
+      );
     } catch {
       setMessage('도장을 찍지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {

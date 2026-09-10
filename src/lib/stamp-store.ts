@@ -51,7 +51,12 @@ export async function loadStamps(): Promise<Stamp[]> {
         typeof s?.sigungu === 'string' &&
         Array.isArray(s?.petIds) &&
         typeof s?.createdAt === 'string',
-    );
+    ).map((s) => ({
+      // `verifiedOnSite`는 나중에 생긴 값이다. 없는 옛 도장은 확인 안 된 것으로 본다 —
+      // 화면이 `undefined`를 참으로 읽어 현장 배지를 잘못 다는 걸 막는다.
+      ...s,
+      verifiedOnSite: s.verifiedOnSite === true,
+    }));
   } catch {
     return [];
   }

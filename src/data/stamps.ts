@@ -32,8 +32,16 @@ export interface Stamp {
   sigunguCode: string | null;
   /** 함께 간 아이들 */
   petIds: number[];
-  /** 인증샷. 1단계에서는 검사하지 않고 도장첩에만 쓴다 */
+  /** 함께 찍은 사진. 1단계에서는 검사하지 않고 도장첩에만 쓴다 */
   photoUri: string | null;
+  /**
+   * 도장을 찍을 때 실제로 그 시설 근처에 있었는지.
+   *
+   * **강제하지 않는다.** 위치를 못 받았거나 멀리서 찍어도 도장은 남고, 이 값만 `false`가
+   * 된다. 강제하면 그 자리에 못 가는 사람(심사자 포함)이 기능을 아예 못 쓴다.
+   * 그래도 구분해서 남기는 건, 현장에서 찍은 도장이 더 값지기 때문이다.
+   */
+  verifiedOnSite: boolean;
   /** ISO 8601 */
   createdAt: string;
 }
@@ -187,6 +195,11 @@ export function stampsThisMonth(stamps: Stamp[], now = new Date()): Stamp[] {
     // 저장된 값이 깨졌으면 이번 달에서 빼되 목록 자체는 살린다
     return !Number.isNaN(d.getTime()) && d.getFullYear() === y && d.getMonth() === m;
   });
+}
+
+/** 현장에서 찍은 도장 수. 도장첩 요약에 쓴다. 옛 도장은 이 값이 없어 `false`로 센다. */
+export function onSiteCount(stamps: Stamp[]): number {
+  return stamps.filter((s) => s.verifiedOnSite).length;
 }
 
 /** 같은 시설에 이미 도장이 있는지. 한 시설당 한 번만 찍는다 — 같은 곳을 반복해 세면 정복이 아니다. */

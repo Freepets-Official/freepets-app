@@ -1,4 +1,5 @@
 import { judgeGroup, type GroupResult } from '@/data/judge';
+import { distanceMeters } from '@/lib/location';
 import { FACILITIES, mockId, reviewsOf } from '@/data/mock';
 import type { Category, CheckResult, Facility, Pet, PetSatisfaction, ReviewTag } from '@/data/types';
 
@@ -76,18 +77,8 @@ const RANK: Record<CheckResult, number> = { ALLOWED: 0, CONDITIONAL: 1, DENIED: 
 
 type LatLng = { latitude: number; longitude: number };
 
-/** 두 좌표 사이 대략 거리(m) — 하버사인 */
-function haversine(a: LatLng, b: LatLng): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.latitude - a.latitude);
-  const dLng = toRad(b.longitude - a.longitude);
-  const lat1 = toRad(a.latitude);
-  const lat2 = toRad(b.latitude);
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
+/** 두 좌표 사이 대략 거리(m). 도장 현장 확인도 같은 계산을 쓰므로 `lib/location`에 모아뒀다. */
+const haversine = distanceMeters;
 
 const hasCoords = (f: Facility): f is Facility & LatLng =>
   f.latitude != null && f.longitude != null;

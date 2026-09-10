@@ -587,6 +587,8 @@ export default function FacilityDetailScreen() {
                 facilityName={facility.name}
                 address={facility.address ?? ''}
                 petIds={check.petIds}
+                latitude={facility.latitude}
+                longitude={facility.longitude}
               />
             </Animated.View>
           )}
