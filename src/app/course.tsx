@@ -17,7 +17,7 @@ import {
   type Course,
   type StopResult,
 } from '@/data/course';
-import { FACILITIES, formatDistance } from '@/data/mock';
+import { FACILITIES, formatDistance, isMockFacilityId } from '@/data/mock';
 import {
   CATEGORY_LABEL,
   RESULT_LABEL,
@@ -79,7 +79,15 @@ export default function CourseScreen() {
   // liked·similar)를 그대로 판별에 넘기는 게 이 API가 쓰이는 자리다.
   const [courseCheck, setCourseCheck] = useState<{ key: string; result: CourseCheckResult } | null>(null);
   const [courseCheckKey, setCourseCheckKey] = useState<string | null>(null);
-  const [courseCheckError, setCourseCheckError] = useState<string | null>(null);
+  /**
+   * 판별 실패. **어느 버튼의 실패인지 함께 들고 있는다.**
+   *
+   * 예전에는 메시지만 담고 화면 한 곳에서만 그려서, 아래쪽 버튼을 누르면 위쪽에 뜬 문구를
+   * 사용자가 보지 못했다 — 눌러도 아무 일이 없는 것처럼 보였다.
+   */
+  const [courseCheckError, setCourseCheckError] = useState<{ key: string; message: string } | null>(
+    null,
+  );
 
   // ── 내 코스 저장 ────────────────────────────────────────────────────
   // 서버는 stopIds만 저장한다. 추천 당시의 이름·카테고리·점수는 안 남으므로 목록을 그릴 땐
@@ -217,6 +225,32 @@ export default function CourseScreen() {
   };
 
   /**
+   * 남의 공개 코스를 내 코스로 담는다.
+   *
+   * 서버가 코스를 통째로 복제해주는 API는 없다. 대신 `stopIds`를 그대로 새 코스로 저장하면
+   * 같은 동선이 내 것이 된다 — 명세도 이 엔드포인트의 쓸모를 그렇게 적어뒀다.
+   * 이름에 누구 것인지 남겨, 나중에 목록에서 내가 만든 것과 구분되게 한다.
+   */
+  const [copyingId, setCopyingId] = useState<number | null>(null);
+  const copyPublicCourse = async (course: PublicCourse) => {
+    setCopyingId(course.courseId);
+    setSaveMessage(null);
+    try {
+      const created = await coursesApi.create({
+        name: course.ownerNickname ? `${course.name} (${course.ownerNickname})` : course.name,
+        description: course.description ?? undefined,
+        stopIds: course.stopIds.slice(0, 10),
+      });
+      setSavedCourses((prev) => [created, ...prev.filter((c) => c.courseId !== created.courseId)]);
+      setSaveMessage(`'${course.name}'을(를) 내 코스에 담았어요`);
+    } catch (e) {
+      setSaveMessage(e instanceof Error ? e.message : '코스를 담지 못했어요');
+    } finally {
+      setCopyingId((cur) => (cur === course.courseId ? null : cur));
+    }
+  };
+
+  /**
    * 내 코스를 공개/비공개로 바꾼다. 서버 `PUT /courses/{id}`는 부분 수정이 아니라 **전체 교체**라
    * 이름·설명·스톱을 그대로 다시 실어 보낸다 — 빠뜨리면 코스가 지워진 채로 저장된다.
    */
@@ -258,6 +292,17 @@ export default function CourseScreen() {
     // 배열 순서가 곧 방문 순서다. 서버는 1~10개만 받는다.
     const facilityIds = stops.slice(0, 10).map((st) => st.facilityId);
     const sig = checkSignature(key, facilityIds);
+
+    // 데모 시설이 섞여 있으면 서버가 그 id를 모른다(FACILITY4001). 부르기 전에 걸러,
+    // "왜 안 되는지 모르겠는 실패" 대신 이유를 말한다.
+    if (facilityIds.some(isMockFacilityId)) {
+      setCourseCheck(null);
+      setCourseCheckError({
+        key: sig,
+        message: '데모용 예시 코스라 판별할 수 없어요. 지역으로 찾은 코스에서 확인해 주세요.',
+      });
+      return;
+    }
     setCourseCheckKey(sig);
     setCourseCheckError(null);
     setCourseCheck(null);
@@ -268,7 +313,10 @@ export default function CourseScreen() {
       setCourseCheck({ key: sig, result: res });
     } catch (e) {
       if (checkSignature(key, facilityIds) !== sig) return;
-      setCourseCheckError(e instanceof Error ? e.message : '코스를 판별하지 못했어요');
+      setCourseCheckError({
+        key: sig,
+        message: e instanceof Error ? e.message : '코스를 판별하지 못했어요',
+      });
     } finally {
       setCourseCheckKey((cur) => (cur === sig ? null : cur));
     }
@@ -547,6 +595,7 @@ export default function CourseScreen() {
                     label="이 코스로 다녀와도 될까요?"
                     disabled={selectedPetIds.length === 0}
                     running={courseCheckKey === checkSignature('liked', liked.stops.slice(0, 10).map((st) => st.facilityId))}
+                    error={courseCheckError?.key === checkSignature('liked', liked.stops.slice(0, 10).map((st) => st.facilityId)) ? courseCheckError.message : null}
                     onPress={() => runCourseCheck('liked', liked.stops)}
                   />
                   <SaveCourseAction
@@ -576,6 +625,7 @@ export default function CourseScreen() {
                     label="이 코스로 다녀와도 될까요?"
                     disabled={selectedPetIds.length === 0}
                     running={courseCheckKey === checkSignature('similar', similar.stops.slice(0, 10).map((st) => st.facilityId))}
+                    error={courseCheckError?.key === checkSignature('similar', similar.stops.slice(0, 10).map((st) => st.facilityId)) ? courseCheckError.message : null}
                     onPress={() => runCourseCheck('similar', similar.stops)}
                   />
                   <SaveCourseAction
@@ -665,7 +715,16 @@ export default function CourseScreen() {
                     </Text>
                   ) : (
                     (otherCourses ?? []).map((c) => (
-                      <View key={c.courseId} style={[styles.savedRow, { borderColor: p.line }]}>
+                      // 눌러서 내 코스로 담는다. 명세가 이 API의 쓸모로 적어둔 것이기도 하고,
+                      // 목록만 보여주고 아무 데도 못 가면 눌러본 사람은 고장으로 읽는다.
+                      <Pressable
+                        key={c.courseId}
+                        onPress={() => copyPublicCourse(c)}
+                        disabled={copyingId === c.courseId}
+                        style={({ pressed }) => [
+                          styles.savedRow,
+                          { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
+                        ]}>
                         <Ionicons name="earth" size={15} color={p.accent} />
                         <View style={styles.publicTexts}>
                           <Text style={[styles.savedName, { color: p.ink }]} numberOfLines={1}>
@@ -680,7 +739,12 @@ export default function CourseScreen() {
                         <Text style={[styles.savedMeta, { color: p.muted, marginLeft: 'auto' }]}>
                           {c.stopIds.length}곳
                         </Text>
-                      </View>
+                        {copyingId === c.courseId ? (
+                          <ActivityIndicator size="small" color={p.muted} />
+                        ) : (
+                          <Ionicons name="add-circle-outline" size={16} color={p.accent} />
+                        )}
+                      </Pressable>
                     ))
                   )}
                 </View>
@@ -688,10 +752,6 @@ export default function CourseScreen() {
 
               {saveMessage && (
                 <Text style={[styles.presetStateText, { color: p.muted }]}>{saveMessage}</Text>
-              )}
-
-              {courseCheckError && (
-                <Text style={[styles.presetStateText, { color: p.muted }]}>{courseCheckError}</Text>
               )}
 
               {/* 지역×테마 추천 — 서버가 지역별로 만들어 준다. 로그인 없이도 쓸 수 있는 둘러보기 */}
@@ -776,6 +836,7 @@ export default function CourseScreen() {
                         label="이 코스로 다녀와도 될까요?"
                         disabled={selectedPetIds.length === 0}
                         running={courseCheckKey === checkSignature('preset', preset.course.stops.slice(0, 10).map((st) => st.facilityId))}
+                        error={courseCheckError?.key === checkSignature('preset', preset.course.stops.slice(0, 10).map((st) => st.facilityId)) ? courseCheckError.message : null}
                         onPress={() => runCourseCheck('preset', preset.course.stops)}
                       />
                       <SaveCourseAction
@@ -990,14 +1051,18 @@ function CourseCheckAction({
   disabled,
   running,
   onPress,
+  error,
 }: {
   label: string;
   disabled: boolean;
   running: boolean;
   onPress: () => void;
+  /** 이 버튼으로 낸 판별이 실패했을 때의 문구. 버튼 바로 아래에 붙어야 사용자가 본다. */
+  error?: string | null;
 }) {
   const p = usePalette();
   return (
+    <>
     <Pressable
       onPress={onPress}
       disabled={disabled || running}
@@ -1016,6 +1081,8 @@ function CourseCheckAction({
         </Text>
       )}
     </Pressable>
+    {error && <Text style={[styles.courseCheckError, { color: p.muted }]}>{error}</Text>}
+    </>
   );
 }
 
@@ -1078,9 +1145,9 @@ function LikedCourseCard({ course }: { course: LikedCourse }) {
       {course.stops.map((st, i) => (
         <View key={st.facilityId} style={styles.presetStopBlock}>
           <View style={styles.presetStop}>
-            <Text style={[styles.presetOrder, { backgroundColor: p.accentSoft, color: p.accent }]}>
-              {i + 1}
-            </Text>
+            <View style={[styles.presetOrder, { backgroundColor: p.accentSoft }]}>
+              <Text style={[styles.presetOrderNum, { color: p.accent }]}>{i + 1}</Text>
+            </View>
             <Text style={[styles.presetStopName, { color: p.ink }]} numberOfLines={1}>
               {st.name}
             </Text>
@@ -1122,9 +1189,9 @@ function SimilarCourseCard({ course }: { course: SimilarCourse }) {
       {course.stops.map((st, i) => (
         <View key={st.facilityId} style={styles.presetStopBlock}>
           <View style={styles.presetStop}>
-            <Text style={[styles.presetOrder, { backgroundColor: p.accentSoft, color: p.accent }]}>
-              {i + 1}
-            </Text>
+            <View style={[styles.presetOrder, { backgroundColor: p.accentSoft }]}>
+              <Text style={[styles.presetOrderNum, { color: p.accent }]}>{i + 1}</Text>
+            </View>
             <Text style={[styles.presetStopName, { color: p.ink }]} numberOfLines={1}>
               {st.name}
             </Text>
@@ -1146,9 +1213,9 @@ function PresetCourseCard({ course }: { course: PresetCourse }) {
       <Text style={[styles.presetTitle, { color: p.ink }]}>{course.title}</Text>
       {course.stops.map((st, i) => (
         <View key={st.facilityId} style={styles.presetStop}>
-          <Text style={[styles.presetOrder, { backgroundColor: p.accentSoft, color: p.accent }]}>
-            {i + 1}
-          </Text>
+          <View style={[styles.presetOrder, { backgroundColor: p.accentSoft }]}>
+            <Text style={[styles.presetOrderNum, { color: p.accent }]}>{i + 1}</Text>
+          </View>
           <Text style={[styles.presetStopName, { color: p.ink }]} numberOfLines={1}>
             {st.name}
           </Text>
@@ -1363,6 +1430,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9, alignItems: 'center', marginTop: 4,
   },
   courseCheckBtnText: { fontSize: 13, fontWeight: '800' },
+  courseCheckError: { fontSize: 12, marginTop: 4, paddingHorizontal: 2 },
   checkPanel: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, gap: 10, marginTop: 6 },
   checkHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   checkOverall: { fontSize: 14, fontWeight: '800' },
@@ -1376,11 +1444,18 @@ const styles = StyleSheet.create({
   checkAlt: { fontSize: 11.5, lineHeight: 17, fontWeight: '600' },
   stopReason: { fontSize: 11.5, lineHeight: 17, paddingLeft: 30 },
   coldStart: { fontSize: 12, lineHeight: 18 },
+  /**
+   * 순서 배지. **원은 View, 숫자는 Text**로 나눈다.
+   *
+   * 예전에는 Text 하나에 크기·원형·정렬을 다 걸었는데, Text는 flex 컨테이너가 아니라
+   * `alignItems`·`justifyContent`가 먹지 않는다. 그래서 숫자가 원 안에서 한쪽으로 쏠렸다.
+   * 글씨 크기 설정을 키우면 더 어긋난다 — 글자만 커지고 원은 고정이라서다.
+   */
   presetOrder: {
-    width: 20, height: 20, borderRadius: 999,
+    width: 22, height: 22, borderRadius: 999,
     alignItems: 'center', justifyContent: 'center',
-    fontSize: 11, fontWeight: '800', overflow: 'hidden',
   },
+  presetOrderNum: { fontSize: 11, fontWeight: '800' },
   presetStopName: { fontSize: 14, fontWeight: '700', flexShrink: 1 },
   presetStopMeta: { fontSize: 11.5, fontVariant: ['tabular-nums'] },
   mealTag: {

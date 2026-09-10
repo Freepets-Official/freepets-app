@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -21,6 +21,7 @@ const TYPES: CalEventType[] = ['VACCINE', 'MED', 'CHECKUP', 'TRAVEL', 'OTHER'];
 const REPEATS: CalRepeat[] = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'];
 
 export default function CalendarEventScreen() {
+  const scrollRef = useRef<ScrollView>(null);
   const p = usePalette();
   const router = useRouter();
   const params = useLocalSearchParams<{ date?: string; eventId?: string }>();
@@ -63,6 +64,7 @@ export default function CalendarEventScreen() {
         options={{ title: editing ? '일정 수정' : '일정 추가', headerBackButtonDisplayMode: 'minimal' }}
       />
       <ScrollView
+        ref={scrollRef}
         automaticallyAdjustKeyboardInsets
         keyboardDismissMode="interactive" contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
@@ -159,6 +161,12 @@ export default function CalendarEventScreen() {
             placeholder="예) 강릉동물병원 · 12시간 공복"
             placeholderTextColor={p.muted}
             multiline
+            /**
+             * 키보드 인셋만으로는 부족하다. 그건 스크롤 **여백**을 늘릴 뿐 화면을 옮기지
+             * 않는데, 메모는 화면 맨 아래에 있어 키보드가 덮은 자리에 그대로 남는다.
+             * 포커스가 오면 끝으로 밀어 올린다(키보드가 올라오는 시간만큼 늦춰서).
+             */
+            onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150)}
             style={[styles.textarea, { backgroundColor: p.surface, borderColor: p.line, color: p.ink }]}
           />
 
