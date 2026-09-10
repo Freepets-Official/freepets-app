@@ -140,7 +140,7 @@ export function StampAction({
         <View style={styles.texts}>
           <Text style={[styles.title, { color: p.ink }]}>
             {running
-              ? '인증샷을 확인하고 있어요'
+              ? '사진을 확인하고 있어요'
               : regionsMissing
                 ? '지역 정보를 불러오지 못했어요'
                 : '여권 도장 찍기'}
@@ -148,7 +148,7 @@ export function StampAction({
           <Text style={[styles.body, { color: p.muted }]}>
             {regionsMissing
               ? '눌러서 다시 불러오면 도장을 찍을 수 있어요'
-              : '인증샷을 남기면 이 지역 도장이 도장첩에 쌓여요'}
+              : '아이와 함께 찍은 사진 한 장이면 이 지역 도장이 쌓여요'}
           </Text>
         </View>
         {!running && <Ionicons name="chevron-forward" size={18} color={p.accent} />}

@@ -116,7 +116,7 @@ export default function StampsScreen() {
               <Ionicons name="footsteps-outline" size={22} color={p.muted} />
               <Text style={[styles.emptyTitle, { color: p.ink }]}>아직 도장이 없어요</Text>
               <Text style={[styles.emptyBody, { color: p.muted }]}>
-                아이와 다녀온 시설에서 인증샷을 남기면 그 지역 도장이 찍혀요.
+                아이와 함께 다녀온 곳에서 사진을 남기면 그 지역 도장이 찍혀요.
               </Text>
             </View>
           ) : (
