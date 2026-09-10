@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 
 import { clearSession, loadSession, saveSession } from '@/lib/token-store';
 import { clearStamps, loadStamps, saveStamps } from '@/lib/stamp-store';
+import { loadHiddenChecks, saveHiddenChecks } from '@/lib/hidden-checks';
 import { getFcmToken } from '@/lib/push';
 
 import type { ThemeMode } from '@/constants/theme';
@@ -300,6 +301,13 @@ interface AppStore {
   checks: PetCheck[];
   /** 선택한 여러 마리를 한 번에 판별한다 */
   runCheck: (facilityId: number, petIds: number[]) => Promise<PetCheck | null>;
+  /**
+   * 판별 이력을 목록에서 지운다.
+   *
+   * 서버에 삭제 API가 없어 **이 기기에서만 숨긴다.** 지운 id를 남겨두지 않으면 다음에
+   * 서버에서 다시 불러와 되살아난다.
+   */
+  hideCheck: (checkId: number) => void;
 
   /** 다음 접종이 30일 이내로 다가왔거나 지난 아이들 (홈 알림용) — 임박순 */
   upcomingVaccinations: () => { pet: Pet; dday: number; date: string }[];
@@ -464,6 +472,8 @@ const AppStoreContext = createContext<AppStore | null>(null);
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [pets, setPets] = useState<Pet[]>(INITIAL_PETS);
   const [checks, setChecks] = useState<PetCheck[]>(INITIAL_CHECKS);
+  // 목록에서 지운 판별 이력. 서버 삭제가 없어 불러온 뒤 걸러낸다.
+  const [hiddenCheckIds, setHiddenCheckIds] = useState<number[]>([]);
   const [reviews, setReviews] = useState<Review[]>(REVIEWS);
   // 시설별 서버 리뷰 집계 캐시 (친화도 탭). 시설 상세 진입 시 loadReviews로 채운다.
   const [reviewData, setReviewData] = useState<Record<number, FacilityReviewData>>({});
@@ -1388,6 +1398,37 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       .catch(() => {});
   }, []);
 
+  // 지운 판별 이력을 기기에서 복원한다. 실패해도 목록이 전부 보일 뿐 앱을 막지 않는다.
+  useEffect(() => {
+    let alive = true;
+    loadHiddenChecks().then((ids) => {
+      if (alive) setHiddenCheckIds(ids);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const hideCheck = useCallback((checkId: number) => {
+    setHiddenCheckIds((prev) => {
+      if (prev.includes(checkId)) return prev;
+      const next = [...prev, checkId];
+      void saveHiddenChecks(next);
+      return next;
+    });
+  }, []);
+
+  /**
+   * 화면에 보이는 판별 이력. 지운 것을 걸러낸다.
+   *
+   * 원본 `checks`를 직접 지우지 않는 이유는 서버에서 다시 불러올 때마다 되돌아오기
+   * 때문이다. 걸러내는 자리를 한 곳으로 모아야 화면마다 빠뜨리지 않는다.
+   */
+  const visibleChecks = useMemo(
+    () => (hiddenCheckIds.length === 0 ? checks : checks.filter((c) => !hiddenCheckIds.includes(c.checkId))),
+    [checks, hiddenCheckIds],
+  );
+
   // ── 여권 도장 (게임 요소 1단계) ─────────────────────────────────────
   // 기기에서 복원한다. 실패해도 빈 도장첩으로 시작할 뿐 앱을 막지 않는다.
   //
@@ -1539,7 +1580,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       addPet,
       removePet,
       updatePet,
-      checks,
+      checks: visibleChecks,
+      hideCheck,
       runCheck,
       upcomingVaccinations,
       reviews,
@@ -1620,7 +1662,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       addPet,
       removePet,
       updatePet,
-      checks,
+      visibleChecks,
+      hideCheck,
       runCheck,
       upcomingVaccinations,
       reviews,

@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -73,7 +74,7 @@ function NotificationBell({
 export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { pets, checks, plannedDenialAlerts, upcomingVaccinations, stamps, facilityById, loadFacility } =
+  const { pets, checks, plannedDenialAlerts, upcomingVaccinations, stamps, facilityById, loadFacility, hideCheck } =
     useAppStore();
 
   /**
@@ -165,25 +166,39 @@ export default function HomeScreen() {
               // petIds를 쓴다 — 서버에서 불러온 이력엔 verdicts가 없어서 이름이 통째로 비어버린다
               const names = c.petIds.map((id) => pets.find((x) => x.petId === id)?.name).filter(Boolean);
               return (
-                <Pressable
+                <Swipeable
                   key={c.checkId}
-                  onPress={() =>
-                    router.push({ pathname: '/facility/[id]', params: { id: String(c.facilityId) } })
-                  }
-                  style={({ pressed }) => [
-                    styles.histCard,
-                    { backgroundColor: p.card, borderColor: p.line, opacity: pressed ? 0.92 : 1 },
-                  ]}>
-                  <View style={styles.histTop}>
-                    <Text style={[styles.histName, { color: p.ink }]} numberOfLines={1}>
-                      {facility?.name ?? '알 수 없는 시설'}
+                  friction={2}
+                  rightThreshold={40}
+                  // 목록에서만 지운다. 서버에 삭제 API가 없어 다시 불러오면 되살아나므로
+                  // 스토어가 지운 id를 기기에 남겨 걸러낸다.
+                  renderRightActions={() => (
+                    <Pressable
+                      onPress={() => hideCheck(c.checkId)}
+                      style={[styles.histDelete, { backgroundColor: p.danger }]}>
+                      <Ionicons name="trash" size={18} color="#FFFFFF" />
+                      <Text style={styles.histDeleteText}>삭제</Text>
+                    </Pressable>
+                  )}>
+                  <Pressable
+                    onPress={() =>
+                      router.push({ pathname: '/facility/[id]', params: { id: String(c.facilityId) } })
+                    }
+                    style={({ pressed }) => [
+                      styles.histCard,
+                      { backgroundColor: p.card, borderColor: p.line, opacity: pressed ? 0.92 : 1 },
+                    ]}>
+                    <View style={styles.histTop}>
+                      <Text style={[styles.histName, { color: p.ink }]} numberOfLines={1}>
+                        {facility?.name ?? '알 수 없는 시설'}
+                      </Text>
+                      <ResultBadge result={c.overall} />
+                    </View>
+                    <Text style={[styles.histMeta, { color: p.muted }]}>
+                      {names.join(' · ')} · {formatDate(c.createdAt)}
                     </Text>
-                    <ResultBadge result={c.overall} />
-                  </View>
-                  <Text style={[styles.histMeta, { color: p.muted }]}>
-                    {names.join(' · ')} · {formatDate(c.createdAt)}
-                  </Text>
-                </Pressable>
+                  </Pressable>
+                </Swipeable>
               );
             })}
           </View>
@@ -567,6 +582,11 @@ const styles = StyleSheet.create({
     paddingVertical: 56,
   },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  histDelete: {
+    justifyContent: 'center', alignItems: 'center', gap: 2,
+    width: 76, marginLeft: 8, borderRadius: Radius.md,
+  },
+  histDeleteText: { color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' },
   stampEntry: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, marginTop: 4,
