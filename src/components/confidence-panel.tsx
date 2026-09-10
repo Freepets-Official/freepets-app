@@ -78,6 +78,12 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
             </Pressable>
           )}
 
+          {/*
+            ⚠️ 서버에 확인 요청 API가 아직 없다(라이브 44개 확인). 지금은 이 기기에만 남는다.
+            그래서 문구가 "보냈어요"라고 단정하지 않는다 — 사업자에게 전달됐다고 하면
+            사용자가 답을 기다리게 된다. 백엔드에 엔드포인트가 생기면 여기서 호출하고
+            문구도 그때 "전달했어요"로 바꾼다.
+          */}
           <Pressable
             onPress={() => setRequested(true)}
             disabled={requested}
@@ -91,7 +97,7 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
               color={requested ? p.success : p.muted}
             />
             <Text style={[styles.actionText, { color: requested ? p.success : p.ink }]}>
-              {requested ? '사업자에게 확인 요청을 보냈어요' : '사업자에게 조건 확인 요청'}
+              {requested ? '확인이 필요한 곳으로 표시했어요' : '사업자에게 조건 확인 요청'}
             </Text>
           </Pressable>
         </View>
