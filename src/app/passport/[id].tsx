@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,7 +8,6 @@ import { Text } from '@/components/text';
 import { DenialReport } from '@/components/denial-report';
 import { PassportCard } from '@/components/passport-card';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
-import { FACILITIES } from '@/data/mock';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -22,11 +21,21 @@ import { useAppStore } from '@/store/app-store';
 export default function PassportScreen() {
   const p = usePalette();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { pets, checks, confidenceOf } = useAppStore();
+  const { pets, checks, confidenceOf, facilityById, loadFacility } = useAppStore();
   const { width } = useWindowDimensions();
 
   const facilityId = Number(id);
-  const facility = FACILITIES.find((f) => f.facilityId === facilityId);
+  /**
+   * 시설은 **스토어에서** 가져온다. 예전에는 목 데이터(`FACILITIES`)에서만 찾았는데,
+   * 관광공사에서 온 실제 시설은 거기 없어서 **출입증이 아예 열리지 않았다** —
+   * 판별을 막 끝내고 들어와도 "먼저 AI 출입 판별을 해주세요"가 떴다.
+   */
+  const facility = facilityById(facilityId);
+
+  // 시설 상세를 거치지 않고 바로 들어오는 경로(알림 딥링크 등)에서는 캐시가 비어 있다.
+  useEffect(() => {
+    if (Number.isInteger(facilityId) && facilityId > 0) loadFacility(facilityId);
+  }, [facilityId, loadFacility]);
 
   // 이 시설의 가장 최근 판별 기록
   const check = useMemo(

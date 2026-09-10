@@ -73,7 +73,16 @@ function NotificationBell({
 export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { pets, checks, plannedDenialAlerts, upcomingVaccinations, stamps } = useAppStore();
+  const { pets, checks, plannedDenialAlerts, upcomingVaccinations, stamps, facilityById, loadFacility } =
+    useAppStore();
+
+  // 이력에 담긴 시설을 캐시에 채운다. 이름을 보여주려면 시설을 알아야 하는데, 판별 이력에는
+  // facilityId만 들어 있다. 캐시에 이미 있으면 loadFacility가 알아서 넘어간다.
+  useEffect(() => {
+    for (const c of checks.slice(0, 5)) {
+      if (!facilityById(c.facilityId)) void loadFacility(c.facilityId);
+    }
+  }, [checks, facilityById, loadFacility]);
   // 뱃지 기준과 같은 값(서로 다른 시군구 수)을 쓴다 — 홈과 도장첩이 다른 숫자를 보이면 안 된다
   const stampCount = useMemo(() => uniqueRegionCount(stamps), [stamps]);
   const alerts = plannedDenialAlerts();
@@ -141,7 +150,9 @@ export default function HomeScreen() {
           <SectionTitle title="최근 판별 이력" caption={`${checks.length}건`} />
           <View style={styles.histList}>
             {checks.slice(0, 5).map((c) => {
-              const facility = FACILITIES.find((f) => f.facilityId === c.facilityId);
+              // 스토어 캐시를 먼저 본다. 목 데이터에만 기대면 관광공사에서 온 실제 시설이
+              // 전부 "알 수 없는 시설"로 뜬다 — 판별 이력은 대부분 그쪽이다.
+              const facility = facilityById(c.facilityId) ?? FACILITIES.find((f) => f.facilityId === c.facilityId);
               // petIds를 쓴다 — 서버에서 불러온 이력엔 verdicts가 없어서 이름이 통째로 비어버린다
               const names = c.petIds.map((id) => pets.find((x) => x.petId === id)?.name).filter(Boolean);
               return (
