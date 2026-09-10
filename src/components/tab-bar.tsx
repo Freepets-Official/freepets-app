@@ -16,7 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Text } from '@/components/text';
-import { Palette } from '@/constants/theme';
+import { useColorScheme, usePalette } from '@/hooks/use-theme';
 
 /**
  * 인스타그램식 유리 네비게이터 + 자동 축소.
@@ -85,7 +85,10 @@ interface TabBarProps {
 
 export function GlassTabBar(props: TabBarProps) {
   const { state, descriptors, navigation } = props;
-  const p = Palette.light;
+  // 예전에는 `Palette.light`를 박아 써서 탭바만 테마를 안 따랐다. 다크에서 밝은 유리 위에
+  // 밝은 회색 글씨가 얹혀 아무것도 안 보였다.
+  const p = usePalette();
+  const scheme = useColorScheme();
   const chrome = useTabChrome();
   const collapsed = chrome?.collapsed;
 
@@ -108,7 +111,21 @@ export function GlassTabBar(props: TabBarProps) {
       onTouchStart={() => chrome?.wake()}
       // @ts-expect-error web 전용 호버 — 데스크톱에서 손이 닿기 전 확대
       onMouseEnter={Platform.OS === 'web' ? () => chrome?.wake() : undefined}>
-      <BlurView intensity={60} tint="light" style={[styles.bar, { borderColor: p.line }]}>
+      {/*
+        유리 톤을 테마에 맞춘다. 예전에는 항상 밝은 유리였는데, 다크에서는 글씨 색이
+        밝은 회색(`muted`)이라 밝은 배경 위에서 대비가 사라져 **탭이 아예 안 보였다.**
+        폴백 배경색도 같은 이유로 갈라준다 — BlurView가 안 도는 환경에서 흰 판이 남는다.
+      */}
+      <BlurView
+        intensity={60}
+        tint={scheme === 'dark' ? 'dark' : 'light'}
+        style={[
+          styles.bar,
+          {
+            borderColor: p.line,
+            backgroundColor: scheme === 'dark' ? 'rgba(33,28,40,0.72)' : 'rgba(255,255,255,0.72)',
+          },
+        ]}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const focused = state.index === index;
@@ -156,8 +173,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 6,
     overflow: 'hidden',
-    // BlurView가 지원 안 되는 환경을 위한 반투명 폴백
-    backgroundColor: 'rgba(255,255,255,0.72)',
   },
   item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 0 },
   label: { fontSize: 10, fontWeight: '800' },
