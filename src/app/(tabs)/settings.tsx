@@ -30,7 +30,18 @@ export default function SettingsScreen() {
   const regCount = Object.keys(businessRegs).length;
   const hasOwnerProfile = availableProfiles.includes('owner');
   const [cacheCleared, setCacheCleared] = useState(false);
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  /**
+   * 되돌릴 수 없는 동작 앞에 한 번 묻는다.
+   *
+   * 로그아웃과 탈퇴가 같은 틀을 쓴다 — 따로 만들면 한쪽 문구만 고치고 다른 쪽을 잊는다.
+   */
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    body: string;
+    action: string;
+    danger?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
   const [themeOpen, setThemeOpen] = useState(false);
   const scheme = useColorScheme();
 
@@ -276,11 +287,35 @@ export default function SettingsScreen() {
 
       {/* 계정 관리 */}
       <Group title="계정 관리">
-        <Row icon="log-out-outline" label="로그아웃" onPress={logout} tint />
+        <Row
+          icon="log-out-outline"
+          label="로그아웃"
+          onPress={() =>
+            setConfirm({
+              title: '로그아웃할까요?',
+              // 도장은 기기에만 있어 로그아웃하면 지워진다. 미리 말하지 않으면
+              // 다시 로그인했을 때 사라진 걸 보고서야 알게 된다.
+              body: '반려동물·판별 이력은 다시 로그인하면 그대로 있어요.\n다만 이 기기에 모은 여권 도장은 지워집니다.',
+              action: '로그아웃',
+              onConfirm: logout,
+            })
+          }
+          tint
+        />
         <Row
           icon="person-remove-outline"
           label="회원 탈퇴"
-          onPress={() => setWithdrawOpen(true)}
+          onPress={() =>
+            setConfirm({
+              title: '정말 탈퇴하시겠어요?',
+              body: '탈퇴하면 계정과 등록한 반려동물·리뷰·일정이 모두 삭제되고 되돌릴 수 없어요.',
+              action: '탈퇴하기',
+              danger: true,
+              // ⚠️ 서버에 계정 삭제 API가 없어 지금은 로그아웃만 된다.
+              // `DELETE /users/account`가 생기면 여기서 호출한다.
+              onConfirm: logout,
+            })
+          }
           tint
           last
         />
@@ -288,27 +323,26 @@ export default function SettingsScreen() {
 
       <Text style={[styles.footer, { color: p.muted }]}>반갑꼬리 · 반려동물 동반여행 AI 판별</Text>
 
-      {/* 회원 탈퇴 확인 */}
+      {/* 로그아웃·탈퇴 공통 확인 */}
       <Modal
-        visible={withdrawOpen}
+        visible={confirm !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => setWithdrawOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setWithdrawOpen(false)}>
+        onRequestClose={() => setConfirm(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setConfirm(null)}>
           <Pressable style={[styles.sheet, { backgroundColor: p.card }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.sheetTitle, { color: p.ink }]}>정말 탈퇴하시겠어요?</Text>
-            <Text style={[styles.sheetBody, { color: p.muted }]}>
-              탈퇴하면 계정과 등록한 반려동물·리뷰·일정이 모두 삭제되고 되돌릴 수 없어요.
-            </Text>
+            <Text style={[styles.sheetTitle, { color: p.ink }]}>{confirm?.title}</Text>
+            <Text style={[styles.sheetBody, { color: p.muted }]}>{confirm?.body}</Text>
             <Pressable
               onPress={() => {
-                setWithdrawOpen(false);
-                logout();
+                const run = confirm?.onConfirm;
+                setConfirm(null);
+                run?.();
               }}
-              style={[styles.withdrawBtn, { backgroundColor: p.danger }]}>
-              <Text style={[styles.withdrawBtnText, { color: '#FFFFFF' }]}>탈퇴하기</Text>
+              style={[styles.withdrawBtn, { backgroundColor: confirm?.danger ? p.danger : p.accent }]}>
+              <Text style={[styles.withdrawBtnText, { color: '#FFFFFF' }]}>{confirm?.action}</Text>
             </Pressable>
-            <Pressable onPress={() => setWithdrawOpen(false)} style={styles.cancelBtn}>
+            <Pressable onPress={() => setConfirm(null)} style={styles.cancelBtn}>
               <Text style={[styles.cancelBtnText, { color: p.muted }]}>취소</Text>
             </Pressable>
           </Pressable>

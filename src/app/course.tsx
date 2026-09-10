@@ -195,8 +195,12 @@ export default function CourseScreen() {
     setSaveMessage(null);
     try {
       // 서버는 1~10개만 받는다. 추천 stops의 facilityId를 순서 그대로 넣으면 내 코스가 된다.
+      //
+      // 담은 날짜를 이름에 남긴다. 서버 추천 제목은 그날그날 같은 문구가 오기 때문에
+      // ("지금 인기 있는 곳" 등) 여러 번 담으면 목록에 같은 이름만 쌓여 구분이 안 된다.
+      const stamp = new Date();
       const created = await coursesApi.create({
-        name,
+        name: `${name} · ${stamp.getMonth() + 1}/${stamp.getDate()}`,
         stopIds: stops.slice(0, 10).map((st) => st.facilityId),
       });
       // 저장 결과로 목록을 먼저 갱신한다. 목록 재조회가 실패해도 방금 담은 코스는 보여야 한다 —
