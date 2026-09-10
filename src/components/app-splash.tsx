@@ -26,11 +26,9 @@ const LETTER_START = 620; // 사진이 자리잡은 뒤 글자 시작
 const LETTER_STAGGER = 155; // 글자 사이 간격
 
 export function AppSplash({ onDone }: { onDone: () => void }) {
-  const intro = useSharedValue(0); // 사진 등장
   const gone = useSharedValue(0); // 전체 페이드아웃
 
   useEffect(() => {
-    intro.value = withTiming(1, { duration: 520, easing: Easing.out(Easing.cubic) });
     // 글자가 다 들어오고 잠깐 머문 뒤 사라진다
     const hold = LETTER_START + LETTERS.length * LETTER_STAGGER + 900;
     gone.value = withDelay(
@@ -39,22 +37,23 @@ export function AppSplash({ onDone }: { onDone: () => void }) {
         if (finished) runOnJS(onDone)();
       }),
     );
-  }, [intro, gone, onDone]);
+  }, [gone, onDone]);
 
   const wrapStyle = useAnimatedStyle(() => ({
     opacity: 1 - gone.value,
     transform: [{ scale: 1 - gone.value * 0.06 }],
   }));
-  const photoStyle = useAnimatedStyle(() => ({
-    opacity: intro.value,
-    transform: [{ scale: interpolate(intro.value, [0, 1], [0.9, 1]) }],
-  }));
-
   return (
     <Animated.View style={[StyleSheet.absoluteFill, styles.wrap, wrapStyle]}>
-      <Animated.View style={[styles.photoCard, photoStyle]}>
-        <Image source={PETS} style={styles.photo} contentFit="contain" transition={200} />
-      </Animated.View>
+      {/*
+        **등장 애니메이션을 걸지 않는다.** 이 화면 앞에는 iOS 런치 스크린이 같은 그림을
+        같은 크기로 이미 띄워놓고 있다. 여기서 0.9배로 시작하거나 페이드인을 하면
+        그림이 한 번 튀었다가 자리잡는 것처럼 보인다 — 한 장이 쭉 떠 있어야 한다.
+        움직임은 뒤이어 들어오는 글자가 맡는다.
+      */}
+      <View style={styles.photoCard}>
+        <Image source={PETS} style={styles.photo} contentFit="contain" />
+      </View>
 
       <View style={styles.row}>
         {LETTERS.map((c, i) => (
@@ -92,7 +91,9 @@ function Letter({ children, index }: { children: string; index: number }) {
 /**
  * 스플래시 그림 크기.
  *
- * **`app.json`의 `imageWidth`와 같은 값이어야 한다.** iOS는 런치 스크린(네이티브 스플래시)을
+ * **`app.json`의 `imageWidth`와 같은 값이어야 하고, 이미지 파일도 같아야 한다**
+ * (`splash-art.png`). 예전에는 네이티브가 `splash-icon.png`(512²), 여기가
+ * `splash-art.png`(640²)로 서로 다른 그림을 써서 크기를 맞춰도 어긋났다. iOS는 런치 스크린(네이티브 스플래시)을
  * 없앨 수 없어서 이 화면이 그 뒤에 이어 뜨는데, 크기가 다르면 그림이 한 번 튀었다가
  * 커지는 것처럼 보인다. 두 값을 맞추면 한 장이 쭉 떠 있는 것처럼 이어진다.
  *
