@@ -10,7 +10,8 @@
     "userInterfaceStyle": "light",
     "ios": {
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": ["nmap"]
       },
       "bundleIdentifier": "com.freepets.app",
       "usesAppleSignIn": true

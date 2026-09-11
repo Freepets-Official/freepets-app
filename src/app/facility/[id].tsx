@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { Text, AnimatedText } from '@/components/text';
@@ -13,6 +13,7 @@ import { DenialReport } from '@/components/denial-report';
 import { FacilityCard } from '@/components/facility-card';
 import { OwnerPromotionSection } from '@/components/owner-promotion-section';
 import { PawBadge } from '@/components/paw-badge';
+import { openInMap } from '@/lib/map-link';
 import { ReviewSection } from '@/components/review-section';
 import { SatisfactionSection } from '@/components/satisfaction-section';
 import { StampAction } from '@/components/stamp-action';
@@ -269,8 +270,8 @@ export default function FacilityDetailScreen() {
 
       <ConfidencePanel facility={facility} />
 
-      {/* 위치 — 검색 응답에 좌표가 없어 주소 기반 지도 링크로 연결한다.
-          백엔드가 lat/lng를 내려주면 인라인 지도(핀)로 교체 예정. */}
+      {/* 위치 — 외부 지도(네이버)로 연결한다. 앱 안에 지도를 그리려면 네이버 클라우드
+          플랫폼 Maps SDK와 클라이언트 ID가 필요해서 1.1로 미뤘다. */}
       <View style={[styles.mapCard, { backgroundColor: p.surface, borderColor: p.line }]}>
         <View style={styles.mapHead}>
           <Ionicons name="location" size={16} color={p.accent} />
@@ -281,8 +282,12 @@ export default function FacilityDetailScreen() {
         </Text>
         <Pressable
           onPress={() => {
-            const q = encodeURIComponent(`${facility.name} ${facility.address ?? ''}`.trim());
-            Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${q}`);
+            void openInMap({
+              name: facility.name,
+              address: facility.address,
+              latitude: facility.latitude,
+              longitude: facility.longitude,
+            });
           }}
           style={({ pressed }) => [
             styles.mapBtn,
