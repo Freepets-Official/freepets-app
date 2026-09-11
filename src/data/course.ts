@@ -51,7 +51,12 @@ export interface CourseResult {
  * 관광공사 지역기반 관광정보로 엮은 프리셋.
  * 실제 연동 시 areaBasedList + detailPetTour 조합으로 지역별 코스를 생성한다.
  */
-export const PRESET_COURSES: Course[] = [
+export const PRESET_COURSES: Course[] = !__DEV__
+  ? // 목 시설로 엮인 예시라 실제로 판별하면 "데모용 예시 코스라 판별할 수 없어요"가 뜬다.
+    // 사용자에게 작동하지 않는 항목을 보여줄 이유가 없다 — 같은 자리에 「지역으로 코스
+    // 찾기」가 관광공사 데이터로 실제 코스를 만들어 준다.
+    []
+  : [
   {
     id: 'preset-gangneung-sea',
     name: '강릉 바다 산책 1일 코스',

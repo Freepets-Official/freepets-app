@@ -469,17 +469,28 @@ interface AppStore {
 const MY_USER_ID = 1;
 const AppStoreContext = createContext<AppStore | null>(null);
 
+/**
+ * 목 시드를 초기값으로 넣을지.
+ *
+ * 개발 중에는 서버 없이도 화면을 볼 수 있어야 하지만, 실제 사용자 기기에서는
+ * **자기가 만들지 않은 아이·판별 이력·제보·일정이 보이면 안 된다.** 서버 조회가
+ * 실패하거나(오프라인·502) 아직 돌아오지 않은 동안 목데이터가 그대로 남아,
+ * 새 계정으로 들어와도 "몽이"와 "보리"가 등록돼 있는 것처럼 보였다. 그 아이를 눌러
+ * 무언가 하려 하면 서버는 그런 petId를 모른다.
+ */
+const SEED_MOCK = __DEV__;
+
 export function AppStoreProvider({ children }: { children: ReactNode }) {
-  const [pets, setPets] = useState<Pet[]>(INITIAL_PETS);
-  const [checks, setChecks] = useState<PetCheck[]>(INITIAL_CHECKS);
+  const [pets, setPets] = useState<Pet[]>(SEED_MOCK ? INITIAL_PETS : []);
+  const [checks, setChecks] = useState<PetCheck[]>(SEED_MOCK ? INITIAL_CHECKS : []);
   // 목록에서 지운 판별 이력. 서버 삭제가 없어 불러온 뒤 걸러낸다.
   const [hiddenCheckIds, setHiddenCheckIds] = useState<number[]>([]);
-  const [reviews, setReviews] = useState<Review[]>(REVIEWS);
+  const [reviews, setReviews] = useState<Review[]>(SEED_MOCK ? REVIEWS : []);
   // 시설별 서버 리뷰 집계 캐시 (친화도 탭). 시설 상세 진입 시 loadReviews로 채운다.
   const [reviewData, setReviewData] = useState<Record<number, FacilityReviewData>>({});
   // 리뷰 로드에 실패한 시설 — 목으로 감추지 않고 에러 UI로 보여준다
   const [reviewErrors, setReviewErrors] = useState<Set<number>>(new Set());
-  const [reports, setReports] = useState<Report[]>(INITIAL_REPORTS);
+  const [reports, setReports] = useState<Report[]>(SEED_MOCK ? INITIAL_REPORTS : []);
   const [reportedReviewIds, setReportedReviewIds] = useState<Set<number>>(new Set());
   // 시설 상세 진입 시 그 시설분을 서버에서 채운다(실서비스엔 목 시드가 없다).
   const [satisfactions, setSatisfactions] = useState<PetSatisfaction[]>([]);
@@ -511,7 +522,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const sessionRev = useRef(0);
   const refreshTokenRef = useRef<string | null>(null);
   const [account, setAccount] = useState<Account>({ nickname: '나', avatarUri: null });
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(INITIAL_CAL_EVENTS);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(SEED_MOCK ? INITIAL_CAL_EVENTS : []);
   // 약 복용 기록 — "eventId:YYYY-MM-DD" 집합
   const [medLog, setMedLog] = useState<Set<string>>(new Set());
   const nextEventId = useRef(INITIAL_CAL_EVENTS.length + 1);
