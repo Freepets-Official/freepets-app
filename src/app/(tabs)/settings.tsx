@@ -24,6 +24,15 @@ const THEME_MODES: { key: ThemeMode; label: string; desc: string; icon: IconName
 ];
 const THEME_MODE_LABEL: Record<ThemeMode, string> = { light: '라이트', dark: '다크', auto: '자동' };
 
+/**
+ * 공지사항을 1.0에서 숨긴다.
+ *
+ * 조회 API가 없어 화면이 하드코딩된 4건을 보여주는데, 날짜가 2026-07~08로 출시 전이라
+ * 있지도 않은 과거 업데이트 이력이 되고 「정기 서버 점검」은 하지도 않는 점검이다.
+ * 서버 공지 API가 붙는 다음 업데이트에 되살린다 — 화면과 라우트는 그대로 둔다.
+ */
+const SHOW_NOTICES = false;
+
 export default function SettingsScreen() {
   const p = usePalette();
   const router = useRouter();
@@ -264,12 +273,14 @@ export default function SettingsScreen() {
 
       {/* 정보 */}
       <Group title="정보 · 지원">
-        <Row
-          icon="notifications-circle-outline"
-          label="공지사항"
-          onPress={() => router.push('/notices')}
-          chevron
-        />
+        {SHOW_NOTICES && (
+          <Row
+            icon="notifications-circle-outline"
+            label="공지사항"
+            onPress={() => router.push('/notices')}
+            chevron
+          />
+        )}
         <Row
           icon="chatbubble-ellipses-outline"
           label="문의하기"
