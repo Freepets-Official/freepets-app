@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 
-import { DateField } from '@/components/date-field';
+import { DateField, startOfToday } from '@/components/date-field';
 import { Text } from '@/components/text';
 import { Badge } from '@/components/badge';
 import { Chip } from '@/components/chip';
@@ -284,8 +284,9 @@ export default function PetsScreen() {
           value={nextVaccinationDate}
           onChange={setNextVaccinationDate}
           placeholder="다음 접종 예정일 (선택 · 비우면 접종일+1년)"
-          // 예정일은 지난 날짜가 의미 없다
-          minimumDate={new Date()}
+          // 예정일은 지난 날짜가 의미 없다. 지금 시각이 아니라 오늘 자정을 하한으로
+          // 둬야 오늘을 고를 수 있다(DateField는 고른 날짜를 00:00으로 돌려준다).
+          minimumDate={startOfToday()}
         />
       )}
 

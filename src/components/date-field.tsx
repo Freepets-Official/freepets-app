@@ -114,18 +114,48 @@ function toHm(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+/**
+ * 오늘 자정. `minimumDate`에 쓴다.
+ *
+ * `new Date()`를 그대로 넘기면 지금 시각이 하한이 된다. 이 컴포넌트는 고른 날짜를
+ * 로컬 00:00으로 돌려주므로, 오늘을 고르면 하한보다 이른 값이 되어 iOS 피커가
+ * 오늘을 막거나 내일로 보정해 버린다.
+ */
+export function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 /** 저장된 문자열을 Date로. 형식이 어긋나면 `null` — 호출부가 지금 시각으로 대신한다. */
 function parseValue(value: string, mode: 'date' | 'time'): Date | null {
   if (!value) return null;
   if (mode === 'time') {
     const m = /^(\d{1,2}):(\d{2})$/.exec(value);
     if (!m) return null;
+    // 정규식은 25:00·12:60도 통과시킨다. setHours가 이런 값을 조용히 다음 날로
+    // 굴려버려서, 검사하지 않으면 잘못된 값이 유효한 시각인 척 열린다.
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    if (hh > 23 || mm > 59) return null;
     const d = new Date();
-    d.setHours(Number(m[1]), Number(m[2]), 0, 0);
+    d.setHours(hh, mm, 0, 0);
     return d;
   }
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return null;
   const d = new Date(`${value}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (Number.isNaN(d.getTime())) return null;
+  // 2026-02-30 같은 값을 Date가 3월 2일로 정규화한다. 그대로 두면 저장된 잘못된
+  // 날짜로 피커가 열려, 사용자는 자기가 고른 적 없는 날을 보게 된다.
+  if (
+    d.getFullYear() !== Number(m[1]) ||
+    d.getMonth() + 1 !== Number(m[2]) ||
+    d.getDate() !== Number(m[3])
+  ) {
+    return null;
+  }
+  return d;
 }
 
 const styles = StyleSheet.create({

@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
@@ -131,7 +131,7 @@ export function RankingView({ coords }: { coords: Coords | null }) {
       <Text style={[styles.filterLabel, { color: p.muted }]}>지역</Text>
       <ScrollView
         automaticallyAdjustKeyboardInsets
-        keyboardDismissMode="interactive" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
         <Chip label="전국" selected={sidoCode === null} onPress={clearRegion} />
         {regions.map((r) => (
           <Chip

@@ -623,7 +623,9 @@ export function eventOccursOn(e: CalendarEvent, target: string): boolean {
   if (e.date === target) return true;
   // 기간 일정(여행)은 시작·종료 사이 모든 날에 걸린다. 문자열 비교로 충분하다 —
   // YYYY-MM-DD는 사전순이 곧 날짜순이라 Date로 바꿀 이유가 없다.
-  if (e.endDate && target > e.date && target <= e.endDate) return true;
+  // 종료일이 있으면 기간 안에서만 걸린다. 반복까지 함께 태우면 8/22~8/24 여행에
+  // DAILY가 붙어 있을 때 8/25부터 점으로 계속 찍혀, 막대로 그린 기간과 어긋난다.
+  if (e.endDate) return target > e.date && target <= e.endDate;
   if (e.repeat === 'NONE' || target < e.date) return false;
   const d = new Date(`${target}T00:00:00`);
   const s = new Date(`${e.date}T00:00:00`);

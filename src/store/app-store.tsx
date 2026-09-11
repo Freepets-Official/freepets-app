@@ -1564,8 +1564,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       };
 
       setStamps((prev) => {
-        // 이미 찍은 시설이면 그대로 둔다. 같은 곳을 반복해 세면 "정복"이 아니게 된다.
-        if (prev.some((s2) => s2.facilityId === input.facilityId)) return prev;
+        // 이미 찍은 시설이면 새로 세지 않는다. 같은 곳을 반복해 세면 "정복"이 아니게 된다.
+        const idx = prev.findIndex((s2) => s2.facilityId === input.facilityId);
+        if (idx >= 0) {
+          // 다만 예전엔 멀리서 찍었는데 이번엔 현장이라면 승격한다. 그대로 두면
+          // 현장에 다녀와도 「현장」 배지와 현장 집계가 영영 안 올라간다.
+          if (!input.verifiedOnSite || prev[idx].verifiedOnSite) return prev;
+          const next = [...prev];
+          next[idx] = { ...next[idx], verifiedOnSite: true };
+          return next;
+        }
         return [stamp, ...prev];
       });
       return stamp;

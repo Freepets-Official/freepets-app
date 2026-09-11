@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
@@ -100,7 +100,7 @@ export function Screen({
          * 밀어올려서 헤더까지 따라 올라가고, 스크롤 위치와 어긋나기 쉽다.
          */
         automaticallyAdjustKeyboardInsets
-        keyboardDismissMode="interactive"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         scrollEventThrottle={16}
         onScroll={handleScroll}
         onScrollEndDrag={handleEndDrag}

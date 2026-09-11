@@ -114,11 +114,15 @@ export default function CourseScreen() {
    *
    * 로그인 전에는 `savedCourses`가 비어 거를 대상이 없다. 그때는 전부 남의 코스가 맞다.
    */
+  /** 이번 세션에 담은 원본 공개 코스 ID. 목록에서 빼 중복 저장을 막는다. */
+  const [copiedIds, setCopiedIds] = useState<ReadonlySet<number>>(() => new Set());
   const otherCourses = useMemo(() => {
     if (publicCourses === null) return null;
     const mine = new Set(savedCourses.map((c) => c.courseId));
-    return publicCourses.filter((c) => !mine.has(c.courseId));
-  }, [publicCourses, savedCourses]);
+    // 담은 코스는 **새 코스 ID**로 저장된다. 원본 ID와 겹치지 않으므로 `mine`만으로는
+    // 걸러지지 않고, 같은 행을 다시 누르면 같은 동선이 또 저장된다. 원본 ID를 따로 센다.
+    return publicCourses.filter((c) => !mine.has(c.courseId) && !copiedIds.has(c.courseId));
+  }, [publicCourses, savedCourses, copiedIds]);
 
 
   /** 목록 새로고침. 실패하면 던진다 — 호출자가 "무엇이 실패했는지" 구분해 안내해야 한다. */
@@ -246,6 +250,7 @@ export default function CourseScreen() {
         stopIds: course.stopIds.slice(0, 10),
       });
       setSavedCourses((prev) => [created, ...prev.filter((c) => c.courseId !== created.courseId)]);
+      setCopiedIds((prev) => new Set(prev).add(course.courseId));
       setSaveMessage(`'${course.name}'을(를) 내 코스에 담았어요`);
     } catch (e) {
       setSaveMessage(e instanceof Error ? e.message : '코스를 담지 못했어요');
