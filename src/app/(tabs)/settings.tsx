@@ -7,6 +7,7 @@ import { Alert, Linking, Modal, Platform, Pressable, StyleSheet, Switch, TextInp
 import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
 import { Screen } from '@/components/screen';
+import { SUPPORT_EMAIL, SUPPORT_MAIL_SUBJECT } from '@/constants/contact';
 import { CardShadow, Radius, Spacing, type ThemeMode } from '@/constants/theme';
 import { FONT_SIZE_LABEL, type FontSizeMode } from '@/data/types';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
@@ -272,8 +273,10 @@ export default function SettingsScreen() {
         <Row
           icon="chatbubble-ellipses-outline"
           label="문의하기"
-          sub="freepets.official@gmail.com"
-          onPress={() => Linking.openURL('mailto:freepets.official@gmail.com?subject=반갑꼬리 문의')}
+          sub="메일로 문의 보내기"
+          onPress={() =>
+            Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(SUPPORT_MAIL_SUBJECT)}`)
+          }
           chevron
         />
         <Row
