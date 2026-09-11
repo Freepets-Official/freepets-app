@@ -45,7 +45,7 @@ export default function SignupScreen() {
   };
 
   // 모달에서 닉네임 확정 → 백엔드 가입 → 곧바로 로그인해 토큰 발급 → 세션 진입.
-  // (백엔드에 이메일 인증이 아직 없어 verify-email 화면은 건너뛴다. 추가되면 그때 연결.)
+  // 백엔드에 이메일 인증 절차가 없다. 가입 직후 바로 로그인해 토큰을 받는다.
   const finishSignup = async () => {
     if (!nickOk || loading) return;
     setError(null);

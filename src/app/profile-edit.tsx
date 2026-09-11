@@ -96,7 +96,8 @@ export default function ProfileEditScreen() {
           <Text style={[styles.label, { color: p.ink }]}>이메일</Text>
           <View style={[styles.readonly, { backgroundColor: p.surface, borderColor: p.line }]}>
             <Text style={[styles.readonlyText, { color: p.muted }]}>
-              {session.email ?? 'guest@freepets.app'}
+              {/* 소셜 로그인은 이메일이 없을 수 있다. 없는 주소를 지어내지 않는다 */}
+              {session.email || '소셜 계정으로 로그인'}
             </Text>
             <Ionicons name="lock-closed" size={14} color={p.muted} />
           </View>
