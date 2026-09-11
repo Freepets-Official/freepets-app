@@ -10,6 +10,7 @@ import { useCallFacility } from '@/hooks/use-call-facility';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 import { primaryPhoneNumber } from '@/lib/phone';
+import { ApiError, inquiryApi } from '@/lib/api';
 
 /**
  * 확정성 레이어의 핵심 UI — 정보 신뢰도 + 근거 + 최종 확인 시점,
@@ -22,6 +23,9 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
   const { confidence, source, confirmedAt } = confidenceOf(facility);
 
   const [requested, setRequested] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const facilityId = facility.facilityId;
   const fresh = freshnessText(confirmedAt);
   const isConfirmed = confidence === 'CONFIRMED';
 
@@ -78,15 +82,23 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
             </Pressable>
           )}
 
-          {/*
-            ⚠️ 서버에 확인 요청 API가 아직 없다(라이브 44개 확인). 지금은 이 기기에만 남는다.
-            그래서 문구가 "보냈어요"라고 단정하지 않는다 — 사업자에게 전달됐다고 하면
-            사용자가 답을 기다리게 된다. 백엔드에 엔드포인트가 생기면 여기서 호출하고
-            문구도 그때 "전달했어요"로 바꾼다.
-          */}
           <Pressable
-            onPress={() => setRequested(true)}
-            disabled={requested}
+            onPress={async () => {
+              setSending(true);
+              setError(null);
+              try {
+                await inquiryApi.create(facilityId);
+                setRequested(true);
+              } catch (e) {
+                // 24시간 안에 이미 보냈으면 실패가 아니라 "이미 했다"는 뜻이다.
+                const dup = e instanceof ApiError && e.status === 409;
+                if (dup) setRequested(true);
+                else setError(e instanceof Error ? e.message : '요청을 보내지 못했어요.');
+              } finally {
+                setSending(false);
+              }
+            }}
+            disabled={requested || sending}
             style={({ pressed }) => [
               styles.action,
               { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
@@ -97,9 +109,14 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
               color={requested ? p.success : p.muted}
             />
             <Text style={[styles.actionText, { color: requested ? p.success : p.ink }]}>
-              {requested ? '확인이 필요한 곳으로 표시했어요' : '사업자에게 조건 확인 요청'}
+              {requested
+                ? '사업자에게 확인을 요청했어요'
+                : sending
+                  ? '요청을 보내는 중…'
+                  : '사업자에게 조건 확인 요청'}
             </Text>
           </Pressable>
+          {error && <Text style={[styles.actionError, { color: p.muted }]}>{error}</Text>}
         </View>
       )}
     </View>
@@ -126,4 +143,5 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   actionText: { fontSize: 13.5, fontWeight: '700' },
+  actionError: { fontSize: 12.5, textAlign: 'center', marginTop: 2 },
 });

@@ -248,6 +248,19 @@ export const accountApi = {
    * 회원정보 수정(multipart PATCH). nickname은 매번 필수.
    * photoUri가 새로 고른 로컬 이미지면 avatar 파일로 첨부, http URL·null이면 미첨부(기존 유지).
    */
+  /**
+   * 회원 탈퇴. **비밀번호는 선택이다** — 소셜로 가입하면 비밀번호가 없다
+   * (`password_hash = NULL`). 이메일 가입자만 확인이 필요하므로 서버가 판단한다.
+   *
+   * Apple 심사 가이드라인 5.1.1(v)가 요구하는 필수 기능이다. 계정 생성을 지원하는 앱은
+   * 앱 안에서 삭제도 제공해야 하고, 실제로 삭제돼야 한다.
+   */
+  remove: (password?: string) =>
+    request<Record<string, never>>('DELETE', '/api/v1/users/account', {
+      body: password ? { password } : {},
+      auth: true,
+    }),
+
   update: async (nickname: string, photoUri: string | null): Promise<ServerAccount> => {
     const fd = new FormData();
     fd.append('nickname', nickname);
@@ -282,6 +295,31 @@ export const pushApi = {
       `/api/v1/users/push-tokens?token=${encodeURIComponent(token)}`,
       { auth: true },
     ),
+};
+
+/**
+ * 시설 조건 확인 요청(`/facilities/{id}/condition-inquiries`).
+ *
+ * "이 시설 조건이 불명확하다"를 모은다. 사업자가 조건을 갱신할 근거가 되고, 사용자에게는
+ * 전화 말고도 물어볼 길이 하나 더 생긴다.
+ */
+export const inquiryApi = {
+  /** 요청을 보낸다. `memo`는 선택 — 무엇이 불명확한지 적을 수 있다. */
+  create: (facilityId: number, memo?: string) =>
+    request<Record<string, never>>('POST', `/api/v1/facilities/${facilityId}/condition-inquiries`, {
+      body: memo ? { memo } : {},
+      auth: true,
+    }),
+
+  /** 이 시설에 쌓인 요청 수. 사업자에게 "몇 명이 궁금해하는지"를 보여주는 값이다. */
+  count: async (facilityId: number): Promise<number> => {
+    const r = await request<{ count: number | null }>(
+      'GET',
+      `/api/v1/facilities/${facilityId}/condition-inquiries/count`,
+      { auth: true },
+    );
+    return r.count ?? 0;
+  },
 };
 
 // ─────────────────────────── 시설(facilities) ───────────────────────────
