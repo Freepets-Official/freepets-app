@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { useState, useRef } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DateField } from '@/components/date-field';
 import { Text } from '@/components/text';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import {
@@ -20,6 +21,7 @@ const TYPES: CalEventType[] = ['VACCINE', 'MED', 'CHECKUP', 'TRAVEL', 'OTHER'];
 const REPEATS: CalRepeat[] = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'];
 
 export default function CalendarEventScreen() {
+  const scrollRef = useRef<ScrollView>(null);
   const p = usePalette();
   const router = useRouter();
   const params = useLocalSearchParams<{ date?: string; eventId?: string }>();
@@ -36,6 +38,7 @@ export default function CalendarEventScreen() {
   const [repeat, setRepeat] = useState<CalRepeat>(editing?.repeat ?? 'NONE');
   const [reminder, setReminder] = useState(editing?.reminder ?? true);
   const [notes, setNotes] = useState(editing?.notes ?? '');
+  const [endDate, setEndDate] = useState(editing?.endDate ?? '');
 
   const canSave = title.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(date);
 
@@ -46,6 +49,9 @@ export default function CalendarEventScreen() {
       type,
       title: title.trim(),
       date,
+      // 종료일은 여행에만 둔다. 다른 종류로 바꿔 저장하면 남아 있던 값을 버린다 —
+      // 안 그러면 화면에 안 보이는 기간이 데이터에만 남아 캘린더에 막대가 그려진다.
+      endDate: type === 'TRAVEL' && endDate && endDate > date ? endDate : null,
       time: time.trim() || null,
       repeat,
       reminder,
@@ -61,7 +67,10 @@ export default function CalendarEventScreen() {
       <Stack.Screen
         options={{ title: editing ? '일정 수정' : '일정 추가', headerBackButtonDisplayMode: 'minimal' }}
       />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           {/* 종류 */}
           <Text style={[styles.label, { color: p.ink }]}>종류</Text>
@@ -111,28 +120,33 @@ export default function CalendarEventScreen() {
             ))}
           </View>
 
-          {/* 날짜·시간 */}
-          <View style={styles.pairRow}>
-            <View style={styles.pairCol}>
-              <Text style={[styles.label, { color: p.ink }]}>날짜</Text>
-              <TextInput
-                value={date}
-                onChangeText={setDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={p.muted}
-                style={[styles.input, { backgroundColor: p.surface, borderColor: p.line, color: p.ink }]}
+          {/*
+            날짜·시간은 휠로 고른다. 형식을 손으로 맞추게 하면 오타가 나고, 키보드가
+            아래쪽 입력을 가린다. 세로로 쌓은 이유는 휠이 펼쳐질 자리가 필요해서다.
+          */}
+          <View style={styles.dateCol}>
+            <Text style={[styles.label, { color: p.ink }]}>{type === 'TRAVEL' ? '시작일' : '날짜'}</Text>
+            <DateField value={date} onChange={setDate} placeholder="날짜 선택" />
+          </View>
+          {/*
+            여행만 며칠에 걸친다. 접종·복용·검진은 하루에 끝나므로 종료일을 묻지 않는다 —
+            안 쓰는 칸을 늘어놓으면 무엇을 채워야 하는지가 흐려진다.
+          */}
+          {type === 'TRAVEL' && (
+            <View style={styles.dateCol}>
+              <Text style={[styles.label, { color: p.ink }]}>종료일 (선택)</Text>
+              <DateField
+                value={endDate}
+                onChange={setEndDate}
+                placeholder="당일치기면 비워두세요"
+                // 시작일보다 이르면 기간이 성립하지 않는다
+                minimumDate={date ? new Date(`${date}T00:00:00`) : undefined}
               />
             </View>
-            <View style={styles.pairCol}>
-              <Text style={[styles.label, { color: p.ink }]}>시간 (선택)</Text>
-              <TextInput
-                value={time}
-                onChangeText={setTime}
-                placeholder="09:00"
-                placeholderTextColor={p.muted}
-                style={[styles.input, { backgroundColor: p.surface, borderColor: p.line, color: p.ink }]}
-              />
-            </View>
+          )}
+          <View style={styles.dateCol}>
+            <Text style={[styles.label, { color: p.ink }]}>시간 (선택)</Text>
+            <DateField value={time} onChange={setTime} placeholder="시간 선택" mode="time" />
           </View>
 
           {/* 반복 */}
@@ -167,6 +181,12 @@ export default function CalendarEventScreen() {
             placeholder="예) 강릉동물병원 · 12시간 공복"
             placeholderTextColor={p.muted}
             multiline
+            /**
+             * 키보드 인셋만으로는 부족하다. 그건 스크롤 **여백**을 늘릴 뿐 화면을 옮기지
+             * 않는데, 메모는 화면 맨 아래에 있어 키보드가 덮은 자리에 그대로 남는다.
+             * 포커스가 오면 끝으로 밀어 올린다(키보드가 올라오는 시간만큼 늦춰서).
+             */
+            onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150)}
             style={[styles.textarea, { backgroundColor: p.surface, borderColor: p.line, color: p.ink }]}
           />
 
@@ -236,8 +256,7 @@ const styles = StyleSheet.create({
   petRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   chip: { borderWidth: 1.5, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 8 },
   chipText: { fontSize: 13, fontWeight: '700' },
-  pairRow: { flexDirection: 'row', gap: Spacing.md },
-  pairCol: { flex: 1 },
+  dateCol: { gap: 6 },
   reminderRow: {
     flexDirection: 'row',
     alignItems: 'center',

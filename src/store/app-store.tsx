@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 
 import { clearSession, loadSession, saveSession } from '@/lib/token-store';
 import { clearStamps, loadStamps, saveStamps } from '@/lib/stamp-store';
+import { loadHiddenChecks, saveHiddenChecks } from '@/lib/hidden-checks';
 import { getFcmToken } from '@/lib/push';
 
 import type { ThemeMode } from '@/constants/theme';
@@ -300,6 +301,13 @@ interface AppStore {
   checks: PetCheck[];
   /** 선택한 여러 마리를 한 번에 판별한다 */
   runCheck: (facilityId: number, petIds: number[]) => Promise<PetCheck | null>;
+  /**
+   * 판별 이력을 목록에서 지운다.
+   *
+   * 서버에 삭제 API가 없어 **이 기기에서만 숨긴다.** 지운 id를 남겨두지 않으면 다음에
+   * 서버에서 다시 불러와 되살아난다.
+   */
+  hideCheck: (checkId: number) => void;
 
   /** 다음 접종이 30일 이내로 다가왔거나 지난 아이들 (홈 알림용) — 임박순 */
   upcomingVaccinations: () => { pet: Pet; dday: number; date: string }[];
@@ -357,6 +365,8 @@ interface AppStore {
     address: string;
     petIds: number[];
     photoUri: string | null;
+    /** 찍을 때 시설 근처에 있었는지. 강제하지 않고 표시만 한다 */
+    verifiedOnSite: boolean;
   }) => Stamp | null;
   /** 도장첩이 지역을 알아내는 데 쓰는 트리(TourAPI 코드 포함). 못 받았으면 빈 배열 */
   stampRegions: Region[];
@@ -459,15 +469,28 @@ interface AppStore {
 const MY_USER_ID = 1;
 const AppStoreContext = createContext<AppStore | null>(null);
 
+/**
+ * 목 시드를 초기값으로 넣을지.
+ *
+ * 개발 중에는 서버 없이도 화면을 볼 수 있어야 하지만, 실제 사용자 기기에서는
+ * **자기가 만들지 않은 아이·판별 이력·제보·일정이 보이면 안 된다.** 서버 조회가
+ * 실패하거나(오프라인·502) 아직 돌아오지 않은 동안 목데이터가 그대로 남아,
+ * 새 계정으로 들어와도 "몽이"와 "보리"가 등록돼 있는 것처럼 보였다. 그 아이를 눌러
+ * 무언가 하려 하면 서버는 그런 petId를 모른다.
+ */
+const SEED_MOCK = __DEV__;
+
 export function AppStoreProvider({ children }: { children: ReactNode }) {
-  const [pets, setPets] = useState<Pet[]>(INITIAL_PETS);
-  const [checks, setChecks] = useState<PetCheck[]>(INITIAL_CHECKS);
-  const [reviews, setReviews] = useState<Review[]>(REVIEWS);
+  const [pets, setPets] = useState<Pet[]>(SEED_MOCK ? INITIAL_PETS : []);
+  const [checks, setChecks] = useState<PetCheck[]>(SEED_MOCK ? INITIAL_CHECKS : []);
+  // 목록에서 지운 판별 이력. 서버 삭제가 없어 불러온 뒤 걸러낸다.
+  const [hiddenCheckIds, setHiddenCheckIds] = useState<number[]>([]);
+  const [reviews, setReviews] = useState<Review[]>(SEED_MOCK ? REVIEWS : []);
   // 시설별 서버 리뷰 집계 캐시 (친화도 탭). 시설 상세 진입 시 loadReviews로 채운다.
   const [reviewData, setReviewData] = useState<Record<number, FacilityReviewData>>({});
   // 리뷰 로드에 실패한 시설 — 목으로 감추지 않고 에러 UI로 보여준다
   const [reviewErrors, setReviewErrors] = useState<Set<number>>(new Set());
-  const [reports, setReports] = useState<Report[]>(INITIAL_REPORTS);
+  const [reports, setReports] = useState<Report[]>(SEED_MOCK ? INITIAL_REPORTS : []);
   const [reportedReviewIds, setReportedReviewIds] = useState<Set<number>>(new Set());
   // 시설 상세 진입 시 그 시설분을 서버에서 채운다(실서비스엔 목 시드가 없다).
   const [satisfactions, setSatisfactions] = useState<PetSatisfaction[]>([]);
@@ -499,7 +522,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const sessionRev = useRef(0);
   const refreshTokenRef = useRef<string | null>(null);
   const [account, setAccount] = useState<Account>({ nickname: '나', avatarUri: null });
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(INITIAL_CAL_EVENTS);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(SEED_MOCK ? INITIAL_CAL_EVENTS : []);
   // 약 복용 기록 — "eventId:YYYY-MM-DD" 집합
   const [medLog, setMedLog] = useState<Set<string>>(new Set());
   const nextEventId = useRef(INITIAL_CAL_EVENTS.length + 1);
@@ -1386,6 +1409,37 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       .catch(() => {});
   }, []);
 
+  // 지운 판별 이력을 기기에서 복원한다. 실패해도 목록이 전부 보일 뿐 앱을 막지 않는다.
+  useEffect(() => {
+    let alive = true;
+    loadHiddenChecks().then((ids) => {
+      if (alive) setHiddenCheckIds(ids);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const hideCheck = useCallback((checkId: number) => {
+    setHiddenCheckIds((prev) => {
+      if (prev.includes(checkId)) return prev;
+      const next = [...prev, checkId];
+      void saveHiddenChecks(next);
+      return next;
+    });
+  }, []);
+
+  /**
+   * 화면에 보이는 판별 이력. 지운 것을 걸러낸다.
+   *
+   * 원본 `checks`를 직접 지우지 않는 이유는 서버에서 다시 불러올 때마다 되돌아오기
+   * 때문이다. 걸러내는 자리를 한 곳으로 모아야 화면마다 빠뜨리지 않는다.
+   */
+  const visibleChecks = useMemo(
+    () => (hiddenCheckIds.length === 0 ? checks : checks.filter((c) => !hiddenCheckIds.includes(c.checkId))),
+    [checks, hiddenCheckIds],
+  );
+
   // ── 여권 도장 (게임 요소 1단계) ─────────────────────────────────────
   // 기기에서 복원한다. 실패해도 빈 도장첩으로 시작할 뿐 앱을 막지 않는다.
   //
@@ -1501,6 +1555,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       address: string;
       petIds: number[];
       photoUri: string | null;
+      verifiedOnSite: boolean;
     }): Stamp | null => {
       const region = matchRegion(input.address, stampRegions);
       // 지역을 모르면 안 찍는다. 잘못 찍힌 도장은 사용자가 지울 방법이 없다.
@@ -1515,12 +1570,21 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         sigunguCode: region.sigunguCode,
         petIds: input.petIds,
         photoUri: input.photoUri,
+        verifiedOnSite: input.verifiedOnSite,
         createdAt: new Date().toISOString(),
       };
 
       setStamps((prev) => {
-        // 이미 찍은 시설이면 그대로 둔다. 같은 곳을 반복해 세면 "정복"이 아니게 된다.
-        if (prev.some((s2) => s2.facilityId === input.facilityId)) return prev;
+        // 이미 찍은 시설이면 새로 세지 않는다. 같은 곳을 반복해 세면 "정복"이 아니게 된다.
+        const idx = prev.findIndex((s2) => s2.facilityId === input.facilityId);
+        if (idx >= 0) {
+          // 다만 예전엔 멀리서 찍었는데 이번엔 현장이라면 승격한다. 그대로 두면
+          // 현장에 다녀와도 「현장」 배지와 현장 집계가 영영 안 올라간다.
+          if (!input.verifiedOnSite || prev[idx].verifiedOnSite) return prev;
+          const next = [...prev];
+          next[idx] = { ...next[idx], verifiedOnSite: true };
+          return next;
+        }
         return [stamp, ...prev];
       });
       return stamp;
@@ -1535,7 +1599,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       addPet,
       removePet,
       updatePet,
-      checks,
+      checks: visibleChecks,
+      hideCheck,
       runCheck,
       upcomingVaccinations,
       reviews,
@@ -1616,7 +1681,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       addPet,
       removePet,
       updatePet,
-      checks,
+      visibleChecks,
+      hideCheck,
       runCheck,
       upcomingVaccinations,
       reviews,

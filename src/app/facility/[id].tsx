@@ -168,6 +168,7 @@ export default function FacilityDetailScreen() {
           title,
           date: ymd(new Date()),
           time: null,
+          endDate: null,
           repeat: 'NONE',
           reminder: false,
           notes: '판별받고 방문한 곳 — 자동 기록',
@@ -587,6 +588,8 @@ export default function FacilityDetailScreen() {
                 facilityName={facility.name}
                 address={facility.address ?? ''}
                 petIds={check.petIds}
+                latitude={facility.latitude}
+                longitude={facility.longitude}
               />
             </Animated.View>
           )}

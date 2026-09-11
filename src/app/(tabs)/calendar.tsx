@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useRouter, useScrollToTop } from 'expo-router';
+import { useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,6 +13,7 @@ import {
   ymd,
   type CalEventType,
   type CalendarEvent,
+  spanPosition,
 } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
@@ -24,6 +25,10 @@ export default function CalendarScreen() {
   const p = usePalette();
   const router = useRouter();
   const chrome = useTabChrome();
+  // 캘린더 탭을 다시 누르면 아래 일정 목록을 맨 위로 올린다(다른 탭과 같은 동작)
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
+
   const { pets, eventsOn, toggleEventReminder, removeCalendarEvent, toggleMedTaken, isMedTaken } =
     useAppStore();
 
@@ -111,6 +116,11 @@ export default function CalendarScreen() {
           const isToday = ds === today;
           const isSel = ds === selected;
           const evs = eventsOn(ds);
+          // 기간 일정과 하루짜리를 나눠 그린다 — 앞은 막대, 뒤는 점
+          const spans = evs
+            .map((e) => ({ event: e, pos: spanPosition(e, ds) }))
+            .filter((x): x is { event: CalendarEvent; pos: 'start' | 'middle' | 'end' } => x.pos !== null);
+          const dots = evs.filter((e) => spanPosition(e, ds) === null);
           const wd = d.getDay();
           return (
             <Pressable key={ds} onPress={() => setSelected(ds)} style={styles.cell}>
@@ -138,8 +148,36 @@ export default function CalendarScreen() {
                   {d.getDate()}
                 </Text>
               </View>
+              {/*
+                기간 일정(여행)은 점이 아니라 막대로 그린다. 며칠에 걸친 일이 날마다 점
+                하나로 흩어지면 "이어진 하루하루"라는 게 안 보인다. 시작·끝만 모서리를
+                둥글게 해서 어디서 시작하고 끝나는지 드러낸다.
+              */}
+              {spans.length > 0 && (
+                <View style={styles.spanWrap}>
+                  {spans.slice(0, 2).map((sp, i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.span,
+                        {
+                          backgroundColor: CAL_EVENT_META[sp.event.type].color,
+                          opacity: inMonth ? 1 : 0.4,
+                          borderTopLeftRadius: sp.pos === 'start' ? 3 : 0,
+                          borderBottomLeftRadius: sp.pos === 'start' ? 3 : 0,
+                          borderTopRightRadius: sp.pos === 'end' ? 3 : 0,
+                          borderBottomRightRadius: sp.pos === 'end' ? 3 : 0,
+                          // 시작·끝은 칸 안쪽으로 물리고, 중간은 칸을 꽉 채워 이어 보이게 한다
+                          marginLeft: sp.pos === 'start' ? 4 : 0,
+                          marginRight: sp.pos === 'end' ? 4 : 0,
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+              )}
               <View style={styles.dots}>
-                {evs.slice(0, 3).map((e, i) => (
+                {dots.slice(0, 3).map((e, i) => (
                   <View
                     key={i}
                     style={[styles.dot, { backgroundColor: CAL_EVENT_META[e.type].color, opacity: inMonth ? 1 : 0.4 }]}
@@ -158,6 +196,7 @@ export default function CalendarScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.panel}
         contentContainerStyle={styles.panelContent}
         showsVerticalScrollIndicator={false}
@@ -336,6 +375,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dayNum: { fontSize: 13.5, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  spanWrap: { width: '100%', gap: 2, marginBottom: 2 },
+  span: { height: 4 },
   dots: { flexDirection: 'row', gap: 3, height: 6 },
   dot: { width: 5, height: 5, borderRadius: 3 },
   panelHead: {

@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -73,7 +74,25 @@ function NotificationBell({
 export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { pets, checks, plannedDenialAlerts, upcomingVaccinations, stamps } = useAppStore();
+  const { pets, checks, plannedDenialAlerts, upcomingVaccinations, stamps, facilityById, loadFacility, hideCheck } =
+    useAppStore();
+
+  /**
+   * 이력에 담긴 시설을 캐시에 채운다. 이름을 보여주려면 시설을 알아야 하는데 판별 이력에는
+   * facilityId만 들어 있다.
+   *
+   * **한 번 시도한 시설은 다시 부르지 않는다.** 서버에 없는 시설이면 캐시가 끝내 비어 있어
+   * 리렌더마다 같은 요청을 반복하게 된다 — 탭을 오갈 때마다 실패할 요청이 쌓인다.
+   */
+  const triedFacilities = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    for (const c of checks.slice(0, 5)) {
+      if (triedFacilities.current.has(c.facilityId)) continue;
+      if (facilityById(c.facilityId)) continue;
+      triedFacilities.current.add(c.facilityId);
+      void loadFacility(c.facilityId);
+    }
+  }, [checks, facilityById, loadFacility]);
   // 뱃지 기준과 같은 값(서로 다른 시군구 수)을 쓴다 — 홈과 도장첩이 다른 숫자를 보이면 안 된다
   const stampCount = useMemo(() => uniqueRegionCount(stamps), [stamps]);
   const alerts = plannedDenialAlerts();
@@ -141,29 +160,45 @@ export default function HomeScreen() {
           <SectionTitle title="최근 판별 이력" caption={`${checks.length}건`} />
           <View style={styles.histList}>
             {checks.slice(0, 5).map((c) => {
-              const facility = FACILITIES.find((f) => f.facilityId === c.facilityId);
+              // 스토어 캐시를 먼저 본다. 목 데이터에만 기대면 관광공사에서 온 실제 시설이
+              // 전부 "알 수 없는 시설"로 뜬다 — 판별 이력은 대부분 그쪽이다.
+              const facility = facilityById(c.facilityId) ?? FACILITIES.find((f) => f.facilityId === c.facilityId);
               // petIds를 쓴다 — 서버에서 불러온 이력엔 verdicts가 없어서 이름이 통째로 비어버린다
               const names = c.petIds.map((id) => pets.find((x) => x.petId === id)?.name).filter(Boolean);
               return (
-                <Pressable
+                <Swipeable
                   key={c.checkId}
-                  onPress={() =>
-                    router.push({ pathname: '/facility/[id]', params: { id: String(c.facilityId) } })
-                  }
-                  style={({ pressed }) => [
-                    styles.histCard,
-                    { backgroundColor: p.card, borderColor: p.line, opacity: pressed ? 0.92 : 1 },
-                  ]}>
-                  <View style={styles.histTop}>
-                    <Text style={[styles.histName, { color: p.ink }]} numberOfLines={1}>
-                      {facility?.name ?? '알 수 없는 시설'}
+                  friction={2}
+                  rightThreshold={40}
+                  // 목록에서만 지운다. 서버에 삭제 API가 없어 다시 불러오면 되살아나므로
+                  // 스토어가 지운 id를 기기에 남겨 걸러낸다.
+                  renderRightActions={() => (
+                    <Pressable
+                      onPress={() => hideCheck(c.checkId)}
+                      style={[styles.histDelete, { backgroundColor: p.danger }]}>
+                      <Ionicons name="trash" size={18} color="#FFFFFF" />
+                      <Text style={styles.histDeleteText}>삭제</Text>
+                    </Pressable>
+                  )}>
+                  <Pressable
+                    onPress={() =>
+                      router.push({ pathname: '/facility/[id]', params: { id: String(c.facilityId) } })
+                    }
+                    style={({ pressed }) => [
+                      styles.histCard,
+                      { backgroundColor: p.card, borderColor: p.line, opacity: pressed ? 0.92 : 1 },
+                    ]}>
+                    <View style={styles.histTop}>
+                      <Text style={[styles.histName, { color: p.ink }]} numberOfLines={1}>
+                        {facility?.name ?? '알 수 없는 시설'}
+                      </Text>
+                      <ResultBadge result={c.overall} />
+                    </View>
+                    <Text style={[styles.histMeta, { color: p.muted }]}>
+                      {names.join(' · ')} · {formatDate(c.createdAt)}
                     </Text>
-                    <ResultBadge result={c.overall} />
-                  </View>
-                  <Text style={[styles.histMeta, { color: p.muted }]}>
-                    {names.join(' · ')} · {formatDate(c.createdAt)}
-                  </Text>
-                </Pressable>
+                  </Pressable>
+                </Swipeable>
               );
             })}
           </View>
@@ -234,9 +269,17 @@ function StackCard({
     sc.value = withSpring(Math.max(0.9, 1 - pos * 0.03), STACK_SPRING);
   }, [pos, total, tY, sc]);
 
+  /**
+   * 뒤 카드를 **투명하게 만들지 않는다.**
+   *
+   * 예전에는 `opacity`로 깊이를 줬는데, 카드가 반투명해지면서 **뒤 카드의 내용이 앞
+   * 카드에 비쳐 보였다.** 아이가 여럿이면 이름·레벨·XP 바가 겹쳐 읽혀 지저분하다.
+   * 다크에서 특히 두드러진다.
+   *
+   * 깊이는 이미 `scale`과 `translateY`가 만들고 있어서 투명도까지 쓸 이유가 없다.
+   */
   const anim = useAnimatedStyle(() => ({
     transform: [{ translateY: tY.value }, { scale: sc.value }],
-    opacity: 1 - Math.min(pos, 3) * 0.06,
   }));
 
   const isFront = pos === 0;
@@ -539,6 +582,11 @@ const styles = StyleSheet.create({
     paddingVertical: 56,
   },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  histDelete: {
+    justifyContent: 'center', alignItems: 'center', gap: 2,
+    width: 76, marginLeft: 8, borderRadius: Radius.md,
+  },
+  histDeleteText: { color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' },
   stampEntry: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, marginTop: 4,

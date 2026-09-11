@@ -11,6 +11,7 @@ import {
   CONQUEROR_BADGES,
   badgeState,
   groupBySido,
+  onSiteCount,
   stampsThisMonth,
   type Stamp,
 } from '@/data/stamps';
@@ -32,6 +33,7 @@ export default function StampsScreen() {
   const progress = useMemo(() => groupBySido(stamps, stampRegions), [stamps, stampRegions]);
   const badges = useMemo(() => badgeState(stamps), [stamps]);
   const thisMonth = useMemo(() => stampsThisMonth(stamps), [stamps]);
+  const onSite = useMemo(() => onSiteCount(stamps), [stamps]);
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]} edges={['bottom']}>
@@ -53,6 +55,11 @@ export default function StampsScreen() {
             <View style={styles.summaryCell}>
               <Text style={[styles.summaryNum, { color: p.accent }]}>{thisMonth.length}</Text>
               <Text style={[styles.summaryLabel, { color: p.muted }]}>이번 달</Text>
+            </View>
+            <View style={[styles.summaryDivider, { backgroundColor: p.line }]} />
+            <View style={styles.summaryCell}>
+              <Text style={[styles.summaryNum, { color: p.accent }]}>{onSite}</Text>
+              <Text style={[styles.summaryLabel, { color: p.muted }]}>현장 확인</Text>
             </View>
           </View>
 
@@ -116,7 +123,7 @@ export default function StampsScreen() {
               <Ionicons name="footsteps-outline" size={22} color={p.muted} />
               <Text style={[styles.emptyTitle, { color: p.ink }]}>아직 도장이 없어요</Text>
               <Text style={[styles.emptyBody, { color: p.muted }]}>
-                아이와 다녀온 시설에서 인증샷을 남기면 그 지역 도장이 찍혀요.
+                아이와 함께 다녀온 곳에서 사진을 남기면 그 지역 도장이 찍혀요.
               </Text>
             </View>
           ) : (
@@ -217,6 +224,13 @@ function StampRow({ stamp }: { stamp: Stamp }) {
           {date ? ` · ${date}` : ''}
         </Text>
       </View>
+      {/* 현장에서 찍은 도장만 표시한다. 없다고 잘못된 도장은 아니라 회색 반대말은 두지 않는다 */}
+      {stamp.verifiedOnSite && (
+        <View style={styles.onSiteBadge}>
+          <Ionicons name="location" size={11} color={p.accent} />
+          <Text style={[styles.onSiteText, { color: p.accent }]}>현장</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -283,6 +297,8 @@ const styles = StyleSheet.create({
   thumb: { width: 40, height: 40, borderRadius: Radius.sm },
   thumbEmpty: { alignItems: 'center', justifyContent: 'center' },
   stampTexts: { flexShrink: 1, gap: 2 },
+  onSiteBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, marginLeft: 'auto' },
+  onSiteText: { fontSize: 10.5, fontWeight: '800' },
   stampName: { fontSize: 13, fontWeight: '700' },
   stampMeta: { fontSize: 11.5 },
 });

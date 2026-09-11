@@ -1,14 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
 import { DenialReport } from '@/components/denial-report';
 import { PassportCard } from '@/components/passport-card';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
-import { FACILITIES } from '@/data/mock';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -22,11 +21,39 @@ import { useAppStore } from '@/store/app-store';
 export default function PassportScreen() {
   const p = usePalette();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { pets, checks, confidenceOf } = useAppStore();
+  const { pets, checks, confidenceOf, facilityById, loadFacility } = useAppStore();
   const { width } = useWindowDimensions();
 
   const facilityId = Number(id);
-  const facility = FACILITIES.find((f) => f.facilityId === facilityId);
+  /**
+   * 시설은 **스토어에서** 가져온다. 예전에는 목 데이터(`FACILITIES`)에서만 찾았는데,
+   * 관광공사에서 온 실제 시설은 거기 없어서 **출입증이 아예 열리지 않았다** —
+   * 판별을 막 끝내고 들어와도 "먼저 AI 출입 판별을 해주세요"가 떴다.
+   */
+  const facility = facilityById(facilityId);
+
+  /**
+   * 시설 상세를 거치지 않고 바로 들어오는 경로(알림 딥링크 등)에서는 캐시가 비어 있다.
+   *
+   * 조회가 끝났는지를 따로 들고 있어야 한다. 첫 렌더는 `facility` 없이 지나가는데,
+   * 그 순간 아래 빈 상태가 "먼저 AI 출입 판별을 해주세요"를 띄운다 — 판별을 이미
+   * 했는데도 안 했다고 말하는 셈이라, 조회가 끝나기 전에는 기다리는 화면을 보여준다.
+   */
+  const [lookedUp, setLookedUp] = useState(false);
+  useEffect(() => {
+    if (!(Number.isInteger(facilityId) && facilityId > 0)) {
+      setLookedUp(true);
+      return;
+    }
+    let alive = true;
+    setLookedUp(false);
+    loadFacility(facilityId).finally(() => {
+      if (alive) setLookedUp(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [facilityId, loadFacility]);
 
   // 이 시설의 가장 최근 판별 기록
   const check = useMemo(
@@ -43,6 +70,19 @@ export default function PassportScreen() {
   const cards = (check?.verdicts ?? [])
     .map((v) => ({ verdict: v, pet: pets.find((x) => x.petId === v.petId) }))
     .filter((c): c is { verdict: typeof c.verdict; pet: NonNullable<typeof c.pet> } => !!c.pet);
+
+  // 조회 중에는 판단을 미룬다. 빈 상태와 로딩은 사용자에게 전혀 다른 뜻이다.
+  if (!facility && !lookedUp) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
+        <Stack.Screen options={{ title: '동반 출입증', headerBackButtonDisplayMode: 'minimal' }} />
+        <View style={styles.empty}>
+          <ActivityIndicator color={p.accent} />
+          <Text style={[styles.emptyText, { color: p.muted }]}>출입증을 불러오는 중이에요.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!facility || !check || cards.length === 0) {
     // 판별한 적이 없는 경우와, 이력은 있는데 상세가 없는 경우를 나눠 안내한다.

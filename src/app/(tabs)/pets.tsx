@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 
+import { DateField, startOfToday } from '@/components/date-field';
 import { Text } from '@/components/text';
 import { Badge } from '@/components/badge';
 import { Chip } from '@/components/chip';
@@ -40,6 +41,7 @@ export default function PetsScreen() {
       title: `${species} 예방접종`,
       date,
       time: null,
+      endDate: null,
       repeat: 'NONE',
       reminder: true,
       notes: '다음 접종 예정 — 정확한 일정은 동물병원 확인',
@@ -268,24 +270,23 @@ export default function PetsScreen() {
       </View>
 
       {vaccinated && (
-        <TextInput
+        <DateField
           value={vaccinationDate}
-          onChangeText={setVaccinationDate}
-          placeholder="접종일 (예: 2026-03-15)"
-          placeholderTextColor={p.muted}
-          keyboardType="numbers-and-punctuation"
-          style={[styles.input, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
+          onChange={setVaccinationDate}
+          placeholder="접종일 선택"
+          // 접종은 이미 한 일이라 미래 날짜가 나올 수 없다
+          maximumDate={new Date()}
         />
       )}
 
       {(kind === 'DOG' || kind === 'CAT') && (
-        <TextInput
+        <DateField
           value={nextVaccinationDate}
-          onChangeText={setNextVaccinationDate}
-          placeholder="다음 접종 예정일 (선택 · 비우면 접종일+1년 자동)"
-          placeholderTextColor={p.muted}
-          keyboardType="numbers-and-punctuation"
-          style={[styles.input, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
+          onChange={setNextVaccinationDate}
+          placeholder="다음 접종 예정일 (선택 · 비우면 접종일+1년)"
+          // 예정일은 지난 날짜가 의미 없다. 지금 시각이 아니라 오늘 자정을 하한으로
+          // 둬야 오늘을 고를 수 있다(DateField는 고른 날짜를 00:00으로 돌려준다).
+          minimumDate={startOfToday()}
         />
       )}
 

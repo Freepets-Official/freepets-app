@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
@@ -50,7 +50,9 @@ export default function PromotionScreen() {
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
       <Stack.Screen options={{ title: '매장 소개·홍보', headerBackButtonDisplayMode: 'minimal' }} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           <View style={styles.head}>
             <Text style={[styles.eyebrow, { color: p.accent }]}>{facility.name}</Text>

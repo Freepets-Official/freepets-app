@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -161,7 +161,9 @@ export default function BusinessScreen() {
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
       <Stack.Screen options={{ title: '사업자 등록' }} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           <View style={styles.head}>
             <Text style={[styles.eyebrow, { color: p.accent }]}>사업자 셀프 등록</Text>

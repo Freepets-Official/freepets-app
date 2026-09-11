@@ -1,4 +1,5 @@
 import { judgeGroup, type GroupResult } from '@/data/judge';
+import { distanceMeters } from '@/lib/location';
 import { FACILITIES, mockId, reviewsOf } from '@/data/mock';
 import type { Category, CheckResult, Facility, Pet, PetSatisfaction, ReviewTag } from '@/data/types';
 
@@ -50,7 +51,12 @@ export interface CourseResult {
  * 관광공사 지역기반 관광정보로 엮은 프리셋.
  * 실제 연동 시 areaBasedList + detailPetTour 조합으로 지역별 코스를 생성한다.
  */
-export const PRESET_COURSES: Course[] = [
+export const PRESET_COURSES: Course[] = !__DEV__
+  ? // 목 시설로 엮인 예시라 실제로 판별하면 "데모용 예시 코스라 판별할 수 없어요"가 뜬다.
+    // 사용자에게 작동하지 않는 항목을 보여줄 이유가 없다 — 같은 자리에 「지역으로 코스
+    // 찾기」가 관광공사 데이터로 실제 코스를 만들어 준다.
+    []
+  : [
   {
     id: 'preset-gangneung-sea',
     name: '강릉 바다 산책 1일 코스',
@@ -76,18 +82,8 @@ const RANK: Record<CheckResult, number> = { ALLOWED: 0, CONDITIONAL: 1, DENIED: 
 
 type LatLng = { latitude: number; longitude: number };
 
-/** 두 좌표 사이 대략 거리(m) — 하버사인 */
-function haversine(a: LatLng, b: LatLng): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b.latitude - a.latitude);
-  const dLng = toRad(b.longitude - a.longitude);
-  const lat1 = toRad(a.latitude);
-  const lat2 = toRad(b.latitude);
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
+/** 두 좌표 사이 대략 거리(m). 도장 현장 확인도 같은 계산을 쓰므로 `lib/location`에 모아뒀다. */
+const haversine = distanceMeters;
 
 const hasCoords = (f: Facility): f is Facility & LatLng =>
   f.latitude != null && f.longitude != null;

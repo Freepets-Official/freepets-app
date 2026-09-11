@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
@@ -59,6 +59,10 @@ export default function VerifyEmailScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
+      {/* 입력이 한두 개뿐이라 스크롤을 들이지 않고 화면째 밀어올린다 */}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* 뒤로 (회원가입으로) */}
       <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
         <Ionicons name="chevron-back" size={24} color={p.ink} />
@@ -136,11 +140,13 @@ export default function VerifyEmailScreen() {
           </Pressable>
         </View>
       </View>
+    </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   safe: { flex: 1 },
   back: { position: 'absolute', top: 8, left: 8, padding: 12, zIndex: 10 },
   inner: {

@@ -2,14 +2,16 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter } from 'expo-router';
 import { useState, type ComponentProps, type ReactNode } from 'react';
-import { Alert, Linking, Modal, Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
+import { Alert, Linking, Modal, Platform, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
 import { Screen } from '@/components/screen';
+import { SUPPORT_EMAIL, SUPPORT_MAIL_SUBJECT } from '@/constants/contact';
 import { CardShadow, Radius, Spacing, type ThemeMode } from '@/constants/theme';
 import { FONT_SIZE_LABEL, type FontSizeMode } from '@/data/types';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
+import { ApiError, accountApi } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -30,7 +32,23 @@ export default function SettingsScreen() {
   const regCount = Object.keys(businessRegs).length;
   const hasOwnerProfile = availableProfiles.includes('owner');
   const [cacheCleared, setCacheCleared] = useState(false);
-  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  /**
+   * 되돌릴 수 없는 동작 앞에 한 번 묻는다.
+   *
+   * 로그아웃과 탈퇴가 같은 틀을 쓴다 — 따로 만들면 한쪽 문구만 고치고 다른 쪽을 잊는다.
+   */
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    body: string;
+    action: string;
+    danger?: boolean;
+    /** 탈퇴처럼 비밀번호 확인이 필요한 동작에서만 입력란을 띄운다 */
+    askPassword?: boolean;
+    onConfirm: (password?: string) => void | Promise<void>;
+  } | null>(null);
+  const [confirmPw, setConfirmPw] = useState('');
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [themeOpen, setThemeOpen] = useState(false);
   const scheme = useColorScheme();
 
@@ -255,8 +273,10 @@ export default function SettingsScreen() {
         <Row
           icon="chatbubble-ellipses-outline"
           label="문의하기"
-          sub="freepets.official@gmail.com"
-          onPress={() => Linking.openURL('mailto:freepets.official@gmail.com?subject=반갑꼬리 문의')}
+          sub="메일로 문의 보내기"
+          onPress={() =>
+            Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(SUPPORT_MAIL_SUBJECT)}`)
+          }
           chevron
         />
         <Row
@@ -276,11 +296,39 @@ export default function SettingsScreen() {
 
       {/* 계정 관리 */}
       <Group title="계정 관리">
-        <Row icon="log-out-outline" label="로그아웃" onPress={logout} tint />
+        <Row
+          icon="log-out-outline"
+          label="로그아웃"
+          onPress={() =>
+            setConfirm({
+              title: '로그아웃할까요?',
+              // 도장은 기기에만 있어 로그아웃하면 지워진다. 미리 말하지 않으면
+              // 다시 로그인했을 때 사라진 걸 보고서야 알게 된다.
+              body: '반려동물·판별 이력은 다시 로그인하면 그대로 있어요.\n다만 이 기기에 모은 여권 도장은 지워집니다.',
+              action: '로그아웃',
+              onConfirm: logout,
+            })
+          }
+          tint
+        />
         <Row
           icon="person-remove-outline"
           label="회원 탈퇴"
-          onPress={() => setWithdrawOpen(true)}
+          onPress={() =>
+            setConfirm({
+              title: '정말 탈퇴하시겠어요?',
+              body: '탈퇴하면 계정과 등록한 반려동물·리뷰·일정이 모두 삭제되고 되돌릴 수 없어요.',
+              action: '탈퇴하기',
+              danger: true,
+              askPassword: true,
+              onConfirm: async (password) => {
+                // 서버에서 실제로 지운 뒤에 세션을 정리한다. 순서가 바뀌면 토큰이 없어
+                // 삭제 요청 자체가 401이 된다.
+                await accountApi.remove(password);
+                logout();
+              },
+            })
+          }
           tint
           last
         />
@@ -288,27 +336,65 @@ export default function SettingsScreen() {
 
       <Text style={[styles.footer, { color: p.muted }]}>반갑꼬리 · 반려동물 동반여행 AI 판별</Text>
 
-      {/* 회원 탈퇴 확인 */}
+      {/* 로그아웃·탈퇴 공통 확인 */}
       <Modal
-        visible={withdrawOpen}
+        visible={confirm !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => setWithdrawOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setWithdrawOpen(false)}>
+        onRequestClose={() => setConfirm(null)}>
+        <Pressable style={styles.backdrop} onPress={() => setConfirm(null)}>
           <Pressable style={[styles.sheet, { backgroundColor: p.card }]} onPress={(e) => e.stopPropagation()}>
-            <Text style={[styles.sheetTitle, { color: p.ink }]}>정말 탈퇴하시겠어요?</Text>
-            <Text style={[styles.sheetBody, { color: p.muted }]}>
-              탈퇴하면 계정과 등록한 반려동물·리뷰·일정이 모두 삭제되고 되돌릴 수 없어요.
-            </Text>
+            <Text style={[styles.sheetTitle, { color: p.ink }]}>{confirm?.title}</Text>
+            <Text style={[styles.sheetBody, { color: p.muted }]}>{confirm?.body}</Text>
+            {confirm?.askPassword && (
+              <>
+                <TextInput
+                  value={confirmPw}
+                  onChangeText={setConfirmPw}
+                  placeholder="비밀번호"
+                  placeholderTextColor={p.muted}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  style={[styles.pwInput, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
+                />
+                {/* 소셜로 가입하면 비밀번호가 없다. 비워둘 수 있다는 걸 미리 말한다 */}
+                <Text style={[styles.pwHint, { color: p.muted }]}>
+                  소셜 계정으로 가입하셨다면 비워두세요.
+                </Text>
+              </>
+            )}
+            {confirmError && <Text style={[styles.pwError, { color: p.danger }]}>{confirmError}</Text>}
+            <Pressable
+              disabled={confirmBusy}
+              onPress={async () => {
+                if (!confirm) return;
+                setConfirmBusy(true);
+                setConfirmError(null);
+                try {
+                  await confirm.onConfirm(confirmPw.trim() || undefined);
+                  // 성공했을 때만 닫는다. 실패했는데 닫으면 왜 안 됐는지 알 수 없다.
+                  setConfirm(null);
+                  setConfirmPw('');
+                } catch (e) {
+                  setConfirmError(
+                    e instanceof ApiError ? e.message : '처리하지 못했어요. 잠시 후 다시 시도해 주세요.',
+                  );
+                } finally {
+                  setConfirmBusy(false);
+                }
+              }}
+              style={[styles.withdrawBtn, { backgroundColor: confirm?.danger ? p.danger : p.accent }]}>
+              <Text style={[styles.withdrawBtnText, { color: '#FFFFFF' }]}>
+                {confirmBusy ? '처리 중…' : confirm?.action}
+              </Text>
+            </Pressable>
             <Pressable
               onPress={() => {
-                setWithdrawOpen(false);
-                logout();
+                setConfirm(null);
+                setConfirmPw('');
+                setConfirmError(null);
               }}
-              style={[styles.withdrawBtn, { backgroundColor: p.danger }]}>
-              <Text style={[styles.withdrawBtnText, { color: '#FFFFFF' }]}>탈퇴하기</Text>
-            </Pressable>
-            <Pressable onPress={() => setWithdrawOpen(false)} style={styles.cancelBtn}>
+              style={styles.cancelBtn}>
               <Text style={[styles.cancelBtnText, { color: p.muted }]}>취소</Text>
             </Pressable>
           </Pressable>
@@ -486,6 +572,13 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   sheetTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.4 },
+  pwInput: {
+    borderWidth: 1, borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg, paddingVertical: 12,
+    fontSize: 15, marginTop: Spacing.md,
+  },
+  pwHint: { fontSize: 12.5, marginTop: 6 },
+  pwError: { fontSize: 13, fontWeight: '600', marginTop: 10 },
   sheetBody: { fontSize: 13, lineHeight: 20, marginBottom: Spacing.sm },
   withdrawBtn: { alignItems: 'center', borderRadius: Radius.md, paddingVertical: 15 },
   withdrawBtnText: { fontSize: 15, fontWeight: '800' },

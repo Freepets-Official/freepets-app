@@ -10,6 +10,7 @@ import { useCallFacility } from '@/hooks/use-call-facility';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 import { primaryPhoneNumber } from '@/lib/phone';
+import { ApiError, inquiryApi } from '@/lib/api';
 
 /**
  * 확정성 레이어의 핵심 UI — 정보 신뢰도 + 근거 + 최종 확인 시점,
@@ -22,6 +23,9 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
   const { confidence, source, confirmedAt } = confidenceOf(facility);
 
   const [requested, setRequested] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const facilityId = facility.facilityId;
   const fresh = freshnessText(confirmedAt);
   const isConfirmed = confidence === 'CONFIRMED';
 
@@ -79,8 +83,22 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
           )}
 
           <Pressable
-            onPress={() => setRequested(true)}
-            disabled={requested}
+            onPress={async () => {
+              setSending(true);
+              setError(null);
+              try {
+                await inquiryApi.create(facilityId);
+                setRequested(true);
+              } catch (e) {
+                // 24시간 안에 이미 보냈으면 실패가 아니라 "이미 했다"는 뜻이다.
+                const dup = e instanceof ApiError && e.status === 409;
+                if (dup) setRequested(true);
+                else setError(e instanceof Error ? e.message : '요청을 보내지 못했어요.');
+              } finally {
+                setSending(false);
+              }
+            }}
+            disabled={requested || sending}
             style={({ pressed }) => [
               styles.action,
               { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
@@ -91,9 +109,14 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
               color={requested ? p.success : p.muted}
             />
             <Text style={[styles.actionText, { color: requested ? p.success : p.ink }]}>
-              {requested ? '사업자에게 확인 요청을 보냈어요' : '사업자에게 조건 확인 요청'}
+              {requested
+                ? '사업자에게 확인을 요청했어요'
+                : sending
+                  ? '요청을 보내는 중…'
+                  : '사업자에게 조건 확인 요청'}
             </Text>
           </Pressable>
+          {error && <Text style={[styles.actionError, { color: p.muted }]}>{error}</Text>}
         </View>
       )}
     </View>
@@ -110,11 +133,15 @@ const styles = StyleSheet.create({
   action: {
     flexDirection: 'row',
     alignItems: 'center',
+    // 아이콘·글씨가 한 덩어리로 가운데 모이게 한다. 예전에는 글씨에 `flex: 1`이 걸려
+    // 왼쪽으로 밀렸는데, 오른쪽 화살표가 없는 버튼은 그만큼 오른쪽이 비어 허전했다.
+    justifyContent: 'center',
     gap: 8,
     borderWidth: 1.5,
     borderRadius: Radius.full,
     paddingHorizontal: Spacing.lg,
     paddingVertical: 12,
   },
-  actionText: { fontSize: 13.5, fontWeight: '700', flex: 1 },
+  actionText: { fontSize: 13.5, fontWeight: '700' },
+  actionError: { fontSize: 12.5, textAlign: 'center', marginTop: 2 },
 });

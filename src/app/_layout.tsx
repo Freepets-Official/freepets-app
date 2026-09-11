@@ -1,5 +1,6 @@
 import { DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 
@@ -148,11 +149,15 @@ export default function RootLayout() {
   // 화면 모드는 스토어에 있고, 실제 스킴 전환(자동 경계·포그라운드 재계산)은
   // AppThemeProvider가 관리한다. 두 프로바이더 안에서 테마를 읽는다.
   return (
-    <AppStoreProvider>
-      <AppThemeProvider>
-        <ScaledTextRoot />
-      </AppThemeProvider>
-    </AppStoreProvider>
+    // 제스처(스와이프 삭제 등)가 동작하려면 트리 최상단을 이걸로 감싸야 한다.
+    // expo-router가 자동으로 넣어주지 않아 여기서 직접 건다.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AppStoreProvider>
+        <AppThemeProvider>
+          <ScaledTextRoot />
+        </AppThemeProvider>
+      </AppStoreProvider>
+    </GestureHandlerRootView>
   );
 }
 
