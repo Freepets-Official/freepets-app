@@ -90,10 +90,15 @@ export default function SettingsScreen() {
           onPress={() => router.push('/profile-edit')}
           chevron
         />
+        {/*
+          네이버·카카오는 앱에 이메일을 주지 않는다(구글만 주고, 애플은 최초 1회뿐).
+          서버 회원정보에도 이메일이 없어 복원하면 값이 빈다. 예전에는 그 자리에
+          없는 주소를 지어 넣어, 있지도 않은 계정을 계정 정보라고 보여줬다.
+        */}
         <Row
           icon="mail-outline"
           label="계정 정보"
-          sub={session.email ?? 'guest@freepets.app'}
+          sub={session.email || '소셜 계정으로 로그인'}
           last
         />
       </Group>

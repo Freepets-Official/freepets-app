@@ -5,7 +5,7 @@ import * as SecureStore from 'expo-secure-store';
  *
  * 이메일까지 함께 두는 이유는 서버 `GET /users/account`가 닉네임·아바타만 주고
  * **이메일을 주지 않기 때문**이다. 복원할 때 이메일이 없으면 설정·프로필 화면이
- * `guest@freepets.app`로 되돌아간다.
+ * 계정 주소를 못 보여준다(네이버·카카오는 애초에 이메일을 주지 않아 그때도 빈다).
  *
  * 네이티브는 SecureStore(키체인·keystore)를 쓰고, 웹은 별도 구현(.web.ts)이 받는다.
  */
