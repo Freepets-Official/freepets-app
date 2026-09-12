@@ -78,6 +78,66 @@ export function setAuthToken(token: string | null) {
   authToken = token;
 }
 
+/**
+ * 리프레시 토큰. 액세스 토큰이 만료되면 이걸로 재발급받는다.
+ * store가 로그인·세션 복원 때 넣어준다.
+ */
+let refreshToken: string | null = null;
+export function setRefreshToken(token: string | null) {
+  refreshToken = token;
+}
+
+/** 재발급에 성공하면 새 토큰 쌍을 store에 넘겨 기기에도 남기게 한다. */
+let onTokensRefreshed: ((t: { accessToken: string; refreshToken: string }) => void) | null = null;
+export function setTokensRefreshedHandler(
+  fn: ((t: { accessToken: string; refreshToken: string }) => void) | null,
+) {
+  onTokensRefreshed = fn;
+}
+
+/**
+ * 진행 중인 재발급. 여러 요청이 동시에 401을 받아도 재발급은 한 번만 돈다.
+ *
+ * 서버가 리프레시 토큰도 새로 주는 **회전** 방식이라, 같은 토큰으로 두 번 부르면
+ * 두 번째는 이미 폐기된 토큰을 쓰게 되어 실패하고 멀쩡한 세션이 끊긴다.
+ */
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function refreshTokens(): Promise<boolean> {
+  if (!refreshToken) return false;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    // 재발급은 헤더로 보낸다(서버 스펙: RefreshToken 헤더). request()를 타지 않는다 —
+    // 401 처리를 타면 재발급이 재발급을 부르는 고리가 생긴다.
+    const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { RefreshToken: refreshToken },
+      signal: ctrl.signal,
+    });
+    const json = (await res.json().catch(() => null)) as ApiEnvelope<{
+      accessToken: string;
+      refreshToken: string;
+    }> | null;
+    if (!res.ok || !json?.isSuccess || !json.result?.accessToken) return false;
+    authToken = json.result.accessToken;
+    refreshToken = json.result.refreshToken ?? refreshToken;
+    onTokensRefreshed?.({ accessToken: authToken, refreshToken });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function refreshOnce(): Promise<boolean> {
+  refreshInFlight ??= refreshTokens().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
 /** 지금 요청에 쓸 토큰. 로그인 토큰이 없고 개발 모드면 10년 테스트 토큰으로 대체한다. */
 function currentToken(): string | null {
   if (authToken) return authToken;
@@ -105,37 +165,56 @@ const UPLOAD_TIMEOUT_MS = 60_000;
 
 async function request<T>(method: Method, path: string, opts: { body?: unknown; auth?: boolean } = {}): Promise<T> {
   const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData;
-  const headers: Record<string, string> = {};
-  if (opts.body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
-  if (opts.auth) {
-    const token = currentToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), isForm ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS);
-  let res: Response;
-  try {
-    res = await fetch(`${API_URL}${path}`, {
-      method,
-      headers,
-      body: opts.body === undefined ? undefined : isForm ? (opts.body as FormData) : JSON.stringify(opts.body),
-      signal: ctrl.signal,
-    });
-  } catch (e) {
-    // 제한 시간 초과와 연결 실패를 나눠 안내한다. 원인이 다르면 사용자가 할 일도 다르다 —
-    // 전자는 기다렸다 다시, 후자는 네트워크 확인이다.
-    if (e instanceof Error && e.name === 'AbortError') {
-      throw new ApiError('서버 응답이 너무 늦어요. 잠시 후 다시 시도해 주세요.', 'TIMEOUT');
+  const buildHeaders = (): Record<string, string> => {
+    const h: Record<string, string> = {};
+    if (opts.body !== undefined && !isForm) h['Content-Type'] = 'application/json';
+    if (opts.auth) {
+      const token = currentToken();
+      if (token) h.Authorization = `Bearer ${token}`;
     }
-    throw new ApiError('서버에 연결할 수 없어요. 네트워크를 확인해주세요.');
-  } finally {
-    clearTimeout(timer);
-  }
-  // 인증이 필요한 요청의 401은 "세션이 끝났다"는 뜻이다. 로그인·가입(auth:false)의 401은
-  // 자격 증명이 틀린 것이므로 건드리지 않는다.
+    return h;
+  };
+  const sendOnce = async (): Promise<Response> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), isForm ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS);
+    try {
+      return await fetch(`${API_URL}${path}`, {
+        method,
+        // 재시도는 **새 토큰**으로 가야 하므로 헤더를 매번 다시 만든다
+        headers: buildHeaders(),
+        body: opts.body === undefined ? undefined : isForm ? (opts.body as FormData) : JSON.stringify(opts.body),
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      // 제한 시간 초과와 연결 실패를 나눠 안내한다. 원인이 다르면 사용자가 할 일도 다르다 —
+      // 전자는 기다렸다 다시, 후자는 네트워크 확인이다.
+      if (e instanceof Error && e.name === 'AbortError') {
+        throw new ApiError('서버 응답이 너무 늦어요. 잠시 후 다시 시도해 주세요.', 'TIMEOUT');
+      }
+      throw new ApiError('서버에 연결할 수 없어요. 네트워크를 확인해주세요.');
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  let res = await sendOnce();
+
+  /**
+   * 인증이 필요한 요청의 401 = 액세스 토큰 만료.
+   *
+   * 재발급을 한 번 시도하고 같은 요청을 다시 보낸다. 재발급까지 실패하면 되살릴 방법이
+   * 없으므로 세션을 정리하고 로그인 화면으로 보낸다. 로그인·가입(auth:false)의 401은
+   * 자격 증명이 틀린 것이라 건드리지 않는다.
+   *
+   * 재시도는 한 번만 한다 — 새 토큰으로도 401이면 토큰 문제가 아니다.
+   */
   if (opts.auth && res.status === 401) {
-    onUnauthorized?.();
-    throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
+    const renewed = await refreshOnce();
+    if (renewed) res = await sendOnce();
+    if (!renewed || res.status === 401) {
+      onUnauthorized?.();
+      throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
+    }
   }
 
   const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null;
@@ -796,6 +875,31 @@ export const aiApi = {
     }
 
     return { overall: r.overall, blockedCount: r.blockedCount ?? 0, stops };
+  },
+
+  /**
+   * 저장된 판별 하나를 상세로 되받는다.
+   *
+   * 목록(GET /pet-checks)은 요약만 줘서 verdicts가 비어 있다. 그래서 앱을 다시 켠 뒤
+   * 예전 판별의 출입증을 열면 그릴 게 없어 "한 번 더 판별하면 바로 만들어져요"가 떴다.
+   * 이 API가 verifyCode까지 그대로 돌려주므로 재판별 없이 출입증을 다시 연다.
+   *
+   * 남의 checkId는 존재 여부도 알려주지 않고 PETCHECK4001(404)로 막힌다.
+   */
+  checkDetail: async (checkId: number): Promise<AiCheckResult> => {
+    const r = await request<ServerAiCheck>('GET', `/api/v1/pet-checks/${checkId}`, { auth: true });
+    return {
+      checkId: r.checkId,
+      facilityId: r.facilityId,
+      overall: r.overall,
+      verdicts: (r.verdicts ?? []).map((v) => ({
+        petId: v.petId,
+        result: v.result,
+        reason: v.reason,
+        conditions: v.conditions ?? [],
+        verifyCode: v.verifyCode ?? undefined,
+      })),
+    };
   },
 
   /**
