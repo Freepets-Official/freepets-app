@@ -405,7 +405,9 @@ export default function SettingsScreen() {
                 setConfirmBusy(true);
                 setConfirmError(null);
                 try {
-                  await confirm.onConfirm(confirmPw.trim() || undefined);
+                  // 비밀번호는 원문 그대로 보낸다. 가입·로그인이 trim하지 않으므로 여기서만
+                  // 다듬으면, 앞뒤 공백이 든 비밀번호로 가입한 사람은 탈퇴가 막힌다.
+                  await confirm.onConfirm(confirmPw || undefined);
                   // 성공했을 때만 닫는다. 실패했는데 닫으면 왜 안 됐는지 알 수 없다.
                   setConfirm(null);
                   setConfirmPw('');

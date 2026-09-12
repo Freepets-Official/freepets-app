@@ -18,12 +18,15 @@ import {
   pushApi,
   reviewsApi,
   satisfactionApi,
+  bumpSessionEpoch,
   setAuthToken,
   setRefreshToken,
   setTokensRefreshedHandler,
   setUnauthorizedHandler,
   type ServerDenialReport,
 } from '@/lib/api';
+import { DEV_TOKEN } from '@/lib/config';
+import { loadSettings, saveSettings } from '@/lib/settings-store';
 import type { Coords } from '@/lib/location';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, pawGradeOf, vaccinationDday } from '@/data/types';
@@ -451,7 +454,8 @@ interface AppStore {
 
   /** 계정 프로필 (닉네임·아바타) */
   account: Account;
-  updateAccount: (patch: Partial<Account>) => void;
+  /** 프로필 수정. 서버가 실패하면 화면을 되돌리고 **던진다** — 호출한 쪽이 안내해야 한다. */
+  updateAccount: (patch: Partial<Account>) => Promise<void>;
 
   /** 로그인 세션 (계정 하나 + 활성 프로필) */
   session: Session;
@@ -507,6 +511,25 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 반려동물별 좋아한 곳 TOP3 (홈) — 서버가 시설명·카테고리까지 계산해 내려준다
   const [topPlaces, setTopPlaces] = useState<Record<number, TopPlace[]>>({});
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  /**
+   * 저장된 설정을 읽기 전에는 기록하지 않는다. 불러오기 전에 저장하면 기본값이 덮어써서
+   * 사용자가 켜둔 앱 잠금·다크모드가 매 실행마다 날아간다.
+   */
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    loadSettings(DEFAULT_SETTINGS).then((saved) => {
+      if (!alive) return;
+      setSettings(saved);
+      setSettingsLoaded(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (settingsLoaded) void saveSettings(settings);
+  }, [settings, settingsLoaded]);
   const [userConfirmedIds, setUserConfirmedIds] = useState<Set<number>>(new Set());
   // 씨드 거부 제보도 신뢰도에 반영돼 있어야 앱을 켜자마자 하향된 상태로 보인다
   const [downgradedIds, setDowngradedIds] = useState<Set<number>>(
@@ -551,10 +574,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 탐색 화면이 잡은 GPS를 보관한다. 상세에서 다시 권한을 묻지 않고 거리(distanceM)를 받기 위한 것.
   const [lastCoords, setLastCoords] = useState<Coords | null>(null);
 
-  // 서버에서 내 반려동물을 불러와 로컬 상태를 채운다.
-  // __DEV__에선 dev 토큰으로 항상 조회되고, 실서비스에선 로그인 후 조회된다.
-  // 실패(미인증·네트워크)하면 조용히 목데이터를 유지해 데모가 깨지지 않게 한다.
+  /**
+   * 서버에서 내 반려동물을 불러와 로컬 상태를 채운다.
+   *
+   * **로그인 전에는 부르지 않는다.** 예전에는 무조건 불러서 401을 받았는데, 그 401이
+   * 재발급 실패로 이어지고 그 결과가 늦게 도착하면 **그 사이 새로 로그인한 세션까지**
+   * 만료 처리됐다. 401을 만들 이유가 없는 호출은 아예 하지 않는 게 맞다.
+   * __DEV__에선 dev 토큰이 있어 로그인 없이도 조회된다.
+   */
   useEffect(() => {
+    if (!session.authed && !(__DEV__ && DEV_TOKEN)) return;
     let alive = true;
     petsApi
       .list()
@@ -567,8 +596,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     };
   }, [session.authed]);
 
-  // 서버에서 판별 이력을 불러온다. 서버가 주는 건 **요약뿐**이라 아이별 판별(verdicts)이
-  // 비어 있다 — checkId로 상세를 되찾는 API가 없다(명세 미구현).
+  // 서버에서 판별 이력을 불러온다. 목록이 주는 건 **요약뿐**이라 아이별 판별(verdicts)이
+  // 비어 있다 — 필요할 때 hydrateCheck(GET /pet-checks/{checkId})로 채운다.
   //
   // 그래서 덮어쓰지 않고 **합친다.** 이번 세션에서 방금 판별한 항목은 상세를 갖고 있는데,
   // 서버 요약으로 덮으면 그 자리에서 출입증이 빈 화면이 된다. 같은 checkId면 로컬을 남긴다.
@@ -1299,13 +1328,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         setRestoring(false);
         return;
       }
+      restoredEmailRef.current = saved.email;
       setAuthToken(saved.accessToken);
       setRefreshToken(saved.refreshToken);
       try {
         const me = await accountApi.get();
         if (stale()) return;
-        setAccessToken(saved.accessToken);
-        refreshTokenRef.current = saved.refreshToken;
+        /**
+         * 조회가 401을 거쳐 **재발급으로 성공**했을 수 있다. 그때는 api 레이어가 이미
+         * 새 토큰을 들고 있는데, 여기서 `saved.accessToken`을 다시 넣으면 스토어만
+         * 만료된 토큰으로 되돌아가 둘이 갈린다. 재발급 콜백이 채워둔 값이 있으면 그걸 쓴다.
+         */
+        setAccessToken(refreshedRef.current?.accessToken ?? saved.accessToken);
+        refreshTokenRef.current = refreshedRef.current?.refreshToken ?? saved.refreshToken;
         setAccount({ nickname: me.nickname, avatarUri: me.avatarUri });
         setSession({ authed: true, email: saved.email, activeProfile: 'consumer' });
       } catch (e) {
@@ -1318,8 +1353,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           setAuthToken(null);
           await clearSession();
         } else {
-          setAccessToken(saved.accessToken);
-          refreshTokenRef.current = saved.refreshToken;
+          setAccessToken(refreshedRef.current?.accessToken ?? saved.accessToken);
+          refreshTokenRef.current = refreshedRef.current?.refreshToken ?? saved.refreshToken;
           setSession({ authed: true, email: saved.email, activeProfile: 'consumer' });
         }
       } finally {
@@ -1336,6 +1371,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const authenticate = useCallback(
     (email: string, tokens: { accessToken: string; refreshToken: string }) => {
       // 진행 중인 복원이 이 로그인을 덮어쓰지 않도록 세대를 올린다
+      bumpSessionEpoch();
+      refreshedRef.current = null;
+      restoredEmailRef.current = email || null;
       sessionRev.current += 1;
       setRestoring(false);
       setAccessToken(tokens.accessToken);
@@ -1388,6 +1426,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 서버에 재발급 API가 없어 토큰을 되살릴 수 없으므로 로그인 화면으로 돌려보낸다.
    */
   const expireSession = useCallback(() => {
+    // api 레이어의 세대도 올린다. 진행 중이던 재발급 응답이 이 세션을 되살리지 못하게.
+    bumpSessionEpoch();
+    refreshedRef.current = null;
     sessionRev.current += 1;
     setRestoring(false);
     setAccessToken(null);
@@ -1412,14 +1453,38 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   useEffect(() => {
     setTokensRefreshedHandler(({ accessToken, refreshToken }) => {
+      refreshedRef.current = { accessToken, refreshToken };
       setAccessToken(accessToken);
       refreshTokenRef.current = refreshToken;
-      void saveSession({ accessToken, refreshToken, email: sessionRef.current.email || null });
+      /**
+       * 이메일은 **기기에 저장돼 있던 값**을 우선한다.
+       *
+       * 복원 도중에 재발급이 일어나면 `session.email`은 아직 null이다. 그걸 그대로
+       * 저장하면 기기에서 이메일이 지워져, 다음 실행부터 계정 정보가 비어 보인다.
+       * 서버 회원정보에 이메일이 없어 다시 채울 방법도 없다.
+       */
+      const email = restoredEmailRef.current ?? sessionRef.current.email ?? null;
+      void saveSession({ accessToken, refreshToken, email });
     });
     return () => setTokensRefreshedHandler(null);
   }, []);
 
   const logout = useCallback(() => {
+    /**
+     * 푸시 해제를 **토큰을 지우기 전에** 부른다.
+     *
+     * 이 API는 인증이 필요한데 예전에는 setAuthToken(null) 뒤에 불러서, 운영 빌드에서는
+     * Authorization 없이 나가고 실패도 무시됐다. 그러면 서버에 등록이 남아 로그아웃한
+     * 계정의 알림이 이 기기로 계속 온다.
+     */
+    const pushed = pushTokenRef.current;
+    if (pushed) {
+      pushTokenRef.current = null;
+      void pushApi.unregister(pushed).catch(() => {});
+    }
+    bumpSessionEpoch();
+    refreshedRef.current = null;
+    restoredEmailRef.current = null;
     sessionRev.current += 1; // 복원이 늦게 끝나 로그아웃을 되돌리지 않도록
     setRestoring(false);
     setAccessToken(null);
@@ -1428,18 +1493,31 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
     void clearSession(); // 남겨두면 다음 실행에 로그아웃한 계정으로 되살아난다
-    // 해제하지 않으면 로그아웃한 기기로 계속 발송을 시도한다. 서버가 나중에 무효 토큰을
-    // 정리하긴 하지만, 그 전까지는 남의 알림이 이 기기로 온다.
-    const pushed = pushTokenRef.current;
-    if (pushed) {
-      pushTokenRef.current = null;
-      void pushApi.unregister(pushed).catch(() => {});
-    }
     // 도장은 서버가 아니라 기기에 있어 계정과 묶여 있지 않다. 안 지우면 다음에 로그인한
     // 사람에게 앞사람의 도장첩·뱃지가 그대로 보인다. 대신 같은 사람이 다시 로그인해도
     // 도장은 돌아오지 않는다 — 2단계에서 서버로 옮기면 해소된다.
     setStamps([]);
     void clearStamps();
+
+    /**
+     * 계정에 딸린 상태를 전부 비운다.
+     *
+     * 예전에는 도장만 지웠다. 그래서 A로 일정을 만들고 로그아웃한 뒤 B로 들어가면 A의
+     * 일정이 그대로 보였고, B의 조회가 실패하면 A의 반려동물·닉네임까지 남았다.
+     * 남의 계정 화면에 내 데이터가 보이는 것은 기능 문제가 아니라 사고다.
+     *
+     * 설정(화면 모드·글씨 크기·앱 잠금)은 기기에 속한 값이라 남긴다.
+     */
+    setPets([]);
+    setChecks([]);
+    setHiddenCheckIds([]);
+    setReports([]);
+    setReviews([]);
+    setCalendarEvents([]);
+    setMedLog(new Set());
+    setSatisfactions([]);
+    setBusinessRegs({});
+    setAccount({ nickname: '나', avatarUri: null });
   }, []);
 
   const selectProfile = useCallback((kind: ProfileKind) => {
@@ -1459,8 +1537,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const sessionRef = useRef<Session>(session);
   sessionRef.current = session;
 
-  // 서버에서 내 회원정보(닉네임·아바타)를 불러와 채운다. 실패 시 조용히 기본값 유지(데모 안전).
+  /** 재발급으로 갱신된 토큰. 복원 코드가 옛 토큰으로 덮지 않도록 참고한다. */
+  const refreshedRef = useRef<{ accessToken: string; refreshToken: string } | null>(null);
+  /** 기기에서 읽어온 이메일. 복원 중 재발급이 일어나도 이메일을 잃지 않게 들고 있는다. */
+  const restoredEmailRef = useRef<string | null>(null);
+
+  // 서버에서 내 회원정보(닉네임·아바타)를 불러와 채운다. 실패 시 조용히 기본값 유지.
+  // 반려동물 조회와 같은 이유로 로그인 전에는 부르지 않는다(늦은 401이 새 세션을 만료시킨다).
   useEffect(() => {
+    if (!session.authed && !(__DEV__ && DEV_TOKEN)) return;
     let alive = true;
     accountApi
       .get()
@@ -1474,14 +1559,25 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, [session.authed]);
 
   // 수정: 낙관적으로 로컬 반영 후 서버 PATCH. 서버가 준 최종값(아바타 URL 등)으로 다시 맞춘다.
-  const updateAccount = useCallback((patch: Partial<Account>) => {
+  /**
+   * 프로필 수정. **실패를 삼키지 않는다.**
+   *
+   * 예전에는 화면에 먼저 반영하고 서버 실패를 조용히 버렸다. 네트워크가 끊긴 채 저장하면
+   * 바뀐 것처럼 보이고 화면이 닫히는데, 다음 조회에서 옛 정보로 돌아왔다. 실패하면 화면을
+   * 되돌리고 오류를 던져, 호출한 쪽이 사용자에게 알리고 화면을 닫지 않게 한다.
+   */
+  const updateAccount = useCallback(async (patch: Partial<Account>) => {
+    const before = accountRef.current;
+    const nickname = patch.nickname ?? before.nickname;
+    const photoUri = patch.avatarUri ?? before.avatarUri;
     setAccount((prev) => ({ ...prev, ...patch }));
-    const nickname = patch.nickname ?? accountRef.current.nickname;
-    const photoUri = patch.avatarUri ?? accountRef.current.avatarUri;
-    accountApi
-      .update(nickname, photoUri)
-      .then((a) => setAccount({ nickname: a.nickname, avatarUri: a.avatarUri }))
-      .catch(() => {});
+    try {
+      const a = await accountApi.update(nickname, photoUri);
+      setAccount({ nickname: a.nickname, avatarUri: a.avatarUri });
+    } catch (e) {
+      setAccount(before);
+      throw e;
+    }
   }, []);
 
   // 지운 판별 이력을 기기에서 복원한다. 실패해도 목록이 전부 보일 뿐 앱을 막지 않는다.
@@ -1588,9 +1684,24 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   const pushTokenRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!accessToken) return;
+    if (!accessToken || !settingsLoaded) return;
     let alive = true;
     (async () => {
+      /**
+       * 알림을 꺼두면 **서버에서 토큰을 지운다.**
+       *
+       * 예전에는 설정을 보지 않고 등록만 해서, 사용자가 꺼도 서버에는 그대로 남았다.
+       * 개인정보처리방침에 "끄면 저장된 푸시 토큰도 함께 삭제됩니다"라고 적어둔 터라
+       * 문서와 동작이 어긋나 있었다.
+       */
+      if (!settings.notifPush) {
+        const registered = pushTokenRef.current;
+        if (registered) {
+          pushTokenRef.current = null;
+          await pushApi.unregister(registered).catch(() => {});
+        }
+        return;
+      }
       const token = await getFcmToken();
       if (!alive || !token) return;
       try {
@@ -1603,7 +1714,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [accessToken]);
+  }, [accessToken, settings.notifPush, settingsLoaded]);
 
   /** 지역 트리 재조회. 화면의 재시도 버튼이 쓴다 — 없으면 앱을 다시 켤 때까지 도장을 못 찍는다. */
   const reloadStampRegions = useCallback(async () => {

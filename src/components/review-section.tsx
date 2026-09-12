@@ -178,10 +178,13 @@ export function ReviewSection({
                   </Text>
                 )}
               </View>
-              <StarsDisplay
-                value={(r.ratingSpace + r.ratingStaff + r.ratingAmenity) / 3}
-                size={13}
-              />
+              {/* 별점은 줄어들지 않는다 — 작성자 줄이 길어도 항상 보여야 한다 */}
+              <View style={styles.reviewStars}>
+                <StarsDisplay
+                  value={(r.ratingSpace + r.ratingStaff + r.ratingAmenity) / 3}
+                  size={13}
+                />
+              </View>
             </View>
             {r.content && <Text style={[styles.reviewText, { color: p.ink }]}>{r.content}</Text>}
             {r.tags.length > 0 && (
@@ -359,8 +362,11 @@ const styles = StyleSheet.create({
   },
   writeLabel: { fontSize: 14, fontWeight: '800' },
   review: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.lg, gap: 7 },
-  reviewTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  reviewer: { flexDirection: 'row', alignItems: 'baseline', gap: 7 },
+  reviewStars: { flexShrink: 0 },
+  reviewTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  // flex·minWidth가 없으면 함께 간 아이가 많을 때 작성자 줄이 늘어나 별점을 화면 밖으로
+  // 밀어낸다. numberOfLines는 부모에 폭 제약이 있어야 줄임표를 만든다.
+  reviewer: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'baseline', gap: 7 },
   nickname: { fontSize: 14, fontWeight: '800' },
   petName: { fontSize: 11.5 },
   reviewText: { fontSize: 13.5, lineHeight: 20 },

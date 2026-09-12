@@ -104,7 +104,14 @@ export default function CourseScreen() {
   // 그 ID로 시설을 다시 조회해야 한다 — 지금은 개수만 보여주고 상세는 다음 작업으로 둔다.
   const [savedCourses, setSavedCourses] = useState<SavedCourse[]>([]);
   const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  /**
+   * 내 코스 동작의 결과 안내. 실패는 성공과 다르게 보여야 한다.
+   *
+   * 공개 토글은 서버가 COURSE4045("공개하려면 코스에 담긴 모든 시설에 판별 기록과 리뷰가
+   * 있어야 합니다")로 거절할 수 있는데, 예전에는 이 문장을 블록 맨 아래 회색 작은 글씨로
+   * 그려서 누른 자리에서 멀었다. 사용자는 아무 일도 안 일어난 것으로 봤다.
+   */
+  const [saveMessage, setSaveMessage] = useState<{ text: string; failed: boolean } | null>(null);
 
   // ── 둘러보기 (다른 사람이 공개한 코스) ────────────────────────────
   // 로그인 없이도 보이는 목록이라 내 코스와 따로 싣는다. 실패를 빈 목록과 구분해서
@@ -220,11 +227,11 @@ export default function CourseScreen() {
       // 저장 결과로 목록을 먼저 갱신한다. 목록 재조회가 실패해도 방금 담은 코스는 보여야 한다 —
       // 저장은 됐는데 목록에 없으면 사용자는 실패한 줄 안다.
       setSavedCourses((prev) => [created, ...prev.filter((c) => c.courseId !== created.courseId)]);
-      setSaveMessage(`'${name}'을(를) 내 코스에 담았어요`);
+      setSaveMessage({ text: `'${name}'을(를) 내 코스에 담았어요`, failed: false });
       // 서버가 매긴 순서·필드로 맞춰두되, 실패는 저장 성공을 덮지 않는다
       reloadSaved().catch(() => {});
     } catch (e) {
-      setSaveMessage(e instanceof Error ? e.message : '코스를 저장하지 못했어요');
+      setSaveMessage({ text: e instanceof Error ? e.message : '코스를 저장하지 못했어요', failed: true });
     } finally {
       setSavingKey(null);
     }
@@ -238,7 +245,7 @@ export default function CourseScreen() {
       setSaveMessage(null);
       reloadSaved().catch(() => {});
     } catch {
-      setSaveMessage('코스를 삭제하지 못했어요');
+      setSaveMessage({ text: '코스를 삭제하지 못했어요', failed: true });
     }
   };
 
@@ -261,9 +268,9 @@ export default function CourseScreen() {
       });
       setSavedCourses((prev) => [created, ...prev.filter((c) => c.courseId !== created.courseId)]);
       setCopiedIds((prev) => new Set(prev).add(course.courseId));
-      setSaveMessage(`'${course.name}'을(를) 내 코스에 담았어요`);
+      setSaveMessage({ text: `'${course.name}'을(를) 내 코스에 담았어요`, failed: false });
     } catch (e) {
-      setSaveMessage(e instanceof Error ? e.message : '코스를 담지 못했어요');
+      setSaveMessage({ text: e instanceof Error ? e.message : '코스를 담지 못했어요', failed: true });
     } finally {
       setCopyingId((cur) => (cur === course.courseId ? null : cur));
     }
@@ -285,13 +292,17 @@ export default function CourseScreen() {
         isPublic: next,
       });
       setSavedCourses((prev) => prev.map((c) => (c.courseId === updated.courseId ? updated : c)));
-      setSaveMessage(
-        next ? `'${course.name}'을(를) 공개했어요` : `'${course.name}'을(를) 비공개로 바꿨어요`,
-      );
+      setSaveMessage({
+        text: next ? `'${course.name}'을(를) 공개했어요` : `'${course.name}'을(를) 비공개로 바꿨어요`,
+        failed: false,
+      });
       // 둘러보기를 다시 부르지 않는다. 내 코스는 그 목록에서 걸러지므로 바뀔 게 없고,
       // 부르면 늦게 온 응답이 새 목록을 덮는 경합만 생긴다.
     } catch (e) {
-      setSaveMessage(e instanceof Error ? e.message : '공개 설정을 바꾸지 못했어요');
+      setSaveMessage({
+        text: e instanceof Error ? e.message : '공개 설정을 바꾸지 못했어요',
+        failed: true,
+      });
     } finally {
       // 다른 코스의 토글이 이미 자리를 차지했으면 그쪽 스피너를 끄지 않는다
       setPublicPendingId((cur) => (cur === course.courseId ? null : cur));
@@ -800,6 +811,30 @@ export default function CourseScreen() {
                   ))}
                 </View>
               )}
+
+              {saveMessage && (
+                <View
+                  style={[
+                    styles.saveNotice,
+                    saveMessage.failed
+                      ? { backgroundColor: p.dangerSoft, borderColor: p.danger }
+                      : { backgroundColor: p.successSoft, borderColor: p.success },
+                  ]}>
+                  <Ionicons
+                    name={saveMessage.failed ? 'alert-circle' : 'checkmark-circle'}
+                    size={16}
+                    color={saveMessage.failed ? p.danger : p.success}
+                  />
+                  <Text
+                    style={[
+                      styles.saveNoticeText,
+                      { color: saveMessage.failed ? p.danger : p.ink },
+                    ]}>
+                    {saveMessage.text}
+                  </Text>
+                </View>
+              )}
+
               {/*
                 둘러보기 — 다른 사람이 공개한 코스. 못 불러온 것과 아직 없는 것을 나눠서 안내한다.
                 로딩 중(null)에는 자리만 비워둔다 — 빈 상태를 먼저 보여주면 없는 줄 알고 지나친다.
@@ -870,10 +905,6 @@ export default function CourseScreen() {
                     ))
                   )}
                 </View>
-              )}
-
-              {saveMessage && (
-                <Text style={[styles.presetStateText, { color: p.muted }]}>{saveMessage}</Text>
               )}
 
               {/* 지역×테마 추천 — 서버가 지역별로 만들어 준다. 로그인 없이도 쓸 수 있는 둘러보기 */}
@@ -1563,6 +1594,16 @@ function StopResultCard({
 }
 
 const styles = StyleSheet.create({
+  saveNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingVertical: 11,
+    paddingHorizontal: Spacing.lg,
+  },
+  saveNoticeText: { flex: 1, fontSize: 13, lineHeight: 19, fontWeight: '600' },
   presetBlock: { gap: 10, marginTop: 4 },
   filterLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
   chips: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.xl },
