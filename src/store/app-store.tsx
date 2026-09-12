@@ -1513,19 +1513,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => setTokensRefreshedHandler(null);
   }, []);
 
-  const logout = useCallback(() => {
-    /**
-     * 푸시 해제를 **토큰을 지우기 전에** 부른다.
-     *
-     * 이 API는 인증이 필요한데 예전에는 setAuthToken(null) 뒤에 불러서, 운영 빌드에서는
-     * Authorization 없이 나가고 실패도 무시됐다. 그러면 서버에 등록이 남아 로그아웃한
-     * 계정의 알림이 이 기기로 계속 온다.
-     */
-    const pushed = pushTokenRef.current;
-    if (pushed) {
-      pushTokenRef.current = null;
-      void pushApi.unregister(pushed).catch(() => {});
-    }
+  const finishLogout = useCallback(() => {
     bumpSessionEpoch();
     refreshedRef.current = null;
     restoredEmailRef.current = null;
@@ -1541,6 +1529,31 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // 로그인한 사람에게 앞사람의 도장첩·뱃지가 그대로 보인다.
     clearAccountState();
   }, [clearAccountState]);
+
+  /**
+   * 푸시 해제에 허용하는 시간.
+   *
+   * 해제는 **세션을 정리하기 전에** 끝나야 한다. 인증이 필요한 요청이라 토큰을 먼저
+   * 지우면 401을 받아도 재발급할 수단이 없어 영영 실패하고, 로그아웃한 계정의 등록이
+   * 서버에 남는다. 그렇다고 무한정 기다리면 네트워크가 느릴 때 로그아웃이 멈춘 것처럼
+   * 보이므로 짧게 끊고 진행한다. 못 지운 토큰은 서버의 무효 토큰 정리가 걷어간다.
+   */
+  const PUSH_UNREGISTER_WAIT_MS = 3000;
+
+  const logout = useCallback(() => {
+    // 등록이 아직 진행 중일 수도 있다. 그 토큰까지 함께 해제한다.
+    const pushed = pushTokenRef.current ?? pushPendingRef.current;
+    pushTokenRef.current = null;
+    pushPendingRef.current = null;
+    if (!pushed) {
+      finishLogout();
+      return;
+    }
+    void Promise.race([
+      pushApi.unregister(pushed).catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, PUSH_UNREGISTER_WAIT_MS)),
+    ]).then(finishLogout);
+  }, [finishLogout]);
 
   const selectProfile = useCallback((kind: ProfileKind) => {
     setSession((s) => ({ ...s, activeProfile: kind }));
@@ -1705,6 +1718,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 값을 들고 있는다.
    */
   const pushTokenRef = useRef<string | null>(null);
+  /**
+   * 등록이 끝나기 전에 OFF·로그아웃이 오면 `pushTokenRef`가 아직 비어 있어 해제를
+   * 건너뛰었고, 뒤늦게 끝난 등록만 서버에 남았다. 등록을 시작하는 순간 토큰을 기록해
+   * 그 사이에 들어온 해제가 이 토큰도 지우게 한다.
+   */
+  const pushPendingRef = useRef<string | null>(null);
   useEffect(() => {
     if (!accessToken || !settingsLoaded) return;
     let alive = true;
@@ -1717,20 +1736,35 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
        * 문서와 동작이 어긋나 있었다.
        */
       if (!settings.notifPush) {
-        const registered = pushTokenRef.current;
+        const registered = pushTokenRef.current ?? pushPendingRef.current;
         if (registered) {
-          pushTokenRef.current = null;
-          await pushApi.unregister(registered).catch(() => {});
+          // 해제가 성공해야 참조를 버린다. 먼저 지우면 실패했을 때 다시 시도할 정보가 없다.
+          const ok = await pushApi
+            .unregister(registered)
+            .then(() => true)
+            .catch(() => false);
+          if (ok) {
+            pushTokenRef.current = null;
+            pushPendingRef.current = null;
+          }
         }
         return;
       }
       const token = await getFcmToken();
       if (!alive || !token) return;
+      pushPendingRef.current = token;
       try {
         await pushApi.register(token, Platform.OS === 'ios' ? 'IOS' : 'ANDROID');
+        // 등록이 도는 사이 화면을 벗어났거나 알림이 꺼졌으면 바로 되돌린다.
+        if (!alive || !settings.notifPush) {
+          await pushApi.unregister(token).catch(() => {});
+          pushPendingRef.current = null;
+          return;
+        }
         pushTokenRef.current = token;
       } catch {
         // 등록 실패는 알림이 안 오는 것으로 끝난다. 로그인·사용을 막지 않는다.
+        pushPendingRef.current = null;
       }
     })();
     return () => {

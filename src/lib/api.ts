@@ -117,7 +117,7 @@ export function setTokensRefreshedHandler(
  * 서버가 리프레시 토큰도 새로 주는 **회전** 방식이라, 같은 토큰으로 두 번 부르면
  * 두 번째는 이미 폐기된 토큰을 쓰게 되어 실패하고 멀쩡한 세션이 끊긴다.
  */
-let refreshInFlight: Promise<RefreshOutcome> | null = null;
+let refreshInFlight: { epoch: number; promise: Promise<RefreshOutcome> } | null = null;
 
 /**
  * 재발급 결과.
@@ -177,11 +177,20 @@ async function refreshTokens(): Promise<RefreshOutcome> {
   }
 }
 
-function refreshOnce(): Promise<RefreshOutcome> {
-  refreshInFlight ??= refreshTokens().finally(() => {
-    refreshInFlight = null;
-  });
-  return refreshInFlight;
+/**
+ * 같은 세대 안에서만 재발급을 공유한다.
+ *
+ * 세대를 구분하지 않으면, A 재발급이 도는 중에 B로 로그인한 요청까지 A의 프로미스에
+ * 합류한다. A 결과가 `stale`이면 B는 자기 토큰으로 재발급을 시도조차 못 하고 실패한다.
+ */
+function refreshOnce(epoch: number): Promise<RefreshOutcome> {
+  if (!refreshInFlight || refreshInFlight.epoch !== epoch) {
+    const promise = refreshTokens().finally(() => {
+      if (refreshInFlight?.promise === promise) refreshInFlight = null;
+    });
+    refreshInFlight = { epoch, promise };
+  }
+  return refreshInFlight.promise;
 }
 
 /** 지금 요청에 쓸 토큰. 로그인 토큰이 없고 개발 모드면 10년 테스트 토큰으로 대체한다. */
@@ -243,7 +252,16 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
     }
   };
 
+  /**
+   * 요청이 **출발한 시점**의 세대. 예전에는 첫 401을 받은 뒤에야 잡아서, A 요청이 나간
+   * 뒤 B로 로그인하면 뒤늦은 A의 401이 B 토큰으로 재발급·재전송을 일으켰다.
+   * 성공 응답도 세대를 안 봐서 옛 세션의 결과가 새 화면에 반영될 수 있었다.
+   */
+  const startEpoch = sessionEpoch;
   let res = await sendOnce();
+  if (opts.auth && startEpoch !== sessionEpoch) {
+    throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
+  }
 
   /**
    * 인증이 필요한 요청의 401 = 액세스 토큰 만료.
@@ -255,20 +273,21 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
    * 재시도는 한 번만 한다 — 새 토큰으로도 401이면 토큰 문제가 아니다.
    */
   if (opts.auth && res.status === 401) {
-    const epoch = sessionEpoch;
-    const outcome = await refreshOnce();
+    const outcome = await refreshOnce(startEpoch);
 
     // 기다리는 사이 로그아웃·재로그인이 있었다면 이 응답은 남의 세션 것이다.
     // 성공으로도 실패로도 취급하지 않고, 화면이 조용히 넘어가게 둔다.
-    if (epoch !== sessionEpoch || outcome === 'stale') {
+    if (startEpoch !== sessionEpoch || outcome === 'stale') {
       throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
     }
 
     if (outcome === 'ok') {
       res = await sendOnce();
-      if (res.status !== 401) {
-        // 재발급 후 통과. 아래 공통 파싱으로 내려간다.
-      } else {
+      // 재시도가 나갔다 오는 사이에도 세션이 바뀔 수 있다. 그 401로 새 세션을 끊으면 안 된다.
+      if (startEpoch !== sessionEpoch) {
+        throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
+      }
+      if (res.status === 401) {
         // 새 토큰으로도 401이면 토큰 문제가 아니다. 더 시도하지 않는다.
         onUnauthorized?.();
         throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
