@@ -87,6 +87,20 @@ export function setRefreshToken(token: string | null) {
   refreshToken = token;
 }
 
+/**
+ * 세션 세대. 로그인·로그아웃·만료 때마다 store가 올린다.
+ *
+ * 재발급은 비동기라, 응답이 돌아왔을 때는 이미 다른 세션일 수 있다. A로 쓰다 로그아웃한
+ * 뒤 A의 재발급 응답이 도착하면 지워둔 세션이 되살아나고, B로 로그인한 뒤 도착하면
+ * B 화면에서 A 토큰으로 요청하게 된다. 시작할 때의 세대와 끝났을 때의 세대가 다르면
+ * 그 응답은 버린다.
+ */
+let sessionEpoch = 0;
+export function bumpSessionEpoch(): number {
+  sessionEpoch += 1;
+  return sessionEpoch;
+}
+
 /** 재발급에 성공하면 새 토큰 쌍을 store에 넘겨 기기에도 남기게 한다. */
 let onTokensRefreshed: ((t: { accessToken: string; refreshToken: string }) => void) | null = null;
 export function setTokensRefreshedHandler(
@@ -101,10 +115,21 @@ export function setTokensRefreshedHandler(
  * 서버가 리프레시 토큰도 새로 주는 **회전** 방식이라, 같은 토큰으로 두 번 부르면
  * 두 번째는 이미 폐기된 토큰을 쓰게 되어 실패하고 멀쩡한 세션이 끊긴다.
  */
-let refreshInFlight: Promise<boolean> | null = null;
+let refreshInFlight: Promise<RefreshOutcome> | null = null;
 
-async function refreshTokens(): Promise<boolean> {
-  if (!refreshToken) return false;
+/**
+ * 재발급 결과.
+ * - `ok`     새 토큰을 받았다
+ * - `expired` 리프레시 토큰이 죽었다(401·403). 되살릴 방법이 없으니 로그아웃한다
+ * - `failed`  일시 장애(타임아웃·네트워크·5xx). **세션을 지우면 안 된다**
+ * - `stale`   응답이 오는 사이 세션이 바뀌었다. 조용히 버린다
+ */
+type RefreshOutcome = 'ok' | 'expired' | 'failed' | 'stale';
+
+async function refreshTokens(): Promise<RefreshOutcome> {
+  const token = refreshToken;
+  if (!token) return 'expired';
+  const epoch = sessionEpoch;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
@@ -112,26 +137,34 @@ async function refreshTokens(): Promise<boolean> {
     // 401 처리를 타면 재발급이 재발급을 부르는 고리가 생긴다.
     const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
       method: 'POST',
-      headers: { RefreshToken: refreshToken },
+      headers: { RefreshToken: token },
       signal: ctrl.signal,
     });
+    // 세션이 바뀐 뒤 도착한 응답은 남의 것이다. 전역 토큰을 건드리지 않고 버린다.
+    if (epoch !== sessionEpoch) return 'stale';
     const json = (await res.json().catch(() => null)) as ApiEnvelope<{
       accessToken: string;
       refreshToken: string;
     }> | null;
-    if (!res.ok || !json?.isSuccess || !json.result?.accessToken) return false;
+    if (res.status === 401 || res.status === 403) return 'expired';
+    if (!res.ok || !json?.isSuccess || !json.result?.accessToken) {
+      // 400은 토큰이 잘못됐다는 뜻이라 되살릴 수 없다. 5xx·형식 불량은 일시 장애로 본다.
+      return res.status === 400 ? 'expired' : 'failed';
+    }
+    if (epoch !== sessionEpoch) return 'stale';
     authToken = json.result.accessToken;
     refreshToken = json.result.refreshToken ?? refreshToken;
     onTokensRefreshed?.({ accessToken: authToken, refreshToken });
-    return true;
+    return 'ok';
   } catch {
-    return false;
+    // 타임아웃·네트워크 단절. 리프레시 토큰은 멀쩡하므로 세션을 지우지 않는다.
+    return epoch === sessionEpoch ? 'failed' : 'stale';
   } finally {
     clearTimeout(timer);
   }
 }
 
-function refreshOnce(): Promise<boolean> {
+function refreshOnce(): Promise<RefreshOutcome> {
   refreshInFlight ??= refreshTokens().finally(() => {
     refreshInFlight = null;
   });
@@ -209,11 +242,35 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
    * 재시도는 한 번만 한다 — 새 토큰으로도 401이면 토큰 문제가 아니다.
    */
   if (opts.auth && res.status === 401) {
-    const renewed = await refreshOnce();
-    if (renewed) res = await sendOnce();
-    if (!renewed || res.status === 401) {
+    const epoch = sessionEpoch;
+    const outcome = await refreshOnce();
+
+    // 기다리는 사이 로그아웃·재로그인이 있었다면 이 응답은 남의 세션 것이다.
+    // 성공으로도 실패로도 취급하지 않고, 화면이 조용히 넘어가게 둔다.
+    if (epoch !== sessionEpoch || outcome === 'stale') {
+      throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
+    }
+
+    if (outcome === 'ok') {
+      res = await sendOnce();
+      if (res.status !== 401) {
+        // 재발급 후 통과. 아래 공통 파싱으로 내려간다.
+      } else {
+        // 새 토큰으로도 401이면 토큰 문제가 아니다. 더 시도하지 않는다.
+        onUnauthorized?.();
+        throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
+      }
+    } else if (outcome === 'expired') {
       onUnauthorized?.();
       throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
+    } else {
+      /**
+       * 일시 장애 — 세션을 지우지 않는다.
+       *
+       * 리프레시 토큰은 멀쩡한데 서버가 잠깐 흔들린 것뿐이다. 여기서 로그아웃시키면
+       * 502 한 번에 모든 사용자가 튕긴다. 이 서버는 실제로 502를 낸 적이 있다.
+       */
+      throw new ApiError('서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.', 'TIMEOUT');
     }
   }
 

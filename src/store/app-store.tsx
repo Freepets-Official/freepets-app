@@ -18,12 +18,14 @@ import {
   pushApi,
   reviewsApi,
   satisfactionApi,
+  bumpSessionEpoch,
   setAuthToken,
   setRefreshToken,
   setTokensRefreshedHandler,
   setUnauthorizedHandler,
   type ServerDenialReport,
 } from '@/lib/api';
+import { DEV_TOKEN } from '@/lib/config';
 import type { Coords } from '@/lib/location';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, pawGradeOf, vaccinationDday } from '@/data/types';
@@ -551,10 +553,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 탐색 화면이 잡은 GPS를 보관한다. 상세에서 다시 권한을 묻지 않고 거리(distanceM)를 받기 위한 것.
   const [lastCoords, setLastCoords] = useState<Coords | null>(null);
 
-  // 서버에서 내 반려동물을 불러와 로컬 상태를 채운다.
-  // __DEV__에선 dev 토큰으로 항상 조회되고, 실서비스에선 로그인 후 조회된다.
-  // 실패(미인증·네트워크)하면 조용히 목데이터를 유지해 데모가 깨지지 않게 한다.
+  /**
+   * 서버에서 내 반려동물을 불러와 로컬 상태를 채운다.
+   *
+   * **로그인 전에는 부르지 않는다.** 예전에는 무조건 불러서 401을 받았는데, 그 401이
+   * 재발급 실패로 이어지고 그 결과가 늦게 도착하면 **그 사이 새로 로그인한 세션까지**
+   * 만료 처리됐다. 401을 만들 이유가 없는 호출은 아예 하지 않는 게 맞다.
+   * __DEV__에선 dev 토큰이 있어 로그인 없이도 조회된다.
+   */
   useEffect(() => {
+    if (!session.authed && !(__DEV__ && DEV_TOKEN)) return;
     let alive = true;
     petsApi
       .list()
@@ -567,8 +575,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     };
   }, [session.authed]);
 
-  // 서버에서 판별 이력을 불러온다. 서버가 주는 건 **요약뿐**이라 아이별 판별(verdicts)이
-  // 비어 있다 — checkId로 상세를 되찾는 API가 없다(명세 미구현).
+  // 서버에서 판별 이력을 불러온다. 목록이 주는 건 **요약뿐**이라 아이별 판별(verdicts)이
+  // 비어 있다 — 필요할 때 hydrateCheck(GET /pet-checks/{checkId})로 채운다.
   //
   // 그래서 덮어쓰지 않고 **합친다.** 이번 세션에서 방금 판별한 항목은 상세를 갖고 있는데,
   // 서버 요약으로 덮으면 그 자리에서 출입증이 빈 화면이 된다. 같은 checkId면 로컬을 남긴다.
@@ -1299,13 +1307,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         setRestoring(false);
         return;
       }
+      restoredEmailRef.current = saved.email;
       setAuthToken(saved.accessToken);
       setRefreshToken(saved.refreshToken);
       try {
         const me = await accountApi.get();
         if (stale()) return;
-        setAccessToken(saved.accessToken);
-        refreshTokenRef.current = saved.refreshToken;
+        /**
+         * 조회가 401을 거쳐 **재발급으로 성공**했을 수 있다. 그때는 api 레이어가 이미
+         * 새 토큰을 들고 있는데, 여기서 `saved.accessToken`을 다시 넣으면 스토어만
+         * 만료된 토큰으로 되돌아가 둘이 갈린다. 재발급 콜백이 채워둔 값이 있으면 그걸 쓴다.
+         */
+        setAccessToken(refreshedRef.current?.accessToken ?? saved.accessToken);
+        refreshTokenRef.current = refreshedRef.current?.refreshToken ?? saved.refreshToken;
         setAccount({ nickname: me.nickname, avatarUri: me.avatarUri });
         setSession({ authed: true, email: saved.email, activeProfile: 'consumer' });
       } catch (e) {
@@ -1318,8 +1332,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           setAuthToken(null);
           await clearSession();
         } else {
-          setAccessToken(saved.accessToken);
-          refreshTokenRef.current = saved.refreshToken;
+          setAccessToken(refreshedRef.current?.accessToken ?? saved.accessToken);
+          refreshTokenRef.current = refreshedRef.current?.refreshToken ?? saved.refreshToken;
           setSession({ authed: true, email: saved.email, activeProfile: 'consumer' });
         }
       } finally {
@@ -1336,6 +1350,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const authenticate = useCallback(
     (email: string, tokens: { accessToken: string; refreshToken: string }) => {
       // 진행 중인 복원이 이 로그인을 덮어쓰지 않도록 세대를 올린다
+      bumpSessionEpoch();
+      refreshedRef.current = null;
+      restoredEmailRef.current = email || null;
       sessionRev.current += 1;
       setRestoring(false);
       setAccessToken(tokens.accessToken);
@@ -1388,6 +1405,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 서버에 재발급 API가 없어 토큰을 되살릴 수 없으므로 로그인 화면으로 돌려보낸다.
    */
   const expireSession = useCallback(() => {
+    // api 레이어의 세대도 올린다. 진행 중이던 재발급 응답이 이 세션을 되살리지 못하게.
+    bumpSessionEpoch();
+    refreshedRef.current = null;
     sessionRev.current += 1;
     setRestoring(false);
     setAccessToken(null);
@@ -1412,14 +1432,26 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   useEffect(() => {
     setTokensRefreshedHandler(({ accessToken, refreshToken }) => {
+      refreshedRef.current = { accessToken, refreshToken };
       setAccessToken(accessToken);
       refreshTokenRef.current = refreshToken;
-      void saveSession({ accessToken, refreshToken, email: sessionRef.current.email || null });
+      /**
+       * 이메일은 **기기에 저장돼 있던 값**을 우선한다.
+       *
+       * 복원 도중에 재발급이 일어나면 `session.email`은 아직 null이다. 그걸 그대로
+       * 저장하면 기기에서 이메일이 지워져, 다음 실행부터 계정 정보가 비어 보인다.
+       * 서버 회원정보에 이메일이 없어 다시 채울 방법도 없다.
+       */
+      const email = restoredEmailRef.current ?? sessionRef.current.email ?? null;
+      void saveSession({ accessToken, refreshToken, email });
     });
     return () => setTokensRefreshedHandler(null);
   }, []);
 
   const logout = useCallback(() => {
+    bumpSessionEpoch();
+    refreshedRef.current = null;
+    restoredEmailRef.current = null;
     sessionRev.current += 1; // 복원이 늦게 끝나 로그아웃을 되돌리지 않도록
     setRestoring(false);
     setAccessToken(null);
@@ -1459,8 +1491,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const sessionRef = useRef<Session>(session);
   sessionRef.current = session;
 
-  // 서버에서 내 회원정보(닉네임·아바타)를 불러와 채운다. 실패 시 조용히 기본값 유지(데모 안전).
+  /** 재발급으로 갱신된 토큰. 복원 코드가 옛 토큰으로 덮지 않도록 참고한다. */
+  const refreshedRef = useRef<{ accessToken: string; refreshToken: string } | null>(null);
+  /** 기기에서 읽어온 이메일. 복원 중 재발급이 일어나도 이메일을 잃지 않게 들고 있는다. */
+  const restoredEmailRef = useRef<string | null>(null);
+
+  // 서버에서 내 회원정보(닉네임·아바타)를 불러와 채운다. 실패 시 조용히 기본값 유지.
+  // 반려동물 조회와 같은 이유로 로그인 전에는 부르지 않는다(늦은 401이 새 세션을 만료시킨다).
   useEffect(() => {
+    if (!session.authed && !(__DEV__ && DEV_TOKEN)) return;
     let alive = true;
     accountApi
       .get()
