@@ -61,6 +61,19 @@ export class ApiError extends Error {
 // 로그인 성공 시 store가 setAuthToken으로 넣어준다. api.ts는 React에 의존하지 않도록
 // 모듈 변수로 들고 있다가 보호 API 호출 시 헤더에 붙인다.
 let authToken: string | null = null;
+/**
+ * 인증이 필요한 요청이 401을 받았을 때 불린다. store가 세션을 정리하도록 등록한다.
+ *
+ * 서버에 **토큰 재발급 엔드포인트가 없다**(2026-09-12 라이브 Swagger 46개 확인).
+ * 그래서 액세스 토큰이 만료되면 되살릴 방법이 없는데, 앱은 401을 그냥 오류로만
+ * 흘려보내 로그인 상태를 유지했다. 화면은 들어가지는데 무엇을 눌러도 서버가 준
+ * "만료된 토큰입니다"가 뜨고, 사용자는 빠져나갈 길이 없었다.
+ */
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(fn: (() => void) | null) {
+  onUnauthorized = fn;
+}
+
 export function setAuthToken(token: string | null) {
   authToken = token;
 }
@@ -118,6 +131,13 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
   } finally {
     clearTimeout(timer);
   }
+  // 인증이 필요한 요청의 401은 "세션이 끝났다"는 뜻이다. 로그인·가입(auth:false)의 401은
+  // 자격 증명이 틀린 것이므로 건드리지 않는다.
+  if (opts.auth && res.status === 401) {
+    onUnauthorized?.();
+    throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
+  }
+
   const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null;
   if (!json || typeof json.isSuccess !== 'boolean') {
     // 업로드 용량 초과는 nginx가 앱 envelope가 아닌 413(HTML)로 막는다 → 친화 메시지로 변환
