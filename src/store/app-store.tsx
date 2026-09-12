@@ -390,7 +390,8 @@ interface AppStore {
   facilityById: (id: number) => Facility | undefined;
   /** GET /facilities/{id} — 상세를 받아 캐시에 병합한다(검색을 안 거치고 들어온 시설용) */
   loadFacility: (id: number) => Promise<void>;
-  /** 탐색이 잡은 GPS를 보관 — 상세에서 권한을 다시 묻지 않고 거리 계산에 쓴다 */
+  /** 탐색이 잡은 GPS를 보관 — 상세·코스 빌더에서 권한을 다시 묻지 않고 거리 계산에 쓴다 */
+  lastCoords: Coords | null;
   setLastCoords: (c: Coords | null) => void;
   /** 서버에서 받은 시설을 상세 조회용 캐시에 등록 */
   registerFacilities: (fs: Facility[]) => void;
@@ -1659,6 +1660,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       facilityById,
       registerFacilities,
       loadFacility,
+      lastCoords,
       setLastCoords,
       settings,
       updateSettings,
@@ -1741,6 +1743,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       facilityById,
       registerFacilities,
       loadFacility,
+      lastCoords,
       setLastCoords,
       settings,
       updateSettings,
