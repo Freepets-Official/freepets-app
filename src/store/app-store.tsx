@@ -26,6 +26,7 @@ import {
   type ServerDenialReport,
 } from '@/lib/api';
 import { DEV_TOKEN } from '@/lib/config';
+import { loadSettings, saveSettings } from '@/lib/settings-store';
 import type { Coords } from '@/lib/location';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, pawGradeOf, vaccinationDday } from '@/data/types';
@@ -509,6 +510,25 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 반려동물별 좋아한 곳 TOP3 (홈) — 서버가 시설명·카테고리까지 계산해 내려준다
   const [topPlaces, setTopPlaces] = useState<Record<number, TopPlace[]>>({});
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  /**
+   * 저장된 설정을 읽기 전에는 기록하지 않는다. 불러오기 전에 저장하면 기본값이 덮어써서
+   * 사용자가 켜둔 앱 잠금·다크모드가 매 실행마다 날아간다.
+   */
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    loadSettings(DEFAULT_SETTINGS).then((saved) => {
+      if (!alive) return;
+      setSettings(saved);
+      setSettingsLoaded(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (settingsLoaded) void saveSettings(settings);
+  }, [settings, settingsLoaded]);
   const [userConfirmedIds, setUserConfirmedIds] = useState<Set<number>>(new Set());
   // 씨드 거부 제보도 신뢰도에 반영돼 있어야 앱을 켜자마자 하향된 상태로 보인다
   const [downgradedIds, setDowngradedIds] = useState<Set<number>>(
@@ -1449,6 +1469,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    /**
+     * 푸시 해제를 **토큰을 지우기 전에** 부른다.
+     *
+     * 이 API는 인증이 필요한데 예전에는 setAuthToken(null) 뒤에 불러서, 운영 빌드에서는
+     * Authorization 없이 나가고 실패도 무시됐다. 그러면 서버에 등록이 남아 로그아웃한
+     * 계정의 알림이 이 기기로 계속 온다.
+     */
+    const pushed = pushTokenRef.current;
+    if (pushed) {
+      pushTokenRef.current = null;
+      void pushApi.unregister(pushed).catch(() => {});
+    }
     bumpSessionEpoch();
     refreshedRef.current = null;
     restoredEmailRef.current = null;
@@ -1460,18 +1492,31 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
     void clearSession(); // 남겨두면 다음 실행에 로그아웃한 계정으로 되살아난다
-    // 해제하지 않으면 로그아웃한 기기로 계속 발송을 시도한다. 서버가 나중에 무효 토큰을
-    // 정리하긴 하지만, 그 전까지는 남의 알림이 이 기기로 온다.
-    const pushed = pushTokenRef.current;
-    if (pushed) {
-      pushTokenRef.current = null;
-      void pushApi.unregister(pushed).catch(() => {});
-    }
     // 도장은 서버가 아니라 기기에 있어 계정과 묶여 있지 않다. 안 지우면 다음에 로그인한
     // 사람에게 앞사람의 도장첩·뱃지가 그대로 보인다. 대신 같은 사람이 다시 로그인해도
     // 도장은 돌아오지 않는다 — 2단계에서 서버로 옮기면 해소된다.
     setStamps([]);
     void clearStamps();
+
+    /**
+     * 계정에 딸린 상태를 전부 비운다.
+     *
+     * 예전에는 도장만 지웠다. 그래서 A로 일정을 만들고 로그아웃한 뒤 B로 들어가면 A의
+     * 일정이 그대로 보였고, B의 조회가 실패하면 A의 반려동물·닉네임까지 남았다.
+     * 남의 계정 화면에 내 데이터가 보이는 것은 기능 문제가 아니라 사고다.
+     *
+     * 설정(화면 모드·글씨 크기·앱 잠금)은 기기에 속한 값이라 남긴다.
+     */
+    setPets([]);
+    setChecks([]);
+    setHiddenCheckIds([]);
+    setReports([]);
+    setReviews([]);
+    setCalendarEvents([]);
+    setMedLog(new Set());
+    setSatisfactions([]);
+    setBusinessRegs({});
+    setAccount({ nickname: '나', avatarUri: null });
   }, []);
 
   const selectProfile = useCallback((kind: ProfileKind) => {
@@ -1627,9 +1672,24 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   const pushTokenRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!accessToken) return;
+    if (!accessToken || !settingsLoaded) return;
     let alive = true;
     (async () => {
+      /**
+       * 알림을 꺼두면 **서버에서 토큰을 지운다.**
+       *
+       * 예전에는 설정을 보지 않고 등록만 해서, 사용자가 꺼도 서버에는 그대로 남았다.
+       * 개인정보처리방침에 "끄면 저장된 푸시 토큰도 함께 삭제됩니다"라고 적어둔 터라
+       * 문서와 동작이 어긋나 있었다.
+       */
+      if (!settings.notifPush) {
+        const registered = pushTokenRef.current;
+        if (registered) {
+          pushTokenRef.current = null;
+          await pushApi.unregister(registered).catch(() => {});
+        }
+        return;
+      }
       const token = await getFcmToken();
       if (!alive || !token) return;
       try {
@@ -1642,7 +1702,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [accessToken]);
+  }, [accessToken, settings.notifPush, settingsLoaded]);
 
   /** 지역 트리 재조회. 화면의 재시도 버튼이 쓴다 — 없으면 앱을 다시 켤 때까지 도장을 못 찍는다. */
   const reloadStampRegions = useCallback(async () => {
