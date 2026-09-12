@@ -21,7 +21,7 @@ import { useAppStore } from '@/store/app-store';
 export default function PassportScreen() {
   const p = usePalette();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { pets, checks, confidenceOf, facilityById, loadFacility } = useAppStore();
+  const { pets, checks, confidenceOf, facilityById, loadFacility, hydrateCheck } = useAppStore();
   const { width } = useWindowDimensions();
 
   const facilityId = Number(id);
@@ -65,14 +65,31 @@ export default function PassportScreen() {
 
   const pageWidth = Math.min(width, MaxContentWidth);
 
-  // 아이별 판별 근거가 있어야 출입증이 된다. 서버에서 불러온 이력은 요약뿐이라
-  // verdicts가 비어 있고(상세 조회 API 없음), 그대로 두면 빈 캐러셀이 그려진다.
+  /**
+   * 아이별 판별 근거가 있어야 출입증이 된다. 서버 이력 목록은 요약뿐이라 verdicts가
+   * 비어 있는데, 단건 상세(GET /pet-checks/{checkId})로 채우면 재판별 없이 열린다.
+   * 채우는 동안에는 아래 로딩 화면이 뜬다.
+   */
+  const needsDetail = !!check && check.verdicts.length === 0 && check.checkId > 0;
+  const [hydrating, setHydrating] = useState(false);
+  useEffect(() => {
+    if (!needsDetail || !check) return;
+    let alive = true;
+    setHydrating(true);
+    hydrateCheck(check.checkId).finally(() => {
+      if (alive) setHydrating(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [needsDetail, check?.checkId, hydrateCheck]);
+
   const cards = (check?.verdicts ?? [])
     .map((v) => ({ verdict: v, pet: pets.find((x) => x.petId === v.petId) }))
     .filter((c): c is { verdict: typeof c.verdict; pet: NonNullable<typeof c.pet> } => !!c.pet);
 
   // 조회 중에는 판단을 미룬다. 빈 상태와 로딩은 사용자에게 전혀 다른 뜻이다.
-  if (!facility && !lookedUp) {
+  if ((!facility && !lookedUp) || hydrating) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
         <Stack.Screen options={{ title: '동반 출입증', headerBackButtonDisplayMode: 'minimal' }} />

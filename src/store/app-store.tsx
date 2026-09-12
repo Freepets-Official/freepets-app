@@ -19,6 +19,8 @@ import {
   reviewsApi,
   satisfactionApi,
   setAuthToken,
+  setRefreshToken,
+  setTokensRefreshedHandler,
   setUnauthorizedHandler,
   type ServerDenialReport,
 } from '@/lib/api';
@@ -390,6 +392,8 @@ interface AppStore {
   facilityById: (id: number) => Facility | undefined;
   /** GET /facilities/{id} — 상세를 받아 캐시에 병합한다(검색을 안 거치고 들어온 시설용) */
   loadFacility: (id: number) => Promise<void>;
+  /** GET /pet-checks/{checkId} — 요약만 있는 이력에 아이별 근거를 채운다(출입증 재열람용) */
+  hydrateCheck: (checkId: number) => Promise<void>;
   /** 탐색이 잡은 GPS를 보관 — 상세·코스 빌더에서 권한을 다시 묻지 않고 거리 계산에 쓴다 */
   lastCoords: Coords | null;
   setLastCoords: (c: Coords | null) => void;
@@ -1296,6 +1300,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         return;
       }
       setAuthToken(saved.accessToken);
+      setRefreshToken(saved.refreshToken);
       try {
         const me = await accountApi.get();
         if (stale()) return;
@@ -1335,6 +1340,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setRestoring(false);
       setAccessToken(tokens.accessToken);
       setAuthToken(tokens.accessToken); // 보호 API 호출에 쓰이도록 api 레이어에도 넣는다
+      setRefreshToken(tokens.refreshToken);
       refreshTokenRef.current = tokens.refreshToken;
       setSession({
         authed: true,
@@ -1353,6 +1359,28 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   );
 
   /**
+   * 요약만 있는 판별 이력에 아이별 근거(verdicts)를 채운다.
+   *
+   * 목록 API(GET /pet-checks)는 요약만 줘서, 앱을 다시 켠 뒤 예전 판별의 출입증을 열면
+   * 그릴 게 없어 "한 번 더 판별하면 바로 만들어져요"가 떴다. 단건 상세로 verifyCode까지
+   * 받아 채우면 재판별 없이 출입증이 열린다.
+   */
+  const hydrateCheck = useCallback(async (checkId: number) => {
+    // 로컬 전용 판별은 음수 id라 서버에 없다. 부르면 404만 돌아온다.
+    if (!Number.isInteger(checkId) || checkId <= 0) return;
+    try {
+      const d = await aiApi.checkDetail(checkId);
+      setChecks((prev) =>
+        prev.map((c) =>
+          c.checkId === checkId ? { ...c, overall: d.overall, verdicts: d.verdicts } : c,
+        ),
+      );
+    } catch {
+      // 못 채우면 기존 안내("한 번 더 판별하면…")로 떨어진다. 화면을 막지는 않는다.
+    }
+  }, []);
+
+  /**
    * 세션 만료 — 401을 받았을 때 부른다.
    *
    * 로그아웃과 **도장 처리가 다르다.** 로그아웃은 기기를 남에게 넘길 수 있다고 보고
@@ -1364,6 +1392,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setRestoring(false);
     setAccessToken(null);
     setAuthToken(null);
+    setRefreshToken(null);
     refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
     void clearSession();
@@ -1375,11 +1404,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, [expireSession]);
 
+  /**
+   * 재발급에 성공하면 새 토큰 쌍을 기기에도 남긴다.
+   *
+   * 서버가 리프레시 토큰을 회전시키므로, 안 남기면 다음 실행에서 이미 폐기된 토큰으로
+   * 복원을 시도하다 로그아웃된다.
+   */
+  useEffect(() => {
+    setTokensRefreshedHandler(({ accessToken, refreshToken }) => {
+      setAccessToken(accessToken);
+      refreshTokenRef.current = refreshToken;
+      void saveSession({ accessToken, refreshToken, email: sessionRef.current.email || null });
+    });
+    return () => setTokensRefreshedHandler(null);
+  }, []);
+
   const logout = useCallback(() => {
     sessionRev.current += 1; // 복원이 늦게 끝나 로그아웃을 되돌리지 않도록
     setRestoring(false);
     setAccessToken(null);
     setAuthToken(null);
+    setRefreshToken(null);
     refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
     void clearSession(); // 남겨두면 다음 실행에 로그아웃한 계정으로 되살아난다
@@ -1408,6 +1453,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 최신 account를 콜백에서 읽기 위한 미러(PATCH에 닉네임을 항상 실어야 함)
   const accountRef = useRef<Account>(account);
   accountRef.current = account;
+
+  // 재발급 콜백이 지금 세션의 이메일을 읽어야 한다. 상태를 의존성에 걸면 세션이 바뀔 때마다
+  // 핸들러가 다시 등록되므로 미러로 읽는다.
+  const sessionRef = useRef<Session>(session);
+  sessionRef.current = session;
 
   // 서버에서 내 회원정보(닉네임·아바타)를 불러와 채운다. 실패 시 조용히 기본값 유지(데모 안전).
   useEffect(() => {
@@ -1660,6 +1710,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       facilityById,
       registerFacilities,
       loadFacility,
+      hydrateCheck,
       lastCoords,
       setLastCoords,
       settings,
@@ -1743,6 +1794,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       facilityById,
       registerFacilities,
       loadFacility,
+      hydrateCheck,
       lastCoords,
       setLastCoords,
       settings,
