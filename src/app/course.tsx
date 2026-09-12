@@ -599,20 +599,7 @@ export default function CourseScreen() {
 
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
-      {/*
-        이 화면만 엣지 스와이프 뒤로가기를 끈다.
-
-        가로 스크롤 칩 줄이 4개(지역·시군구·테마·거리)로 앱에서 가장 많은데, iOS의 뒤로가기
-        제스처는 화면 왼쪽 가장자리 20pt쯤에서 시작한다. 그 자리에서 칩을 옆으로 밀면
-        뒤로가기 전환이 시작됐다가 스크롤뷰가 제스처를 가져가며 취소되고, 중단된 전환이
-        네이티브 헤더를 어중간한 상태로 남겨 뒤로가기 버튼이 복구되지 않는다.
-        "여행 코스에서 가끔 뒤로가기가 사라진다"는 제보가 이 조건과 맞는다.
-
-        헤더의 뒤로가기 버튼은 그대로 있어서 돌아갈 길이 없어지지는 않는다.
-      */}
-      <Stack.Screen
-        options={{ title: '여행 코스', headerBackButtonDisplayMode: 'minimal', gestureEnabled: false }}
-      />
+      <Stack.Screen options={{ title: '여행 코스', headerBackButtonDisplayMode: 'minimal'}} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           <View style={styles.head}>

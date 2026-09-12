@@ -1,8 +1,9 @@
 import { DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Pressable } from 'react-native';
 
 import { AppSplash } from '@/components/app-splash';
 import { BiometricGate } from '@/components/biometric-gate';
@@ -65,13 +66,40 @@ function usePushDeepLink() {
   }, [session.authed, router]);
 }
 
+/**
+ * 히스토리가 없을 때 세우는 뒤로가기.
+ *
+ * 웹은 SPA라 `/course` 같은 주소가 그대로 열린다(vercel.json이 전부 index.html로 넘긴다).
+ * 주소로 바로 들어오거나 브라우저가 탭을 다시 읽으면 앞선 화면이 없어서, 네이티브 스택이
+ * 뒤로가기 버튼을 아예 그리지 않는다 — 화면은 그대로인데 나갈 길만 사라진다.
+ * 모바일 크롬은 메모리가 모자라면 탭을 다시 읽으므로 "가끔" 이 상태가 된다.
+ *
+ * 그때는 홈으로 보내는 버튼을 대신 세운다. 돌아갈 데가 있는 보통 상황에서는 이 버튼이
+ * 붙지 않아 네이티브 기본 뒤로가기가 그대로 쓰인다.
+ */
+function HomeFallbackBack() {
+  const p = usePalette();
+  const router = useRouter();
+  return (
+    <Pressable
+      onPress={() => router.replace('/')}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel="홈으로"
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, paddingRight: 8 })}>
+      <Ionicons name="chevron-back" size={26} color={p.accent} />
+    </Pressable>
+  );
+}
+
 function RootNavigator() {
   useAuthGate();
   usePushDeepLink();
   const p = usePalette();
   return (
     <Stack
-      screenOptions={{
+      screenOptions={({ navigation }) => ({
+        headerLeft: navigation.canGoBack() ? undefined : () => <HomeFallbackBack />,
         headerShadowVisible: false,
         headerStyle: { backgroundColor: p.bg },
         headerTintColor: p.accent,
@@ -87,7 +115,7 @@ function RootNavigator() {
          */
         animation: 'default',
         gestureEnabled: true,
-      }}>
+      })}>
       {/* 인증 게이트 화면은 replace로 갈아끼우므로 슬라이드보다 페이드가 자연스럽다 */}
       <Stack.Screen name="login" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="signup" options={{ headerShown: false, animation: 'fade' }} />
