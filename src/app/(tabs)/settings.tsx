@@ -33,13 +33,29 @@ const THEME_MODE_LABEL: Record<ThemeMode, string> = { light: '라이트', dark: 
  */
 const SHOW_NOTICES = false;
 
+/**
+ * 사업자(사장님) 기능을 1.0에서 숨긴다.
+ *
+ * 백엔드가 사업자 인증과 매장 등록까지는 열었지만, **사장님 대시보드·혜택·프로모션·통계는
+ * 아직 구현 시작 전이다**(백엔드 이슈 #85). 지금 그 네 화면은 서버 호출이 한 건도 없고,
+ * 매장 등록도 React state에만 남아 앱을 다시 켜면 사라진다 — 심사자가 「우리 식당,
+ * 반려동물 받기」를 끝까지 밟으면 아무 동작 없는 화면과 빈 통계를 보게 된다.
+ * 보이는 것이 작동하지 않으면 가이드라인 2.1이다.
+ *
+ * 매장 등록만 열고 대시보드를 감추는 절충은 하지 않는다 — 등록은 되는데 관리할 데가
+ * 없으면 "등록 후 무엇을 하나"라는 질문을 심사자에게 남긴다.
+ *
+ * 화면과 라우트는 지우지 않는다. 1.1에서 verify·claim·profiles 파생까지 묶어 제대로 연다.
+ */
+const SHOW_BUSINESS = false;
+
 export default function SettingsScreen() {
   const p = usePalette();
   const router = useRouter();
   const { settings, updateSettings, businessRegs, session, account, availableProfiles, switchProfile, logout } =
     useAppStore();
   const regCount = Object.keys(businessRegs).length;
-  const hasOwnerProfile = availableProfiles.includes('owner');
+  const hasOwnerProfile = SHOW_BUSINESS && availableProfiles.includes('owner');
   const [cacheCleared, setCacheCleared] = useState(false);
   /**
    * 되돌릴 수 없는 동작 앞에 한 번 묻는다.
@@ -113,6 +129,7 @@ export default function SettingsScreen() {
       </Group>
 
       {/* 사업자 (앱 특화) */}
+      {SHOW_BUSINESS && (
       <Group title="사업자" caption="반갑꼬리 전용">
         <Row
           icon="storefront-outline"
@@ -130,6 +147,7 @@ export default function SettingsScreen() {
           last
         />
       </Group>
+      )}
 
       {/* 글씨 크기 — 앱 전체 텍스트에 같은 배율로 걸린다 */}
       <Group title="화면" caption="반갑꼬리 전용">
