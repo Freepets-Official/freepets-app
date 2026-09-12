@@ -481,7 +481,11 @@ interface AppStore {
   /** (소셜 데모용) 세션만 설정 — 프로필이 하나면 자동 진입, 둘이면 프로필 선택으로 */
   login: (email: string) => void;
   /** 백엔드 로그인 성공 시 — 토큰 저장 + 세션 설정 */
-  authenticate: (email: string, tokens: { accessToken: string; refreshToken: string }) => void;
+  /** 로그인 성공. `userId`는 서버가 주기 시작하면 함께 들어온다(지금은 재발급 응답에만 있다). */
+  authenticate: (
+    email: string,
+    tokens: { accessToken: string; refreshToken: string; userId?: number },
+  ) => void;
   /** 현재 액세스 토큰(인증 헤더용). 미로그인이면 null */
   accessToken: string | null;
   logout: () => void;
@@ -1537,6 +1541,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       try {
         const me = await accountApi.get();
         if (stale()) return;
+        if (typeof me.userId === 'number') setMyUserId(me.userId);
         /**
          * 조회가 401을 거쳐 **재발급으로 성공**했을 수 있다. 그때는 api 레이어가 이미
          * 새 토큰을 들고 있는데, 여기서 `saved.accessToken`을 다시 넣으면 스토어만
@@ -1572,7 +1577,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const authenticate = useCallback(
-    (email: string, tokens: { accessToken: string; refreshToken: string }) => {
+    (email: string, tokens: { accessToken: string; refreshToken: string; userId?: number }) => {
       // 진행 중인 복원이 이 로그인을 덮어쓰지 않도록 세대를 올린다
       bumpSessionEpoch();
       refreshedRef.current = null;
@@ -1582,6 +1587,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setAccessToken(tokens.accessToken);
       setAuthToken(tokens.accessToken); // 보호 API 호출에 쓰이도록 api 레이어에도 넣는다
       setRefreshToken(tokens.refreshToken);
+      if (typeof tokens.userId === 'number') setMyUserId(tokens.userId);
       refreshTokenRef.current = tokens.refreshToken;
       setSession({
         authed: true,
@@ -1787,7 +1793,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     accountApi
       .get()
       .then((a) => {
-        if (alive) setAccount({ nickname: a.nickname, avatarUri: a.avatarUri });
+        if (!alive) return;
+        setAccount({ nickname: a.nickname, avatarUri: a.avatarUri });
+        // 서버가 userId를 주기 시작하면 그때부터 내 글 판정이 기기 기록 없이도 정확해진다.
+        if (typeof a.userId === 'number') setMyUserId(a.userId);
       })
       .catch(() => {});
     return () => {
