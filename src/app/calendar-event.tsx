@@ -168,7 +168,14 @@ export default function CalendarEventScreen() {
             <Ionicons name="notifications-outline" size={18} color={p.accent} />
             <View style={{ flex: 1 }}>
               <Text style={[styles.reminderLabel, { color: p.ink }]}>알림 받기</Text>
-              <Text style={[styles.reminderSub, { color: p.muted }]}>일정 시간에 맞춰 알려드려요</Text>
+              {/*
+                기기 알림 예약은 아직 없다. reminder 값은 저장만 되고 실제로 울리지 않는다.
+                "알려드려요"라고 쓰면 오지 않는 알림을 약속하는 셈이라, 지금 하는 일만 적는다.
+                일정 서버 연동과 함께 실제 예약을 붙이면 문구를 되돌린다.
+              */}
+              <Text style={[styles.reminderSub, { color: p.muted }]}>
+                일정에 알림 표시를 남겨둬요
+              </Text>
             </View>
             <Switch value={reminder} onValueChange={setReminder} trackColor={{ true: p.accent }} thumbColor="#FFFFFF" />
           </View>

@@ -44,12 +44,22 @@ export default function ProfileEditScreen() {
     }
   };
 
-  const save = () => {
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
     const nick = nickname.trim();
     // 서버 제약: 닉네임 2~20자 (PATCH에 매번 필수)
     if (nick.length < 2 || nick.length > 20) return setError('닉네임은 2~20자로 입력해 주세요');
-    updateAccount({ nickname: nick, avatarUri });
-    router.back();
+    setSaving(true);
+    setError(null);
+    try {
+      await updateAccount({ nickname: nick, avatarUri });
+      router.back();
+    } catch (e) {
+      // 실패했는데 화면을 닫으면 저장된 줄 안다. 남아서 다시 시도하게 한다.
+      setError(e instanceof Error ? e.message : '프로필을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const initial = nickname.trim()[0] ?? '나';
@@ -106,9 +116,15 @@ export default function ProfileEditScreen() {
         {error && <Text style={[styles.error, { color: p.danger }]}>{error}</Text>}
 
         <Pressable
-          onPress={save}
-          style={({ pressed }) => [styles.save, { backgroundColor: pressed ? p.accentDark : p.accent }]}>
-          <Text style={[styles.saveText, { color: p.onAccent }]}>저장하기</Text>
+          onPress={() => void save()}
+          disabled={saving}
+          style={({ pressed }) => [
+            styles.save,
+            { backgroundColor: pressed || saving ? p.accentDark : p.accent },
+          ]}>
+          <Text style={[styles.saveText, { color: p.onAccent }]}>
+            {saving ? '저장하는 중…' : '저장하기'}
+          </Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>

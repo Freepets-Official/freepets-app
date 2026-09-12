@@ -454,7 +454,8 @@ interface AppStore {
 
   /** 계정 프로필 (닉네임·아바타) */
   account: Account;
-  updateAccount: (patch: Partial<Account>) => void;
+  /** 프로필 수정. 서버가 실패하면 화면을 되돌리고 **던진다** — 호출한 쪽이 안내해야 한다. */
+  updateAccount: (patch: Partial<Account>) => Promise<void>;
 
   /** 로그인 세션 (계정 하나 + 활성 프로필) */
   session: Session;
@@ -1558,14 +1559,25 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, [session.authed]);
 
   // 수정: 낙관적으로 로컬 반영 후 서버 PATCH. 서버가 준 최종값(아바타 URL 등)으로 다시 맞춘다.
-  const updateAccount = useCallback((patch: Partial<Account>) => {
+  /**
+   * 프로필 수정. **실패를 삼키지 않는다.**
+   *
+   * 예전에는 화면에 먼저 반영하고 서버 실패를 조용히 버렸다. 네트워크가 끊긴 채 저장하면
+   * 바뀐 것처럼 보이고 화면이 닫히는데, 다음 조회에서 옛 정보로 돌아왔다. 실패하면 화면을
+   * 되돌리고 오류를 던져, 호출한 쪽이 사용자에게 알리고 화면을 닫지 않게 한다.
+   */
+  const updateAccount = useCallback(async (patch: Partial<Account>) => {
+    const before = accountRef.current;
+    const nickname = patch.nickname ?? before.nickname;
+    const photoUri = patch.avatarUri ?? before.avatarUri;
     setAccount((prev) => ({ ...prev, ...patch }));
-    const nickname = patch.nickname ?? accountRef.current.nickname;
-    const photoUri = patch.avatarUri ?? accountRef.current.avatarUri;
-    accountApi
-      .update(nickname, photoUri)
-      .then((a) => setAccount({ nickname: a.nickname, avatarUri: a.avatarUri }))
-      .catch(() => {});
+    try {
+      const a = await accountApi.update(nickname, photoUri);
+      setAccount({ nickname: a.nickname, avatarUri: a.avatarUri });
+    } catch (e) {
+      setAccount(before);
+      throw e;
+    }
   }, []);
 
   // 지운 판별 이력을 기기에서 복원한다. 실패해도 목록이 전부 보일 뿐 앱을 막지 않는다.
