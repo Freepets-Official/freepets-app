@@ -56,7 +56,6 @@ export default function SettingsScreen() {
     useAppStore();
   const regCount = Object.keys(businessRegs).length;
   const hasOwnerProfile = SHOW_BUSINESS && availableProfiles.includes('owner');
-  const [cacheCleared, setCacheCleared] = useState(false);
   /**
    * 되돌릴 수 없는 동작 앞에 한 번 묻는다.
    *
@@ -228,27 +227,12 @@ export default function SettingsScreen() {
           value={settings.notifPush}
           onChange={(v) => updateSettings({ notifPush: v })}
         />
-        <ToggleRow
-          icon="megaphone-outline"
-          label="제보 반영·포인트 알림"
-          sub="내 제보가 반영되면 알려드려요"
-          value={settings.notifReport}
-          onChange={(v) => updateSettings({ notifReport: v })}
-        />
-        <ToggleRow
-          icon="location-outline"
-          label="주변 새 시설 알림"
-          sub="자주 가는 지역에 동반 가능 시설이 생기면"
-          value={settings.notifNearby}
-          onChange={(v) => updateSettings({ notifNearby: v })}
-        />
-        <ToggleRow
-          icon="gift-outline"
-          label="혜택·마케팅 알림"
-          value={settings.notifMarketing}
-          onChange={(v) => updateSettings({ notifMarketing: v })}
-          last
-        />
+        {/*
+          종류별 알림 토글(제보 반영·주변 새 시설·혜택)은 1.0에서 감춘다.
+          서버가 알림을 종류로 나눠 보내지 않아서, 켜고 꺼도 실제로 오는 알림이 바뀌지 않는다.
+          동작하지 않는 스위치를 보여주느니 전체 알림 토글 하나만 둔다.
+          서버가 종류를 구분하게 되면 되살린다.
+        */}
       </Group>
 
       {/* 보안 — 생체인증 지원 기기(네이티브)에서만 */}
@@ -284,14 +268,12 @@ export default function SettingsScreen() {
           label="개인정보 · 위치 권한"
           onPress={() => router.push({ pathname: '/policy', params: { tab: 'privacy' } })}
           chevron
-        />
-        <Row
-          icon="trash-outline"
-          label="캐시 삭제"
-          sub={cacheCleared ? '0MB · 삭제됨' : '12.4MB'}
-          onPress={() => setCacheCleared(true)}
           last
         />
+        {/*
+          「캐시 삭제」를 뺀다. 고정값 12.4MB를 0MB로 바꿔 보여주기만 했고 실제로 지우는
+          것이 없었다. 없는 숫자를 지웠다고 말하는 화면은 두지 않는다.
+        */}
       </Group>
 
       {/* 정보 */}

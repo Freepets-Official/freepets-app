@@ -298,11 +298,13 @@ export interface NewReview {
 
 interface AppStore {
   /** 내 사용자 id — 내가 쓴 리뷰 구분 등에 쓴다 */
-  myUserId: number;
+  /** 내 사용자 ID. 서버에서 받기 전에는 `null`이다 — 그때는 내 글 여부를 단정하지 않는다. */
+  myUserId: number | null;
   pets: Pet[];
-  addPet: (input: Omit<Pet, 'petId'>) => void;
-  removePet: (petId: number) => void;
-  updatePet: (petId: number, patch: Partial<Omit<Pet, 'petId'>>) => void;
+  /** 등록·수정·삭제는 서버가 실패하면 화면을 되돌리고 **던진다** — 호출한 쪽이 안내해야 한다. */
+  addPet: (input: Omit<Pet, 'petId'>) => Promise<void>;
+  removePet: (petId: number) => Promise<void>;
+  updatePet: (petId: number, patch: Partial<Omit<Pet, 'petId'>>) => Promise<void>;
 
   checks: PetCheck[];
   /** 선택한 여러 마리를 한 번에 판별한다 */
@@ -357,7 +359,8 @@ interface AppStore {
 
   /** (목 폴백용) 신고된 리뷰 id — 데모 시설에서 등급 산정 제외 표시에 쓴다 */
   reportedReviewIds: Set<number>;
-  reportReview: (reviewId: number, reason: ReviewReportReason, facilityId?: number) => void;
+  /** 리뷰 신고. 접수에 실패하면 **던진다** — 화면이 접수됐다고 말하면 안 된다. */
+  reportReview: (reviewId: number, reason: ReviewReportReason, facilityId?: number) => Promise<void>;
 
   /** 여권 도장 (게임 요소 1단계). 서버 API가 없어 기기에만 남는다 */
   stamps: Stamp[];
@@ -476,7 +479,16 @@ interface AppStore {
   switchProfile: () => void;
 }
 
-const MY_USER_ID = 1;
+/**
+ * 내 사용자 ID. **서버가 알려줄 때까지는 모른다(null).**
+ *
+ * 예전에는 1로 박아뒀다. 그래서 ID가 1이 아닌 사람은 자기 리뷰에 삭제 대신 신고가 뜨고,
+ * 사용자 1의 리뷰는 누구에게나 삭제 버튼이 보였다. 모를 때는 남의 리뷰에 삭제가 뜨지
+ * 않는 쪽(= 전부 신고)으로 둔다 — 틀린 추측보다 낫다.
+ *
+ * 지금은 `POST /auth/refresh` 응답에서만 받을 수 있다. 백엔드가 `GET /users/account`에
+ * `userId`를 넣어 주면 로그인 직후부터 알 수 있다(요청해 둠).
+ */
 const AppStoreContext = createContext<AppStore | null>(null);
 
 /**
@@ -510,6 +522,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [stampRegions, setStampRegions] = useState<Region[]>([]);
   // 반려동물별 좋아한 곳 TOP3 (홈) — 서버가 시설명·카테고리까지 계산해 내려준다
   const [topPlaces, setTopPlaces] = useState<Record<number, TopPlace[]>>({});
+  const [myUserId, setMyUserId] = useState<number | null>(null);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   /**
    * 저장된 설정을 읽기 전에는 기록하지 않는다. 불러오기 전에 저장하면 기본값이 덮어써서
@@ -636,31 +649,49 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     };
   }, [session.authed]);
 
-  // 등록: 낙관적으로 임시 id로 먼저 넣고, 서버가 준 진짜 petId로 교체. 실패하면 롤백.
-  const addPet = useCallback((input: Omit<Pet, 'petId'>) => {
+  /**
+   * 반려동물 등록·수정·삭제.
+   *
+   * 셋 다 **실패를 삼키지 않는다.** 예전에는 화면에 먼저 반영하고 서버 오류를 버려서,
+   * 오프라인에서 저장해도 폼이 닫히고 성공한 것처럼 보였다. 등록은 잠깐 나타났다
+   * 사라지고, 수정·삭제는 로컬 변경이 남아 다음 실행에 서버의 옛 정보가 돌아왔다.
+   * 화면에는 낙관적으로 먼저 반영하되, 실패하면 되돌리고 던진다.
+   */
+  const addPet = useCallback(async (input: Omit<Pet, 'petId'>) => {
     const tempId = -nextPetId.current++; // 음수 임시 id — 서버 양수 id와 충돌 방지
     setPets((prev) => [...prev, { ...input, petId: tempId }]);
-    petsApi
-      .create(input)
-      .then((r) => {
-        setPets((prev) => prev.map((p) => (p.petId === tempId ? { ...p, petId: r.petId } : p)));
-      })
-      .catch(() => {
-        setPets((prev) => prev.filter((p) => p.petId !== tempId));
-      });
+    try {
+      const r = await petsApi.create(input);
+      setPets((prev) => prev.map((p) => (p.petId === tempId ? { ...p, petId: r.petId } : p)));
+    } catch (e) {
+      setPets((prev) => prev.filter((p) => p.petId !== tempId));
+      throw e;
+    }
   }, []);
 
-  const removePet = useCallback((petId: number) => {
+  const removePet = useCallback(async (petId: number) => {
+    const before = petsRef.current;
     setPets((prev) => prev.filter((p) => p.petId !== petId));
-    if (petId > 0) petsApi.remove(petId).catch(() => {}); // 서버에 있는 것만 삭제 요청
+    if (petId <= 0) return; // 서버에 없는 임시 항목
+    try {
+      await petsApi.remove(petId);
+    } catch (e) {
+      setPets(before);
+      throw e;
+    }
   }, []);
 
-  const updatePet = useCallback((petId: number, patch: Partial<Omit<Pet, 'petId'>>) => {
+  const updatePet = useCallback(async (petId: number, patch: Partial<Omit<Pet, 'petId'>>) => {
+    const before = petsRef.current;
     setPets((prev) => prev.map((p) => (p.petId === petId ? { ...p, ...patch } : p)));
-    const existing = petsRef.current.find((p) => p.petId === petId);
-    if (existing && petId > 0) {
-      const { petId: _omit, ...full } = { ...existing, ...patch };
-      petsApi.update(petId, full).catch(() => {});
+    const existing = before.find((p) => p.petId === petId);
+    if (!existing || petId <= 0) return;
+    const { petId: _omit, ...full } = { ...existing, ...patch };
+    try {
+      await petsApi.update(petId, full);
+    } catch (e) {
+      setPets(before);
+      throw e;
     }
   }, []);
 
@@ -793,7 +824,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const myReviewFor = useCallback(
     (facilityId: number) =>
-      reviews.find((r) => r.facilityId === facilityId && r.userId === MY_USER_ID),
+      reviews.find((r) => r.facilityId === facilityId && myUserId != null && r.userId === myUserId),
     [reviews],
   );
 
@@ -820,9 +851,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [loadReviews],
   );
 
+  /** 리뷰 삭제. 실패를 삼키지 않는다 — 지워지지도 않았는데 지워진 것처럼 보이면 안 된다. */
   const removeReview = useCallback(
     async (reviewId: number, facilityId: number) => {
-      await reviewsApi.remove(reviewId).catch(() => {});
+      await reviewsApi.remove(reviewId);
       await loadReviews(facilityId);
     },
     [loadReviews],
@@ -923,7 +955,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (seen.has(c.facilityId)) continue;
       const report = recentDenialOf(c.facilityId);
       if (!report) continue;
-      const facility = FACILITIES.find((f) => f.facilityId === c.facilityId);
+      // 캐시(서버에서 받은 실제 시설) 우선. 목 배열만 보면 관광공사 시설의 거부 경고가
+      // 홈 종 배지와 알림 목록에서 통째로 빠진다 — 시설 상세에서는 보이는데 홈엔 안 떴다.
+      const facility =
+        facilityCache.current.get(c.facilityId) ?? FACILITIES.find((f) => f.facilityId === c.facilityId);
       if (!facility) continue;
       seen.add(c.facilityId);
       out.push({ facility, report });
@@ -940,14 +975,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [reports, serverDenials],
   );
 
+  /**
+   * 리뷰 신고. **접수를 확인한 뒤에 화면을 바꾼다.**
+   *
+   * 예전에는 먼저 신고한 것으로 표시하고 요청 실패를 삼켰다. 네트워크가 끊겨 있어도
+   * "신고 접수 · 등급 산정 제외"로 바뀌고 다시 신고할 버튼도 사라져, 접수되지 않은
+   * 신고를 접수됐다고 말했다. 목록 새로고침도 신고가 끝나기 전에 나갔다.
+   * (서버는 신고해도 바로 제외하지 않고 관리자 승인 후 등급에서 뺀다 — docs/04 4-2)
+   */
   const reportReview = useCallback(
-    (reviewId: number, reason: ReviewReportReason, facilityId?: number) => {
-      // 목 폴백(데모) 시설은 로컬로 즉시 등급 산정 제외 표시.
+    async (reviewId: number, reason: ReviewReportReason, facilityId?: number) => {
+      await reviewsApi.report(reviewId, reason);
       setReportedReviewIds((prev) => new Set(prev).add(reviewId));
-      // 실서버: 신고 접수 후 목록을 새로고침해 reportedByMe를 반영한다.
-      // (서버는 신고해도 바로 제외하지 않고 관리자 승인 후 등급에서 뺀다 — docs/04 4-2)
-      reviewsApi.report(reviewId, reason).catch(() => {});
-      if (facilityId !== undefined) loadReviews(facilityId);
+      if (facilityId !== undefined) await loadReviews(facilityId);
     },
     [loadReviews],
   );
@@ -1419,6 +1459,40 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /**
+   * 계정에 딸린 상태를 전부 비운다.
+   *
+   * 로그아웃과 세션 만료가 같은 정리를 해야 한다. 만료 뒤에 반드시 같은 사람이 다시
+   * 로그인한다는 보장이 없는데, 예전에는 만료가 토큰만 지워서 A의 일정·도장·만족도가
+   * B 화면에 그대로 남았다.
+   *
+   * 설정(화면 모드·글씨 크기·앱 잠금)은 기기에 속한 값이라 남긴다.
+   */
+  const clearAccountState = useCallback(() => {
+    // 예약된 만족도 전송을 취소한다. 두면 600ms 뒤 이전 계정의 기록이 새 토큰으로 나간다.
+    for (const t of satTimers.current.values()) clearTimeout(t);
+    satTimers.current.clear();
+    setMyUserId(null);
+    setPets([]);
+    setChecks([]);
+    setHiddenCheckIds([]);
+    setReports([]);
+    setReviews([]);
+    setReviewData({});
+    setReviewErrors(new Set());
+    setReportedReviewIds(new Set());
+    setServerDenials({});
+    setCalendarEvents([]);
+    setMedLog(new Set());
+    setSatisfactions([]);
+    setBusinessRegs({});
+    setUserConfirmedIds(new Set());
+    setPendingCallConfirm(null);
+    setAccount({ nickname: '나', avatarUri: null });
+    setStamps([]);
+    void clearStamps();
+  }, []);
+
+  /**
    * 세션 만료 — 401을 받았을 때 부른다.
    *
    * 로그아웃과 **도장 처리가 다르다.** 로그아웃은 기기를 남에게 넘길 수 있다고 보고
@@ -1437,7 +1511,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
     void clearSession();
-  }, []);
+    clearAccountState();
+  }, [clearAccountState]);
 
   // request가 401을 만나면 이 함수를 부른다. api.ts는 React에 기대지 않으므로 등록으로 잇는다.
   useEffect(() => {
@@ -1452,8 +1527,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 복원을 시도하다 로그아웃된다.
    */
   useEffect(() => {
-    setTokensRefreshedHandler(({ accessToken, refreshToken }) => {
+    setTokensRefreshedHandler(({ accessToken, refreshToken, userId }) => {
       refreshedRef.current = { accessToken, refreshToken };
+      if (typeof userId === 'number') setMyUserId(userId);
       setAccessToken(accessToken);
       refreshTokenRef.current = refreshToken;
       /**
@@ -1469,19 +1545,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => setTokensRefreshedHandler(null);
   }, []);
 
-  const logout = useCallback(() => {
-    /**
-     * 푸시 해제를 **토큰을 지우기 전에** 부른다.
-     *
-     * 이 API는 인증이 필요한데 예전에는 setAuthToken(null) 뒤에 불러서, 운영 빌드에서는
-     * Authorization 없이 나가고 실패도 무시됐다. 그러면 서버에 등록이 남아 로그아웃한
-     * 계정의 알림이 이 기기로 계속 온다.
-     */
-    const pushed = pushTokenRef.current;
-    if (pushed) {
-      pushTokenRef.current = null;
-      void pushApi.unregister(pushed).catch(() => {});
-    }
+  const finishLogout = useCallback(() => {
     bumpSessionEpoch();
     refreshedRef.current = null;
     restoredEmailRef.current = null;
@@ -1493,32 +1557,35 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
     void clearSession(); // 남겨두면 다음 실행에 로그아웃한 계정으로 되살아난다
-    // 도장은 서버가 아니라 기기에 있어 계정과 묶여 있지 않다. 안 지우면 다음에 로그인한
-    // 사람에게 앞사람의 도장첩·뱃지가 그대로 보인다. 대신 같은 사람이 다시 로그인해도
-    // 도장은 돌아오지 않는다 — 2단계에서 서버로 옮기면 해소된다.
-    setStamps([]);
-    void clearStamps();
+    // 도장도 여기서 함께 지운다. 기기에 있어 계정과 묶여 있지 않아서, 안 지우면 다음에
+    // 로그인한 사람에게 앞사람의 도장첩·뱃지가 그대로 보인다.
+    clearAccountState();
+  }, [clearAccountState]);
 
-    /**
-     * 계정에 딸린 상태를 전부 비운다.
-     *
-     * 예전에는 도장만 지웠다. 그래서 A로 일정을 만들고 로그아웃한 뒤 B로 들어가면 A의
-     * 일정이 그대로 보였고, B의 조회가 실패하면 A의 반려동물·닉네임까지 남았다.
-     * 남의 계정 화면에 내 데이터가 보이는 것은 기능 문제가 아니라 사고다.
-     *
-     * 설정(화면 모드·글씨 크기·앱 잠금)은 기기에 속한 값이라 남긴다.
-     */
-    setPets([]);
-    setChecks([]);
-    setHiddenCheckIds([]);
-    setReports([]);
-    setReviews([]);
-    setCalendarEvents([]);
-    setMedLog(new Set());
-    setSatisfactions([]);
-    setBusinessRegs({});
-    setAccount({ nickname: '나', avatarUri: null });
-  }, []);
+  /**
+   * 푸시 해제에 허용하는 시간.
+   *
+   * 해제는 **세션을 정리하기 전에** 끝나야 한다. 인증이 필요한 요청이라 토큰을 먼저
+   * 지우면 401을 받아도 재발급할 수단이 없어 영영 실패하고, 로그아웃한 계정의 등록이
+   * 서버에 남는다. 그렇다고 무한정 기다리면 네트워크가 느릴 때 로그아웃이 멈춘 것처럼
+   * 보이므로 짧게 끊고 진행한다. 못 지운 토큰은 서버의 무효 토큰 정리가 걷어간다.
+   */
+  const PUSH_UNREGISTER_WAIT_MS = 3000;
+
+  const logout = useCallback(() => {
+    // 등록이 아직 진행 중일 수도 있다. 그 토큰까지 함께 해제한다.
+    const pushed = pushTokenRef.current ?? pushPendingRef.current;
+    pushTokenRef.current = null;
+    pushPendingRef.current = null;
+    if (!pushed) {
+      finishLogout();
+      return;
+    }
+    void Promise.race([
+      pushApi.unregister(pushed).catch(() => {}),
+      new Promise((resolve) => setTimeout(resolve, PUSH_UNREGISTER_WAIT_MS)),
+    ]).then(finishLogout);
+  }, [finishLogout]);
 
   const selectProfile = useCallback((kind: ProfileKind) => {
     setSession((s) => ({ ...s, activeProfile: kind }));
@@ -1683,6 +1750,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 값을 들고 있는다.
    */
   const pushTokenRef = useRef<string | null>(null);
+  /**
+   * 등록이 끝나기 전에 OFF·로그아웃이 오면 `pushTokenRef`가 아직 비어 있어 해제를
+   * 건너뛰었고, 뒤늦게 끝난 등록만 서버에 남았다. 등록을 시작하는 순간 토큰을 기록해
+   * 그 사이에 들어온 해제가 이 토큰도 지우게 한다.
+   */
+  const pushPendingRef = useRef<string | null>(null);
   useEffect(() => {
     if (!accessToken || !settingsLoaded) return;
     let alive = true;
@@ -1695,20 +1768,35 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
        * 문서와 동작이 어긋나 있었다.
        */
       if (!settings.notifPush) {
-        const registered = pushTokenRef.current;
+        const registered = pushTokenRef.current ?? pushPendingRef.current;
         if (registered) {
-          pushTokenRef.current = null;
-          await pushApi.unregister(registered).catch(() => {});
+          // 해제가 성공해야 참조를 버린다. 먼저 지우면 실패했을 때 다시 시도할 정보가 없다.
+          const ok = await pushApi
+            .unregister(registered)
+            .then(() => true)
+            .catch(() => false);
+          if (ok) {
+            pushTokenRef.current = null;
+            pushPendingRef.current = null;
+          }
         }
         return;
       }
       const token = await getFcmToken();
       if (!alive || !token) return;
+      pushPendingRef.current = token;
       try {
         await pushApi.register(token, Platform.OS === 'ios' ? 'IOS' : 'ANDROID');
+        // 등록이 도는 사이 화면을 벗어났거나 알림이 꺼졌으면 바로 되돌린다.
+        if (!alive || !settings.notifPush) {
+          await pushApi.unregister(token).catch(() => {});
+          pushPendingRef.current = null;
+          return;
+        }
         pushTokenRef.current = token;
       } catch {
         // 등록 실패는 알림이 안 오는 것으로 끝난다. 로그인·사용을 막지 않는다.
+        pushPendingRef.current = null;
       }
     })();
     return () => {
@@ -1780,7 +1868,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
-      myUserId: MY_USER_ID,
+      myUserId,
       pets,
       addPet,
       removePet,

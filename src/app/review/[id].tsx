@@ -33,7 +33,14 @@ export default function ReviewWriteScreen() {
   const [tags, setTags] = useState<ReviewTag[]>([]);
   const [content, setContent] = useState('');
   const [petIds, setPetIds] = useState<number[]>(defaultPetIds);
-  const [showPetInfo, setShowPetInfo] = useState(true);
+  /**
+   * 반려동물 품종·몸무게 공개는 **기본 꺼짐**이다.
+   *
+   * 개인정보처리방침에 "이용자의 선택(옵트인)에 따라만 표시된다"고 적어놨는데 기본값이
+   * 켜져 있었다. 스위치를 건드리지 않고 제출하면 본 적 없는 정보가 공개되므로,
+   * 문서와 동작이 어긋날 뿐 아니라 옵트인이라고 부를 수도 없다.
+   */
+  const [showPetInfo, setShowPetInfo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 

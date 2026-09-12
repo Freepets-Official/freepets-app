@@ -314,10 +314,13 @@ export default function CourseScreen() {
    * 다른 요청이므로, 늦게 도착한 옛 응답이 새 입력의 결과인 것처럼 덮어쓰면 안 된다.
    * 방문 순서가 결과를 바꾸므로 facilityIds는 정렬하지 않는다.
    */
+  /** 빌더로 만든 코스의 판별 결과를 구분하는 키. 추천 코스(preset·liked·similar)와 섞이면 안 된다. */
+  const BUILDER_KEY = 'builder';
+
   const checkSignature = (key: string, facilityIds: number[]) =>
     `${key}|${[...selectedPetIds].sort((a, b) => a - b).join(',')}|${facilityIds.join(',')}`;
 
-  const runCourseCheck = async (key: string, stops: CourseStop[]) => {
+  const runCourseCheck = async (key: string, stops: Pick<CourseStop, 'facilityId'>[]) => {
     if (selectedPetIds.length === 0 || stops.length === 0) return;
     // 배열 순서가 곧 방문 순서다. 서버는 1~10개만 받는다.
     const facilityIds = stops.slice(0, 10).map((st) => st.facilityId);
@@ -351,7 +354,6 @@ export default function CourseScreen() {
       setCourseCheckKey((cur) => (cur === sig ? null : cur));
     }
   };
-  const [validated, setValidated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [picking, setPicking] = useState(false);
 
@@ -553,21 +555,18 @@ export default function CourseScreen() {
     [chosenPets, satisfactions],
   );
 
-  const result = useMemo(
-    () => (validated ? validateCourse(stopIds, chosenPets) : null),
-    [validated, stopIds, chosenPets],
-  );
+  /** 빌더 코스의 판별 요청 키. 스톱·아이가 바뀌면 이전 결과는 더 이상 이 코스의 답이 아니다. */
+  const builderSig = checkSignature(BUILDER_KEY, stopIds.slice(0, 10));
+  const builderRunning = courseCheckKey === builderSig;
 
   const togglePet = (petId: number) => {
     setSelectedPetIds((prev) =>
       prev.includes(petId) ? prev.filter((x) => x !== petId) : [...prev, petId],
     );
-    setValidated(false);
   };
 
   const loadCourse = (course: Course) => {
     setStopIds(course.stopIds);
-    setValidated(false);
     setPicking(false);
   };
 
@@ -588,18 +587,15 @@ export default function CourseScreen() {
       setOpeningCourseId(null);
     }
     setStopIds(course.stopIds);
-    setValidated(false);
     setPicking(false);
   };
 
   const addStop = (facilityId: number) => {
     setStopIds((prev) => (prev.includes(facilityId) ? prev : [...prev, facilityId]));
-    setValidated(false);
   };
 
   const removeStop = (facilityId: number) => {
     setStopIds((prev) => prev.filter((x) => x !== facilityId));
-    setValidated(false);
   };
 
   const moveStop = (index: number, dir: -1 | 1) => {
@@ -610,22 +606,26 @@ export default function CourseScreen() {
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
-    setValidated(false);
   };
 
   const swapToAlternative = (fromId: number, toId: number) => {
     setStopIds((prev) => prev.map((x) => (x === fromId ? toId : x)));
-    setValidated(false);
   };
 
-  const runValidation = () => {
-    if (stopIds.length === 0 || chosenPets.length === 0 || loading) return;
-    setLoading(true);
-    // 데모: 코스 전체를 AI로 검증하는 지연을 흉내. 실제 연동 시 POST /api/v1/ai/course-check.
-    setTimeout(() => {
-      setValidated(true);
-      setLoading(false);
-    }, 900);
+  /**
+   * 직접 만든 코스를 **서버로 판별한다.**
+   *
+   * 예전에는 900ms 타이머를 돌린 뒤 로컬 `validateCourse()`로 결과를 만들었다. 그 함수는
+   * 목 시설 배열에서만 시설을 찾으므로, 빌더가 실제 관광공사 시설을 담게 된 뒤로는
+   * 결과가 빈 배열이 됐다 — 로딩이 끝나도 아무것도 안 나왔다.
+   * 추천 코스가 쓰는 것과 같은 `POST /ai/course-check`를 쓴다.
+   */
+  const runValidation = async () => {
+    if (stopIds.length === 0 || chosenPets.length === 0) return;
+    await runCourseCheck(
+      BUILDER_KEY,
+      stopFacilities.map((f) => ({ facilityId: f.facilityId })),
+    );
   };
 
   // 스토어 캐시에서 찾는다 — 서버 시설과 목 시설을 모두 아는 건 여기뿐이다
@@ -1021,13 +1021,16 @@ export default function CourseScreen() {
             <View style={styles.builder}>
               <View style={styles.builderHead}>
                 <Text style={[styles.blockLabel, { color: p.ink }]}>내 코스 · {stopFacilities.length}곳</Text>
-                <Pressable onPress={() => { setStopIds([]); setValidated(false); }}>
+                <Pressable onPress={() => { setStopIds([]); setCourseCheck(null); setCourseCheckError(null); }}>
                   <Text style={[styles.clear, { color: p.muted }]}>비우기</Text>
                 </Pressable>
               </View>
 
               {stopFacilities.map((f, i) => {
-                const stopResult = result?.stops.find((s) => s.facility.facilityId === f.facilityId);
+                const stopResult =
+                  courseCheck?.key === builderSig
+                    ? courseCheck.result.stops.find((st) => st.facility.facilityId === f.facilityId)
+                    : undefined;
                 return (
                   <View key={f.facilityId} style={[styles.stopRow, { borderColor: p.line }]}>
                     <View style={styles.stopOrder}>
@@ -1049,7 +1052,7 @@ export default function CourseScreen() {
                         <Text style={[styles.stopCat, { color: p.accent }]}>
                           {CATEGORY_LABEL[f.category]}
                         </Text>
-                        {stopResult && <ResultBadge result={stopResult.group.overall} />}
+                        {stopResult && <ResultBadge result={stopResult.overall} />}
                       </View>
                       <Text style={[styles.stopName, { color: p.ink }]}>{f.name}</Text>
                       <Text style={[styles.stopMeta, { color: p.muted }]}>
@@ -1147,13 +1150,16 @@ export default function CourseScreen() {
           {/* 판별 버튼 */}
           {stopFacilities.length > 0 && (
             <Pressable
-              onPress={runValidation}
-              disabled={loading || chosenPets.length === 0}
+              onPress={() => void runValidation()}
+              disabled={builderRunning || chosenPets.length === 0}
               style={({ pressed }) => [
                 styles.checkBtn,
-                { backgroundColor: chosenPets.length === 0 ? p.line : pressed || loading ? p.accentDark : p.accent },
+                {
+                  backgroundColor:
+                    chosenPets.length === 0 ? p.line : pressed || builderRunning ? p.accentDark : p.accent,
+                },
               ]}>
-              {loading ? (
+              {builderRunning ? (
                 <>
                   <ActivityIndicator color={p.onAccent} size="small" />
                   <Text style={[styles.checkLabel, { color: p.onAccent }]}>코스 전체를 판별하고 있어요…</Text>
@@ -1167,13 +1173,12 @@ export default function CourseScreen() {
             </Pressable>
           )}
 
-          {/* 판별 결과 요약 + 대체 제안 */}
-          {result && result.stops.length > 0 && (
-            <CourseResultView
-              result={result}
-              petCount={chosenPets.length}
-              onSwap={swapToAlternative}
-            />
+          {/* 판별 결과 — 추천 코스와 같은 서버 응답을 같은 패널로 그린다 */}
+          {courseCheck?.key === checkSignature(BUILDER_KEY, stopIds.slice(0, 10)) && (
+            <CourseCheckPanel result={courseCheck.result} />
+          )}
+          {courseCheckError?.key === checkSignature(BUILDER_KEY, stopIds.slice(0, 10)) && (
+            <Text style={[styles.courseCheckError, { color: p.muted }]}>{courseCheckError.message}</Text>
           )}
         </View>
       </ScrollView>
