@@ -263,6 +263,11 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
    * 뒤 B로 로그인하면 뒤늦은 A의 401이 B 토큰으로 재발급·재전송을 일으켰다.
    * 성공 응답도 세대를 안 봐서 옛 세션의 결과가 새 화면에 반영될 수 있었다.
    */
+  /**
+   * 애초에 토큰이 있었는가. 없었다면 그 401은 "세션 만료"가 아니라 "아직 로그인 전"이다.
+   */
+  const hadToken = !opts.auth || currentToken() != null;
+
   const startEpoch = sessionEpoch;
   // 타이머는 본문을 다 읽은 뒤에 끈다. 예외로 빠져나가는 경로에서도 반드시 꺼야 해서
   // 여기부터 함수 끝까지 try/finally로 감싼다.
@@ -282,6 +287,16 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
      * 재시도는 한 번만 한다 — 새 토큰으로도 401이면 토큰 문제가 아니다.
      */
     if (opts.auth && res.status === 401) {
+      /**
+       * 토큰이 없었으면 재발급도, 만료 처리도 의미가 없다.
+       *
+       * 끊을 세션이 없는데 로그아웃이 돌면, 앱이 뜨자마자 나가는 조회 하나가
+       * 저장된 세션을 지우고 복원까지 무효화한다. 그냥 오류로만 돌려준다.
+       */
+      if (!hadToken) {
+        throw new ApiError('로그인이 필요해요.', 'NO_SESSION', 401);
+      }
+
       const outcome = await refreshOnce(startEpoch);
 
       // 기다리는 사이 로그아웃·재로그인이 있었다면 이 응답은 남의 세션 것이다.
