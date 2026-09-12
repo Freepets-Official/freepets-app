@@ -62,6 +62,7 @@ export default function PetsScreen() {
   const [nextVaccinationDate, setNextVaccinationDate] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const pickPhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -161,10 +162,18 @@ export default function PetsScreen() {
       nextVaccinationDate: nextInput || null,
       photoUri,
     };
-    if (editingId !== null) updatePet(editingId, payload);
-    else addPet(payload);
-    resetForm();
-    setFormOpen(false);
+    // 서버 저장이 끝나야 폼을 닫는다. 실패했는데 닫으면 저장된 줄 안다.
+    setSaving(true);
+    setError(null);
+    void (editingId !== null ? updatePet(editingId, payload) : addPet(payload))
+      .then(() => {
+        resetForm();
+        setFormOpen(false);
+      })
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'),
+      )
+      .finally(() => setSaving(false));
   };
 
   // 편집 폼 — 편집 시엔 해당 카드 자리에서, 신규 등록 시엔 목록 아래에서 같은 폼을 쓴다
@@ -306,12 +315,13 @@ export default function PetsScreen() {
         </Pressable>
         <Pressable
           onPress={submit}
+          disabled={saving}
           style={({ pressed }) => [
             styles.button,
-            { backgroundColor: pressed ? p.accentDark : p.accent },
+            { backgroundColor: pressed || saving ? p.accentDark : p.accent },
           ]}>
           <Text style={[styles.buttonLabel, { color: p.onAccent }]}>
-            {editingId !== null ? '수정 완료' : '등록'}
+            {saving ? '저장하는 중…' : editingId !== null ? '수정 완료' : '등록'}
           </Text>
         </Pressable>
       </View>
@@ -394,7 +404,10 @@ export default function PetsScreen() {
             <Pressable
               onPress={(e) => {
                 e.stopPropagation();
-                removePet(pet.petId);
+                setError(null);
+                void removePet(pet.petId).catch((err) =>
+                  setError(err instanceof Error ? err.message : '삭제하지 못했어요'),
+                );
               }}
               hitSlop={10}
               style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>

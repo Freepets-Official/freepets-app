@@ -301,9 +301,10 @@ interface AppStore {
   /** 내 사용자 ID. 서버에서 받기 전에는 `null`이다 — 그때는 내 글 여부를 단정하지 않는다. */
   myUserId: number | null;
   pets: Pet[];
-  addPet: (input: Omit<Pet, 'petId'>) => void;
-  removePet: (petId: number) => void;
-  updatePet: (petId: number, patch: Partial<Omit<Pet, 'petId'>>) => void;
+  /** 등록·수정·삭제는 서버가 실패하면 화면을 되돌리고 **던진다** — 호출한 쪽이 안내해야 한다. */
+  addPet: (input: Omit<Pet, 'petId'>) => Promise<void>;
+  removePet: (petId: number) => Promise<void>;
+  updatePet: (petId: number, patch: Partial<Omit<Pet, 'petId'>>) => Promise<void>;
 
   checks: PetCheck[];
   /** 선택한 여러 마리를 한 번에 판별한다 */
@@ -358,7 +359,8 @@ interface AppStore {
 
   /** (목 폴백용) 신고된 리뷰 id — 데모 시설에서 등급 산정 제외 표시에 쓴다 */
   reportedReviewIds: Set<number>;
-  reportReview: (reviewId: number, reason: ReviewReportReason, facilityId?: number) => void;
+  /** 리뷰 신고. 접수에 실패하면 **던진다** — 화면이 접수됐다고 말하면 안 된다. */
+  reportReview: (reviewId: number, reason: ReviewReportReason, facilityId?: number) => Promise<void>;
 
   /** 여권 도장 (게임 요소 1단계). 서버 API가 없어 기기에만 남는다 */
   stamps: Stamp[];
@@ -647,31 +649,49 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     };
   }, [session.authed]);
 
-  // 등록: 낙관적으로 임시 id로 먼저 넣고, 서버가 준 진짜 petId로 교체. 실패하면 롤백.
-  const addPet = useCallback((input: Omit<Pet, 'petId'>) => {
+  /**
+   * 반려동물 등록·수정·삭제.
+   *
+   * 셋 다 **실패를 삼키지 않는다.** 예전에는 화면에 먼저 반영하고 서버 오류를 버려서,
+   * 오프라인에서 저장해도 폼이 닫히고 성공한 것처럼 보였다. 등록은 잠깐 나타났다
+   * 사라지고, 수정·삭제는 로컬 변경이 남아 다음 실행에 서버의 옛 정보가 돌아왔다.
+   * 화면에는 낙관적으로 먼저 반영하되, 실패하면 되돌리고 던진다.
+   */
+  const addPet = useCallback(async (input: Omit<Pet, 'petId'>) => {
     const tempId = -nextPetId.current++; // 음수 임시 id — 서버 양수 id와 충돌 방지
     setPets((prev) => [...prev, { ...input, petId: tempId }]);
-    petsApi
-      .create(input)
-      .then((r) => {
-        setPets((prev) => prev.map((p) => (p.petId === tempId ? { ...p, petId: r.petId } : p)));
-      })
-      .catch(() => {
-        setPets((prev) => prev.filter((p) => p.petId !== tempId));
-      });
+    try {
+      const r = await petsApi.create(input);
+      setPets((prev) => prev.map((p) => (p.petId === tempId ? { ...p, petId: r.petId } : p)));
+    } catch (e) {
+      setPets((prev) => prev.filter((p) => p.petId !== tempId));
+      throw e;
+    }
   }, []);
 
-  const removePet = useCallback((petId: number) => {
+  const removePet = useCallback(async (petId: number) => {
+    const before = petsRef.current;
     setPets((prev) => prev.filter((p) => p.petId !== petId));
-    if (petId > 0) petsApi.remove(petId).catch(() => {}); // 서버에 있는 것만 삭제 요청
+    if (petId <= 0) return; // 서버에 없는 임시 항목
+    try {
+      await petsApi.remove(petId);
+    } catch (e) {
+      setPets(before);
+      throw e;
+    }
   }, []);
 
-  const updatePet = useCallback((petId: number, patch: Partial<Omit<Pet, 'petId'>>) => {
+  const updatePet = useCallback(async (petId: number, patch: Partial<Omit<Pet, 'petId'>>) => {
+    const before = petsRef.current;
     setPets((prev) => prev.map((p) => (p.petId === petId ? { ...p, ...patch } : p)));
-    const existing = petsRef.current.find((p) => p.petId === petId);
-    if (existing && petId > 0) {
-      const { petId: _omit, ...full } = { ...existing, ...patch };
-      petsApi.update(petId, full).catch(() => {});
+    const existing = before.find((p) => p.petId === petId);
+    if (!existing || petId <= 0) return;
+    const { petId: _omit, ...full } = { ...existing, ...patch };
+    try {
+      await petsApi.update(petId, full);
+    } catch (e) {
+      setPets(before);
+      throw e;
     }
   }, []);
 
@@ -831,9 +851,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [loadReviews],
   );
 
+  /** 리뷰 삭제. 실패를 삼키지 않는다 — 지워지지도 않았는데 지워진 것처럼 보이면 안 된다. */
   const removeReview = useCallback(
     async (reviewId: number, facilityId: number) => {
-      await reviewsApi.remove(reviewId).catch(() => {});
+      await reviewsApi.remove(reviewId);
       await loadReviews(facilityId);
     },
     [loadReviews],
@@ -934,7 +955,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (seen.has(c.facilityId)) continue;
       const report = recentDenialOf(c.facilityId);
       if (!report) continue;
-      const facility = FACILITIES.find((f) => f.facilityId === c.facilityId);
+      // 캐시(서버에서 받은 실제 시설) 우선. 목 배열만 보면 관광공사 시설의 거부 경고가
+      // 홈 종 배지와 알림 목록에서 통째로 빠진다 — 시설 상세에서는 보이는데 홈엔 안 떴다.
+      const facility =
+        facilityCache.current.get(c.facilityId) ?? FACILITIES.find((f) => f.facilityId === c.facilityId);
       if (!facility) continue;
       seen.add(c.facilityId);
       out.push({ facility, report });
@@ -951,14 +975,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [reports, serverDenials],
   );
 
+  /**
+   * 리뷰 신고. **접수를 확인한 뒤에 화면을 바꾼다.**
+   *
+   * 예전에는 먼저 신고한 것으로 표시하고 요청 실패를 삼켰다. 네트워크가 끊겨 있어도
+   * "신고 접수 · 등급 산정 제외"로 바뀌고 다시 신고할 버튼도 사라져, 접수되지 않은
+   * 신고를 접수됐다고 말했다. 목록 새로고침도 신고가 끝나기 전에 나갔다.
+   * (서버는 신고해도 바로 제외하지 않고 관리자 승인 후 등급에서 뺀다 — docs/04 4-2)
+   */
   const reportReview = useCallback(
-    (reviewId: number, reason: ReviewReportReason, facilityId?: number) => {
-      // 목 폴백(데모) 시설은 로컬로 즉시 등급 산정 제외 표시.
+    async (reviewId: number, reason: ReviewReportReason, facilityId?: number) => {
+      await reviewsApi.report(reviewId, reason);
       setReportedReviewIds((prev) => new Set(prev).add(reviewId));
-      // 실서버: 신고 접수 후 목록을 새로고침해 reportedByMe를 반영한다.
-      // (서버는 신고해도 바로 제외하지 않고 관리자 승인 후 등급에서 뺀다 — docs/04 4-2)
-      reviewsApi.report(reviewId, reason).catch(() => {});
-      if (facilityId !== undefined) loadReviews(facilityId);
+      if (facilityId !== undefined) await loadReviews(facilityId);
     },
     [loadReviews],
   );
@@ -1439,6 +1468,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 설정(화면 모드·글씨 크기·앱 잠금)은 기기에 속한 값이라 남긴다.
    */
   const clearAccountState = useCallback(() => {
+    // 예약된 만족도 전송을 취소한다. 두면 600ms 뒤 이전 계정의 기록이 새 토큰으로 나간다.
+    for (const t of satTimers.current.values()) clearTimeout(t);
+    satTimers.current.clear();
     setMyUserId(null);
     setPets([]);
     setChecks([]);

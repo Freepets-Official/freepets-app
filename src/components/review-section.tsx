@@ -47,6 +47,7 @@ export function ReviewSection({
 }) {
   const p = usePalette();
   const { reportedReviewIds, reportReview, myUserId, removeReview } = useAppStore();
+  const [actionError, setActionError] = useState<string | null>(null);
   const [reportTarget, setReportTarget] = useState<Review | null>(null);
   const [detailTarget, setDetailTarget] = useState<Review | null>(null);
 
@@ -159,6 +160,11 @@ export function ReviewSection({
         </Text>
       </Pressable>
 
+      {/* 삭제·신고 실패는 조용히 넘기지 않는다 */}
+      {actionError && (
+        <Text style={[styles.actionError, { color: p.danger }]}>{actionError}</Text>
+      )}
+
       {written.slice(0, 3).map((r) => {
         const reported = r.reportedByMe ?? reportedReviewIds.has(r.reviewId);
         return (
@@ -204,7 +210,10 @@ export function ReviewSection({
                 <Pressable
                   onPress={(e) => {
                     e.stopPropagation();
-                    removeReview(r.reviewId, facilityId);
+                    setActionError(null);
+                    void removeReview(r.reviewId, facilityId).catch((err) =>
+                      setActionError(err instanceof Error ? err.message : '리뷰를 삭제하지 못했어요'),
+                    );
                   }}
                   hitSlop={8}>
                   <Text style={[styles.reportLink, { color: p.danger }]}>삭제</Text>
@@ -246,8 +255,14 @@ export function ReviewSection({
               <Pressable
                 key={reason}
                 onPress={() => {
-                  if (reportTarget) reportReview(reportTarget.reviewId, reason, facilityId);
+                  const target = reportTarget;
                   setReportTarget(null);
+                  setActionError(null);
+                  if (target) {
+                    void reportReview(target.reviewId, reason, facilityId).catch((err) =>
+                      setActionError(err instanceof Error ? err.message : '신고를 접수하지 못했어요'),
+                    );
+                  }
                 }}
                 style={({ pressed }) => [
                   styles.reasonRow,
@@ -380,6 +395,7 @@ const styles = StyleSheet.create({
   },
   visited: { fontSize: 11 },
   reportLink: { fontSize: 11, fontWeight: '700', textDecorationLine: 'underline' },
+  actionError: { fontSize: 12.5, lineHeight: 18, fontWeight: '600', paddingHorizontal: 2 },
   reportedMark: { fontSize: 11, fontWeight: '700' },
   backdrop: {
     flex: 1,

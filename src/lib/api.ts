@@ -229,9 +229,17 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
     }
     return h;
   };
+  /**
+   * 제한 시간은 **응답 본문까지** 건다.
+   *
+   * 예전에는 `fetch`가 헤더를 돌려주는 순간 타이머를 껐다. 헤더만 오고 본문 전송이 멈추면
+   * `res.json()`이 무제한으로 기다려, 15초를 걸어둔 의미가 없었다. 타이머는 아래
+   * try/finally에서 본문을 다 읽은 뒤에 끈다.
+   */
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), isForm ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS);
+
   const sendOnce = async (): Promise<Response> => {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), isForm ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS);
     try {
       return await fetch(`${API_URL}${path}`, {
         method,
@@ -247,8 +255,6 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
         throw new ApiError('서버 응답이 너무 늦어요. 잠시 후 다시 시도해 주세요.', 'TIMEOUT');
       }
       throw new ApiError('서버에 연결할 수 없어요. 네트워크를 확인해주세요.');
-    } finally {
-      clearTimeout(timer);
     }
   };
 
@@ -258,66 +264,72 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
    * 성공 응답도 세대를 안 봐서 옛 세션의 결과가 새 화면에 반영될 수 있었다.
    */
   const startEpoch = sessionEpoch;
-  let res = await sendOnce();
-  if (opts.auth && startEpoch !== sessionEpoch) {
-    throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
-  }
-
-  /**
-   * 인증이 필요한 요청의 401 = 액세스 토큰 만료.
-   *
-   * 재발급을 한 번 시도하고 같은 요청을 다시 보낸다. 재발급까지 실패하면 되살릴 방법이
-   * 없으므로 세션을 정리하고 로그인 화면으로 보낸다. 로그인·가입(auth:false)의 401은
-   * 자격 증명이 틀린 것이라 건드리지 않는다.
-   *
-   * 재시도는 한 번만 한다 — 새 토큰으로도 401이면 토큰 문제가 아니다.
-   */
-  if (opts.auth && res.status === 401) {
-    const outcome = await refreshOnce(startEpoch);
-
-    // 기다리는 사이 로그아웃·재로그인이 있었다면 이 응답은 남의 세션 것이다.
-    // 성공으로도 실패로도 취급하지 않고, 화면이 조용히 넘어가게 둔다.
-    if (startEpoch !== sessionEpoch || outcome === 'stale') {
+  // 타이머는 본문을 다 읽은 뒤에 끈다. 예외로 빠져나가는 경로에서도 반드시 꺼야 해서
+  // 여기부터 함수 끝까지 try/finally로 감싼다.
+  try {
+    let res = await sendOnce();
+    if (opts.auth && startEpoch !== sessionEpoch) {
       throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
     }
 
-    if (outcome === 'ok') {
-      res = await sendOnce();
-      // 재시도가 나갔다 오는 사이에도 세션이 바뀔 수 있다. 그 401로 새 세션을 끊으면 안 된다.
-      if (startEpoch !== sessionEpoch) {
+    /**
+     * 인증이 필요한 요청의 401 = 액세스 토큰 만료.
+     *
+     * 재발급을 한 번 시도하고 같은 요청을 다시 보낸다. 재발급까지 실패하면 되살릴 방법이
+     * 없으므로 세션을 정리하고 로그인 화면으로 보낸다. 로그인·가입(auth:false)의 401은
+     * 자격 증명이 틀린 것이라 건드리지 않는다.
+     *
+     * 재시도는 한 번만 한다 — 새 토큰으로도 401이면 토큰 문제가 아니다.
+     */
+    if (opts.auth && res.status === 401) {
+      const outcome = await refreshOnce(startEpoch);
+
+      // 기다리는 사이 로그아웃·재로그인이 있었다면 이 응답은 남의 세션 것이다.
+      // 성공으로도 실패로도 취급하지 않고, 화면이 조용히 넘어가게 둔다.
+      if (startEpoch !== sessionEpoch || outcome === 'stale') {
         throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
       }
-      if (res.status === 401) {
-        // 새 토큰으로도 401이면 토큰 문제가 아니다. 더 시도하지 않는다.
+
+      if (outcome === 'ok') {
+        res = await sendOnce();
+        // 재시도가 나갔다 오는 사이에도 세션이 바뀔 수 있다. 그 401로 새 세션을 끊으면 안 된다.
+        if (startEpoch !== sessionEpoch) {
+          throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
+        }
+        if (res.status === 401) {
+          // 새 토큰으로도 401이면 토큰 문제가 아니다. 더 시도하지 않는다.
+          onUnauthorized?.();
+          throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
+        }
+      } else if (outcome === 'expired') {
         onUnauthorized?.();
         throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
+      } else {
+        /**
+         * 일시 장애 — 세션을 지우지 않는다.
+         *
+         * 리프레시 토큰은 멀쩡한데 서버가 잠깐 흔들린 것뿐이다. 여기서 로그아웃시키면
+         * 502 한 번에 모든 사용자가 튕긴다. 이 서버는 실제로 502를 낸 적이 있다.
+         */
+        throw new ApiError('서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.', 'TIMEOUT');
       }
-    } else if (outcome === 'expired') {
-      onUnauthorized?.();
-      throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
-    } else {
-      /**
-       * 일시 장애 — 세션을 지우지 않는다.
-       *
-       * 리프레시 토큰은 멀쩡한데 서버가 잠깐 흔들린 것뿐이다. 여기서 로그아웃시키면
-       * 502 한 번에 모든 사용자가 튕긴다. 이 서버는 실제로 502를 낸 적이 있다.
-       */
-      throw new ApiError('서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.', 'TIMEOUT');
     }
-  }
 
-  const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null;
-  if (!json || typeof json.isSuccess !== 'boolean') {
-    // 업로드 용량 초과는 nginx가 앱 envelope가 아닌 413(HTML)로 막는다 → 친화 메시지로 변환
-    if (res.status === 413) {
-      throw new ApiError('사진 용량이 너무 커요. 20MB 이하로 올려주세요.', 'PAYLOAD_TOO_LARGE', 413);
+    const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null;
+    if (!json || typeof json.isSuccess !== 'boolean') {
+      // 업로드 용량 초과는 nginx가 앱 envelope가 아닌 413(HTML)로 막는다 → 친화 메시지로 변환
+      if (res.status === 413) {
+        throw new ApiError('사진 용량이 너무 커요. 20MB 이하로 올려주세요.', 'PAYLOAD_TOO_LARGE', 413);
+      }
+      throw new ApiError(`서버 응답 오류 (${res.status})`, undefined, res.status);
     }
-    throw new ApiError(`서버 응답 오류 (${res.status})`, undefined, res.status);
+    if (!json.isSuccess) {
+      throw new ApiError(json.message || '요청에 실패했어요.', json.code, res.status);
+    }
+    return json.result;
+  } finally {
+    clearTimeout(timer);
   }
-  if (!json.isSuccess) {
-    throw new ApiError(json.message || '요청에 실패했어요.', json.code, res.status);
-  }
-  return json.result;
 }
 
 export const authApi = {
