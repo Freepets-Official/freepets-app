@@ -46,7 +46,7 @@ export function ReviewSection({
   onWrite: () => void;
 }) {
   const p = usePalette();
-  const { reportedReviewIds, reportReview, myUserId, removeReview } = useAppStore();
+  const { reportedReviewIds, reportReview, isMyReview, removeReview } = useAppStore();
   const [actionError, setActionError] = useState<string | null>(null);
   const [reportTarget, setReportTarget] = useState<Review | null>(null);
   const [detailTarget, setDetailTarget] = useState<Review | null>(null);
@@ -91,7 +91,19 @@ export function ReviewSection({
   const averages = data?.categoryAverages ?? { space: 0, staff: 0, amenity: 0 };
   const tags = data?.topTags ?? [];
   const reviews = data?.reviews ?? [];
-  const written = reviews.filter((r) => r.content);
+  /**
+   * 화면에 그리는 리뷰.
+   *
+   * 예전에는 본문이 있는 것만 골랐다. 별점만 남긴 리뷰는 아예 안 보여서 **자기 글을
+   * 지울 방법이 없었다.** 본문이 없으면 내용 줄만 비워 그리면 된다.
+   */
+  /**
+   * 화면에 그리는 리뷰. **내 글을 앞으로 올린다.**
+   *
+   * 앞의 3개만 보여주는데 내 리뷰가 뒤쪽이면 지울 방법이 없었다. 본문이 없는 리뷰를
+   * 걸러내던 것도 같은 이유로 그만둔다 — 별점만 남긴 내 글도 지울 수 있어야 한다.
+   */
+  const written = [...reviews].sort((a, b) => Number(isMyReview(b)) - Number(isMyReview(a)));
 
   const rows: { label: string; value: number }[] = [
     { label: '공간 여유', value: averages.space },
@@ -205,7 +217,7 @@ export function ReviewSection({
 
             <View style={styles.reviewFoot}>
               <Text style={[styles.visited, { color: p.muted }]}>{r.visitedAt} 방문</Text>
-              {r.userId === myUserId ? (
+              {isMyReview(r) ? (
                 // 내 리뷰 — 신고 대신 삭제
                 <Pressable
                   onPress={(e) => {

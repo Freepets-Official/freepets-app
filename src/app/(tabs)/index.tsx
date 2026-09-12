@@ -74,8 +74,17 @@ function NotificationBell({
 export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { pets, checks, plannedDenialAlerts, upcomingVaccinations, stamps, facilityById, loadFacility, hideCheck } =
-    useAppStore();
+  const {
+    pets,
+    checks,
+    plannedDenialAlerts,
+    upcomingVaccinations,
+    stamps,
+    facilityById,
+    loadFacility,
+    hideCheck,
+    reloadAll,
+  } = useAppStore();
 
   /**
    * 이력에 담긴 시설을 캐시에 채운다. 이름을 보여주려면 시설을 알아야 하는데 판별 이력에는
@@ -113,8 +122,9 @@ export default function HomeScreen() {
           onPress={() => router.push('/notifications')}
         />
       }
-      // 데모: 당기면 발자국 연출 후 마무리. 백엔드 연동 시 실제 데이터 새로고침으로 교체.
-      onRefresh={() => new Promise((r) => setTimeout(r, 800))}>
+      // 실제로 다시 불러온다. 예전에는 800ms 기다리는 연출뿐이라, 최초 조회가 실패하면
+      // 앱을 껐다 켜기 전까지 빈 화면에서 빠져나올 방법이 없었다.
+      onRefresh={reloadAll}>
       {pets.length === 0 ? (
         <View style={[styles.empty, { borderColor: p.line }]}>
           <Ionicons name="paw" size={30} color={p.accent} />

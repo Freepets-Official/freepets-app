@@ -23,9 +23,17 @@ import {
   setRefreshToken,
   setTokensRefreshedHandler,
   setUnauthorizedHandler,
+  type DenialAlert,
   type ServerDenialReport,
 } from '@/lib/api';
 import { DEV_TOKEN } from '@/lib/config';
+import {
+  loadCalendarEvents,
+  loadMedLog,
+  saveCalendarEvents,
+  saveMedLog,
+} from '@/lib/calendar-store';
+import { loadMyReviewIds, saveMyReviewIds } from '@/lib/my-reviews';
 import { loadSettings, saveSettings } from '@/lib/settings-store';
 import type { Coords } from '@/lib/location';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
@@ -300,6 +308,8 @@ interface AppStore {
   /** 내 사용자 id — 내가 쓴 리뷰 구분 등에 쓴다 */
   /** 내 사용자 ID. 서버에서 받기 전에는 `null`이다 — 그때는 내 글 여부를 단정하지 않는다. */
   myUserId: number | null;
+  /** 이 리뷰가 내 글인가. 서버 userId를 모를 때는 기기에 남긴 작성 기록으로 가른다. */
+  isMyReview: (r: { reviewId: number; userId: number }) => boolean;
   pets: Pet[];
   /** 등록·수정·삭제는 서버가 실패하면 화면을 되돌리고 **던진다** — 호출한 쪽이 안내해야 한다. */
   addPet: (input: Omit<Pet, 'petId'>) => Promise<void>;
@@ -398,6 +408,8 @@ interface AppStore {
   facilityById: (id: number) => Facility | undefined;
   /** GET /facilities/{id} — 상세를 받아 캐시에 병합한다(검색을 안 거치고 들어온 시설용) */
   loadFacility: (id: number) => Promise<void>;
+  /** 서버 데이터를 다시 불러온다 — 홈의 당겨서 새로고침. 최초 조회 실패에서 빠져나올 길이다. */
+  reloadAll: () => Promise<void>;
   /** GET /pet-checks/{checkId} — 요약만 있는 이력에 아이별 근거를 채운다(출입증 재열람용) */
   hydrateCheck: (checkId: number) => Promise<void>;
   /** 탐색이 잡은 GPS를 보관 — 상세·코스 빌더에서 권한을 다시 묻지 않고 거리 계산에 쓴다 */
@@ -523,6 +535,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 반려동물별 좋아한 곳 TOP3 (홈) — 서버가 시설명·카테고리까지 계산해 내려준다
   const [topPlaces, setTopPlaces] = useState<Record<number, TopPlace[]>>({});
   const [myUserId, setMyUserId] = useState<number | null>(null);
+  /**
+   * 내가 쓴 리뷰 ID. `myUserId`를 모르는 동안 내 글을 가려내는 수단이다.
+   * 리뷰를 쓴 시점에 기록하고 기기에 남긴다 — 앱을 다시 켜도 유지된다.
+   */
+  const [myReviewIds, setMyReviewIds] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    let alive = true;
+    loadMyReviewIds().then((ids) => {
+      if (alive) setMyReviewIds(new Set(ids));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   /**
    * 저장된 설정을 읽기 전에는 기록하지 않는다. 불러오기 전에 저장하면 기본값이 덮어써서
@@ -565,8 +591,35 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const refreshTokenRef = useRef<string | null>(null);
   const [account, setAccount] = useState<Account>({ nickname: '나', avatarUri: null });
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(SEED_MOCK ? INITIAL_CAL_EVENTS : []);
+  /**
+   * 일정·복용 기록을 기기에 남긴다.
+   *
+   * 서버 API는 있지만 연동은 1.1이다. 그때까지 상태로만 두면 앱을 끄는 순간 사라지는데,
+   * 만든 사람은 저장되지 않았다는 걸 알 방법이 없다. 불러오기 전에는 쓰지 않는다 —
+   * 빈 배열이 저장된 값을 덮는다.
+   */
+  const [calendarLoaded, setCalendarLoaded] = useState(false);
   // 약 복용 기록 — "eventId:YYYY-MM-DD" 집합
   const [medLog, setMedLog] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const [events, log] = await Promise.all([loadCalendarEvents<CalendarEvent>(), loadMedLog()]);
+      if (!alive) return;
+      if (events) setCalendarEvents(events);
+      if (log.length > 0) setMedLog(new Set(log));
+      setCalendarLoaded(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (calendarLoaded) void saveCalendarEvents(calendarEvents);
+  }, [calendarEvents, calendarLoaded]);
+  useEffect(() => {
+    if (calendarLoaded) void saveMedLog([...medLog]);
+  }, [medLog, calendarLoaded]);
   const nextEventId = useRef(INITIAL_CAL_EVENTS.length + 1);
   const nextBenefitId = useRef(1);
   const nextPetId = useRef(INITIAL_PETS.length + 1);
@@ -837,7 +890,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         await loadReviews(input.facilityId);
         return;
       }
-      await reviewsApi.create(input.facilityId, {
+      const created = await reviewsApi.create(input.facilityId, {
         petIds: input.petIds,
         showPetInfo: input.showPetInfo,
         ratingSpace: input.ratingSpace,
@@ -846,12 +899,32 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         content: input.content ?? '',
         tags: input.tags,
       });
+      // 방금 쓴 글의 id를 남긴다. 서버가 내 userId를 알려주기 전까지 "내 리뷰" 판정에 쓴다.
+      if (typeof created?.reviewId === 'number') {
+        setMyReviewIds((prev) => {
+          const next = new Set(prev).add(created.reviewId);
+          void saveMyReviewIds([...next]);
+          return next;
+        });
+      }
       await loadReviews(input.facilityId);
     },
     [loadReviews],
   );
 
   /** 리뷰 삭제. 실패를 삼키지 않는다 — 지워지지도 않았는데 지워진 것처럼 보이면 안 된다. */
+  /**
+   * 이 리뷰가 내 글인가.
+   *
+   * 서버 userId를 알면 그걸 쓰고, 모르면 기기에 남긴 작성 기록으로 가른다.
+   * 둘 다 없으면 **내 글이 아니라고 본다** — 남의 글에 삭제 버튼을 띄우는 쪽이 더 나쁘다.
+   */
+  const isMyReview = useCallback(
+    (r: { reviewId: number; userId: number }) =>
+      (myUserId != null && r.userId === myUserId) || myReviewIds.has(r.reviewId),
+    [myUserId, myReviewIds],
+  );
+
   const removeReview = useCallback(
     async (reviewId: number, facilityId: number) => {
       await reviewsApi.remove(reviewId);
@@ -946,6 +1019,30 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [recentDenialsOf],
   );
 
+  /**
+   * 서버가 계산해 둔 거부 경고. `GET /me/denial-alerts`.
+   *
+   * 예전에는 이 API를 정의만 해두고 부르지 않았다. 그래서 앱을 다시 켜면 거부 캐시가
+   * 비어 있어 홈 종 배지와 알림 목록이 늘 "새로운 알림이 없어요"였다 — 시설 상세를
+   * 직접 열어 loadDenials가 돌기 전에는 경고를 볼 방법이 없었다.
+   */
+  const [serverAlerts, setServerAlerts] = useState<DenialAlert[]>([]);
+  useEffect(() => {
+    if (!session.authed) return;
+    let alive = true;
+    denialApi
+      .alerts()
+      .then((list) => {
+        if (alive) setServerAlerts(list);
+      })
+      .catch(() => {
+        // 못 받으면 아래 로컬 계산분만 보인다. 알림 화면을 막지는 않는다.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [session.authed]);
+
   // 내가 판별받은(=가려던) 시설 중, 남의 현장 거부가 1주 내 들어온 곳.
   // 위치(GPS)가 아니라 "판별 이력"으로 '가려던 곳'을 판단한다.
   const plannedDenialAlerts = useCallback((): { facility: Facility; report: Report }[] => {
@@ -963,8 +1060,29 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       seen.add(c.facilityId);
       out.push({ facility, report });
     }
+    // 서버가 준 경고를 합친다. 판별 이력이 아직 안 불러와졌어도 이쪽은 뜬다.
+    for (const a of serverAlerts) {
+      if (seen.has(a.facility.facilityId)) continue;
+      const facility =
+        facilityCache.current.get(a.facility.facilityId) ??
+        FACILITIES.find((f) => f.facilityId === a.facility.facilityId);
+      if (!facility) continue;
+      seen.add(a.facility.facilityId);
+      out.push({
+        facility,
+        report: {
+          reportId: a.report.reportId,
+          facilityId: a.facility.facilityId,
+          type: 'DENIED',
+          content: '',
+          weight: 1,
+          hasEvidence: false,
+          createdAt: a.report.createdAt,
+        } as Report,
+      });
+    }
     return out;
-  }, [checks, recentDenialOf]);
+  }, [checks, recentDenialOf, serverAlerts]);
 
   const myDenialOf = useCallback(
     (facilityId: number) => {
@@ -1045,6 +1163,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // 슬라이더는 드래그 중 값이 연속으로 바뀐다 → 로컬은 즉시 반영하고, 서버 upsert는
+  // 실패 시 되돌릴 직전 값을 콜백에서 읽기 위한 미러
+  const satisfactionsRef = useRef<PetSatisfaction[]>(satisfactions);
+  satisfactionsRef.current = satisfactions;
+
   // 마지막 변경 뒤 600ms 디바운스로 한 번만 보낸다(요청 폭주 방지).
   const satTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const setSatisfaction = useCallback(
@@ -1057,6 +1179,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       // 슬라이더가 조용히 실패해 항상 '기록 전'으로 보인다.
       if (isMockFacilityId(facilityId)) return;
       const key = `${petId}:${facilityId}`;
+      // 되돌릴 지점을 지금 잡아둔다. 디바운스 뒤에 읽으면 그 사이 변경분까지 지워진다.
+      const before = satisfactionsRef.current.find(
+        (s2) => s2.petId === petId && s2.facilityId === facilityId,
+      );
       const timers = satTimers.current;
       const existing = timers.get(key);
       if (existing) clearTimeout(existing);
@@ -1067,7 +1193,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           satisfactionApi
             .set(facilityId, petId, score)
             .then(() => loadTopPlaces()) // 기록이 바뀌면 홈 TOP3도 갱신
-            .catch(() => {});
+            .catch(() => {
+              /**
+               * 저장에 실패하면 **화면도 되돌린다.**
+               *
+               * 예전에는 실패를 버려서, 오프라인에서 슬라이더를 움직여도 점수가 기록된
+               * 것처럼 남았다. 다음 실행에 사라지는데 사용자는 왜인지 알 수 없다.
+               * 그 사이 같은 자리를 또 바꿨으면(예약이 새로 걸렸으면) 건드리지 않는다.
+               */
+              if (satTimers.current.has(key)) return;
+              setSatisfactions((prev) => {
+                const rest = prev.filter((s2) => !(s2.petId === petId && s2.facilityId === facilityId));
+                return before ? [...rest, before] : rest;
+              });
+            });
         }, 600),
       );
     },
@@ -1099,6 +1238,30 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // GET /facilities/{id} — 검색을 안 거치고 들어온 시설(홈 TOP3·알림·딥링크)의 빈 상세를 채운다.
   // 상세 응답엔 maxWeight·requirements가 없으므로 **덮어쓰지 않고 병합**한다. 덮으면 탐색에서
   // 들어온 시설의 체중 제한이 사라져 판별이 통과로 뒤집힌다.
+  /**
+   * 서버 데이터를 다시 불러온다. 홈의 당겨서 새로고침이 쓴다.
+   *
+   * 예전에는 800ms 기다리는 연출뿐이었다. 지하철에서 앱을 처음 열어 조회가 실패하면
+   * 앱을 완전히 껐다 켜기 전까지 빈 화면이 이어졌다 — 네트워크가 돌아와도 방법이 없었다.
+   */
+  const reloadAll = useCallback(async () => {
+    if (!session.authed && !(__DEV__ && DEV_TOKEN)) return;
+    await Promise.all([
+      petsApi
+        .list()
+        .then(setPets)
+        .catch(() => {}),
+      accountApi
+        .get()
+        .then((a) => setAccount({ nickname: a.nickname, avatarUri: a.avatarUri }))
+        .catch(() => {}),
+      denialApi
+        .alerts()
+        .then(setServerAlerts)
+        .catch(() => {}),
+    ]);
+  }, [session.authed]);
+
   const loadFacility = useCallback(async (id: number) => {
     if (!Number.isInteger(id) || id <= 0) return; // 숫자가 아니면 서버가 400이 아니라 500을 낸다
     // 목 시설은 서버에 없다. 호출해봐야 404고, 혹시 같은 ID가 있으면 남의 시설이 병합된다.
@@ -1483,10 +1646,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setServerDenials({});
     setCalendarEvents([]);
     setMedLog(new Set());
+    void saveCalendarEvents([]);
+    void saveMedLog([]);
     setSatisfactions([]);
     setBusinessRegs({});
     setUserConfirmedIds(new Set());
     setPendingCallConfirm(null);
+    // A의 거부 제보로 하향된 시설이 남으면, B가 서버에서 새 정보를 받아도 로컬 하향이 이긴다
+    setDowngradedIds(new Set());
+    setTopPlaces({});
+    setPromotions({});
+    setBenefits({});
     setAccount({ nickname: '나', avatarUri: null });
     setStamps([]);
     void clearStamps();
@@ -1869,6 +2039,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       myUserId,
+      isMyReview,
       pets,
       addPet,
       removePet,
@@ -1909,6 +2080,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       facilityById,
       registerFacilities,
       loadFacility,
+      reloadAll,
       hydrateCheck,
       lastCoords,
       setLastCoords,
@@ -1993,6 +2165,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       facilityById,
       registerFacilities,
       loadFacility,
+      reloadAll,
       hydrateCheck,
       lastCoords,
       setLastCoords,
