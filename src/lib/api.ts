@@ -44,7 +44,7 @@ export type ApiEnvelope<T> = {
   result: T;
 };
 
-export type LoginResult = { accessToken: string; refreshToken: string };
+export type LoginResult = { accessToken: string; refreshToken: string; userId?: number };
 
 export class ApiError extends Error {
   code?: string;
@@ -460,7 +460,11 @@ export const petsApi = {
 // ─────────────────────────── 마이페이지(account) ───────────────────────────
 // GET  /users/account → { nickname, avatarUri }
 // PATCH /users/account (multipart) → nickname(필수) + avatar(선택 파일). 이메일은 응답에 없음.
-type ServerAccount = { nickname: string; avatarUri: string | null };
+/**
+ * `userId`는 **아직 서버가 주지 않는다.** 백엔드가 넣기로 했고, 오면 그대로 쓰인다.
+ * 선택 필드로 받아두면 서버만 배포해도 이미 나간 앱이 값을 집는다 — 앱을 다시 낼 필요가 없다.
+ */
+type ServerAccount = { nickname: string; avatarUri: string | null; userId?: number };
 
 export const accountApi = {
   /** 내 회원정보 조회. */

@@ -172,10 +172,21 @@ export default function FacilityDetailScreen() {
     );
   }
 
+  /**
+   * 아이 선택이 바뀌면 이전 판별 결과를 지운다.
+   *
+   * 예전에는 작은 개로 "가능"을 받은 뒤 큰 개를 추가해도 결과가 그대로 남았다.
+   * 헛걸음을 막으려는 앱에서 **지금 선택과 다른 아이 기준의 '가능'이 남아 있는 것**이
+   * 가장 위험하다. 선택이 달라지면 그 결과는 더 이상 이 화면의 답이 아니다.
+   */
   const togglePet = (petId: number) => {
+    if (loading) return; // 판별이 도는 중에는 대상이 바뀌지 않게 막는다
     setSelectedIds((prev) =>
       prev.includes(petId) ? prev.filter((x) => x !== petId) : [...prev, petId],
     );
+    setCheck(null);
+    setCheckFailed(false);
+    setDone(new Set());
   };
 
   const startCheck = async () => {

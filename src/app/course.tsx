@@ -516,10 +516,14 @@ export default function CourseScreen() {
       ]);
       // 화면을 떠났으면 상태를 건드리지 않는다. 로딩만은 내린다 — 켜둔 채 빠져나가면
       // 다시 들어왔을 때 아무도 끄지 않는 스피너가 남는다.
-      if (!active) {
-        setPersonalLoading(false);
-        return;
-      }
+      /**
+       * 새 요청이 이미 시작됐으면 이 응답은 옛 답이다.
+       *
+       * 예전에는 `active`가 false여도 로딩만 끄고 나갔는데, 그 로딩은 **새 요청의 것**이다.
+       * 아이를 두 번 빠르게 바꾸면 A의 응답이 B의 스피너를 끄고 옛 추천이 다시 보였다.
+       * 정리는 다음 effect가 이미 맡고 있으므로 여기서는 아무것도 건드리지 않는다.
+       */
+      if (!active) return;
       setLiked(lk.ok ? lk.value : null);
       setLikedEmpty(!lk.ok && lk.empty);
       setPersonalError(!lk.ok && !lk.empty);
@@ -556,8 +560,6 @@ export default function CourseScreen() {
   );
 
   /** 빌더 코스의 판별 요청 키. 스톱·아이가 바뀌면 이전 결과는 더 이상 이 코스의 답이 아니다. */
-  const builderSig = checkSignature(BUILDER_KEY, stopIds.slice(0, 10));
-  const builderRunning = courseCheckKey === builderSig;
 
   const togglePet = (petId: number) => {
     setSelectedPetIds((prev) =>
@@ -590,8 +592,26 @@ export default function CourseScreen() {
     setPicking(false);
   };
 
+  /**
+   * 스톱 추가. **서버 판별이 10곳까지만 받는다.**
+   *
+   * 예전에는 제한 없이 담기고 판별은 앞 10곳만 보냈다. 11곳짜리 코스를 만들면 뒤 1곳은
+   * 판별되지도 않았는데 결과가 "코스 전체"로 표시됐다 — 가장 위험한 종류의 거짓이다.
+   * 담는 단계에서 막고 이유를 알린다.
+   */
+  const MAX_STOPS = 10;
   const addStop = (facilityId: number) => {
-    setStopIds((prev) => (prev.includes(facilityId) ? prev : [...prev, facilityId]));
+    setStopIds((prev) => {
+      if (prev.includes(facilityId)) return prev;
+      if (prev.length >= MAX_STOPS) {
+        setSaveMessage({
+          text: `코스에는 ${MAX_STOPS}곳까지 담을 수 있어요. 빼고 다시 담아 주세요.`,
+          failed: true,
+        });
+        return prev;
+      }
+      return [...prev, facilityId];
+    });
   };
 
   const removeStop = (facilityId: number) => {
@@ -624,6 +644,7 @@ export default function CourseScreen() {
     if (stopIds.length === 0 || chosenPets.length === 0) return;
     await runCourseCheck(
       BUILDER_KEY,
+      // stopIds가 아니라 조회에 성공한 시설만 보낸다. 서명도 같은 기준이어야 결과가 붙는다.
       stopFacilities.map((f) => ({ facilityId: f.facilityId })),
     );
   };
@@ -634,6 +655,19 @@ export default function CourseScreen() {
     .filter((f): f is NonNullable<typeof f> => !!f);
 
   const available = pickItems.filter((f) => !stopIds.includes(f.facilityId));
+
+  /**
+   * 서명은 **실제로 판별에 보낸 시설** 기준이어야 한다.
+   *
+   * 예전에는 `stopIds`로 만들었는데, 저장 코스를 열 때 상세 조회가 일부 실패하면
+   * `stopIds`에는 남고 `stopFacilities`에는 없다. 그러면 요청 서명과 렌더 서명이 어긋나
+   * 결과도 오류도 로딩도 아무것도 안 붙었다 — 눌러도 반응이 없는 것처럼 보였다.
+   */
+  const builderSig = checkSignature(
+    BUILDER_KEY,
+    stopFacilities.map((f) => f.facilityId),
+  );
+  const builderRunning = courseCheckKey === builderSig;
 
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
@@ -1174,10 +1208,10 @@ export default function CourseScreen() {
           )}
 
           {/* 판별 결과 — 추천 코스와 같은 서버 응답을 같은 패널로 그린다 */}
-          {courseCheck?.key === checkSignature(BUILDER_KEY, stopIds.slice(0, 10)) && (
+          {courseCheck?.key === builderSig && (
             <CourseCheckPanel result={courseCheck.result} />
           )}
-          {courseCheckError?.key === checkSignature(BUILDER_KEY, stopIds.slice(0, 10)) && (
+          {courseCheckError?.key === builderSig && (
             <Text style={[styles.courseCheckError, { color: p.muted }]}>{courseCheckError.message}</Text>
           )}
         </View>

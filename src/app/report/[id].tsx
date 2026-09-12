@@ -127,7 +127,9 @@ export default function ReportScreen() {
               심사 절차가 도는 것처럼 말하지 않는다 — 실제로 도는 건 거부 사유 접수뿐이다.
             */}
             {type === 'ENTERED'
-              ? '들어가셨다니 다행이에요.\n남겨주신 내용은 다음 판별을 다듬는 데 씁니다.'
+              ? // '실제로는 입장됐어요'는 서버로 가지 않는다(거부 사유만 받는 API다).
+                // "다음 판별을 다듬는 데 쓴다"고 하면 하지 않는 일을 약속하는 셈이다.
+                '들어가셨다니 다행이에요.\n이 기록은 내 제보 목록에 남겨 둘게요.'
               : isMockFacilityId(facilityId)
                 ? // 목 시설은 서버에 없어 제보를 보내지 않았다. 전해진다고 하면 거짓말이 된다.
                   '제보를 이 기기에 저장했어요.\n더 정확한 정보를 만드는 데 참고할게요.'
@@ -158,7 +160,9 @@ export default function ReportScreen() {
         <Text style={[styles.eyebrow, { color: p.accent }]}>정보 정정 제보</Text>
         <Text style={[styles.title, { color: p.ink }]}>AI 판별이{'\n'}실제와 달랐나요?</Text>
         <Text style={[styles.sub, { color: p.muted }]}>
-          {facility.name}에 대한 제보는 검토 후 다른 사용자에게도 반영돼요.
+          {type === 'ENTERED'
+            ? `${facility.name}에 들어가신 기록은 이 기기의 내 제보 목록에 남아요.`
+            : `${facility.name}에 대한 제보는 같은 곳을 보려는 다른 집사에게 바로 전해져요.`}
         </Text>
       </View>
 
