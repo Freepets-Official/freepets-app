@@ -78,6 +78,18 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
  * 공통 요청기. auth:true면 Authorization: Bearer 헤더를 붙인다.
  * body가 FormData면 multipart로 보낸다(Content-Type을 직접 넣지 않아 경계값이 자동 설정됨).
  */
+/**
+ * 요청 제한 시간.
+ *
+ * 없으면 서버가 연결만 받고 응답을 안 줄 때(nginx는 살아 있는데 뒤의 Spring이 멈춘 경우)
+ * fetch가 영원히 매달린다. 화면은 스피너를 계속 돌리고 사용자는 실패한 줄도 모른다.
+ * 실제로 코스 화면의 「아이 취향으로 코스를 찾는 중…」이 그렇게 끝나지 않았다.
+ *
+ * 사진을 올리는 요청은 오래 걸릴 수 있어 넉넉히 잡는다.
+ */
+const TIMEOUT_MS = 15_000;
+const UPLOAD_TIMEOUT_MS = 60_000;
+
 async function request<T>(method: Method, path: string, opts: { body?: unknown; auth?: boolean } = {}): Promise<T> {
   const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData;
   const headers: Record<string, string> = {};
@@ -86,16 +98,25 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
     const token = currentToken();
     if (token) headers.Authorization = `Bearer ${token}`;
   }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), isForm ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS);
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
       method,
       headers,
       body: opts.body === undefined ? undefined : isForm ? (opts.body as FormData) : JSON.stringify(opts.body),
+      signal: ctrl.signal,
     });
-  } catch {
-    // 네트워크 실패(연결 불가·CORS·mixed content 등)
+  } catch (e) {
+    // 제한 시간 초과와 연결 실패를 나눠 안내한다. 원인이 다르면 사용자가 할 일도 다르다 —
+    // 전자는 기다렸다 다시, 후자는 네트워크 확인이다.
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new ApiError('서버 응답이 너무 늦어요. 잠시 후 다시 시도해 주세요.', 'TIMEOUT');
+    }
     throw new ApiError('서버에 연결할 수 없어요. 네트워크를 확인해주세요.');
+  } finally {
+    clearTimeout(timer);
   }
   const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null;
   if (!json || typeof json.isSuccess !== 'boolean') {
