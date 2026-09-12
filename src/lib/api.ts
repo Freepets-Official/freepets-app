@@ -126,6 +126,9 @@ let refreshInFlight: Promise<RefreshOutcome> | null = null;
  */
 type RefreshOutcome = 'ok' | 'expired' | 'failed' | 'stale';
 
+/** 되살릴 수 없는 토큰 오류. 서버가 전부 401로 주므로 코드로 가른다. */
+const TOKEN_DEAD_CODES = new Set(['TOKEN4001', 'TOKEN4002', 'TOKEN4003', 'TOKEN4004']);
+
 async function refreshTokens(): Promise<RefreshOutcome> {
   const token = refreshToken;
   if (!token) return 'expired';
@@ -146,10 +149,17 @@ async function refreshTokens(): Promise<RefreshOutcome> {
       accessToken: string;
       refreshToken: string;
     }> | null;
-    if (res.status === 401 || res.status === 403) return 'expired';
+    /**
+     * 서버는 토큰 오류를 전부 401로 주고 코드로 갈라 준다.
+     *   TOKEN4001 유효하지 않은 토큰 / TOKEN4002 만료된 토큰
+     *   TOKEN4003 토큰 용도 불일치  / TOKEN4004 리프레시 토큰 만료
+     * 넷 다 리프레시 토큰 자체가 죽었다는 뜻이라 되살릴 방법이 없다 — 로그아웃한다.
+     */
+    if (json?.code && TOKEN_DEAD_CODES.has(json.code)) return 'expired';
+    if (res.status === 401 || res.status === 403 || res.status === 400) return 'expired';
     if (!res.ok || !json?.isSuccess || !json.result?.accessToken) {
-      // 400은 토큰이 잘못됐다는 뜻이라 되살릴 수 없다. 5xx·형식 불량은 일시 장애로 본다.
-      return res.status === 400 ? 'expired' : 'failed';
+      // 5xx·형식 불량은 서버가 흔들린 것이다. 세션을 지우지 않는다.
+      return 'failed';
     }
     if (epoch !== sessionEpoch) return 'stale';
     authToken = json.result.accessToken;
