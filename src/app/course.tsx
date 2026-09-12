@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -17,7 +17,9 @@ import {
   type Course,
   type StopResult,
 } from '@/data/course';
-import { FACILITIES, formatDistance, isMockFacilityId } from '@/data/mock';
+import { formatDistance, isMockFacilityId } from '@/data/mock';
+import { facilitiesApi } from '@/lib/api';
+import { getCurrentLocation, type Coords } from '@/lib/location';
 import {
   CATEGORY_LABEL,
   RESULT_LABEL,
@@ -27,6 +29,7 @@ import {
   type CourseStop,
   type CourseTheme,
   type LikedCourse,
+  type Facility,
   type PresetCourse,
   type PublicCourse,
   type SavedCourse,
@@ -40,9 +43,14 @@ import { useAppStore } from '@/store/app-store';
  * 여행 코스 판별 (F3) — 하루 동선 전체를 한 번에 검증한다.
  * 낱개 시설이 "이 문"을 풀었다면, 코스는 "이 하루"를 푼다.
  */
+/** 코스 빌더 검색 반경. 하루 동선이라 한 도시를 덮을 만큼이면 된다. */
+const PICK_RADIUS_M = 30_000;
+/** 위치를 못 받았을 때의 기준점(서울시청). 키워드로 전국을 찾을 수 있게 열어둔다. */
+const PICK_FALLBACK_CENTER: Coords = { latitude: 37.5665, longitude: 126.978 };
+
 export default function CourseScreen() {
   const p = usePalette();
-  const { pets, satisfactions } = useAppStore();
+  const { pets, satisfactions, facilityById, registerFacilities, lastCoords, setLastCoords } = useAppStore();
 
   const [selectedPetIds, setSelectedPetIds] = useState<number[]>(pets.map((x) => x.petId));
   const [stopIds, setStopIds] = useState<number[]>([]);
@@ -334,6 +342,72 @@ export default function CourseScreen() {
   const [loading, setLoading] = useState(false);
   const [picking, setPicking] = useState(false);
 
+  /**
+   * 코스 빌더의 시설 목록.
+   *
+   * 예전에는 목 데이터(`FACILITIES`)를 그대로 깔아서 강릉 6곳만 나왔다. 관광공사에서 온
+   * 실제 시설은 영원히 뜨지 않았고, 그 목 시설로 코스를 만들면 판별 단계에서
+   * "데모용 예시 코스라 판별할 수 없어요"로 막혀 끝까지 가도 아무것도 안 되는 길이었다.
+   * 서버 검색으로 바꾼다.
+   */
+  const [pickCenter, setPickCenter] = useState<Coords | null>(null);
+  const [pickQuery, setPickQuery] = useState('');
+  const [pickItems, setPickItems] = useState<Facility[]>([]);
+  const [pickLoading, setPickLoading] = useState(false);
+  const [pickFailed, setPickFailed] = useState(false);
+  const [pickRetry, setPickRetry] = useState(0);
+
+  // 검색 기준점을 한 번만 잡는다. 탐색 탭이 이미 잡아둔 좌표가 있으면 권한을 다시 묻지 않고,
+  // 없으면 GPS를 요청하고, 그것도 거부되면 기본 중심으로 전국에서 찾게 둔다 —
+  // 위치를 안 준다고 코스를 못 만들게 할 이유는 없다(키워드로 찾으면 된다).
+  useEffect(() => {
+    if (!picking || pickCenter) return;
+    let active = true;
+    void (async () => {
+      const c = lastCoords ?? (await getCurrentLocation());
+      if (!active) return;
+      if (c && !lastCoords) setLastCoords(c);
+      setPickCenter(c ?? PICK_FALLBACK_CENTER);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [picking, pickCenter, lastCoords, setLastCoords]);
+
+  useEffect(() => {
+    if (!picking || !pickCenter) return;
+    let active = true;
+    const t = setTimeout(async () => {
+      setPickLoading(true);
+      setPickFailed(false);
+      try {
+        const res = await facilitiesApi.search({
+          latitude: pickCenter.latitude,
+          longitude: pickCenter.longitude,
+          keyword: pickQuery.trim() || undefined,
+          radiusM: PICK_RADIUS_M,
+          size: 30,
+        });
+        if (!active) return;
+        // 스톱을 이름으로 그리려면 상세 캐시에 있어야 한다. 안 넣으면 코스를 만든 뒤
+        // 빌더 목록이 비어 보인다.
+        registerFacilities(res.items);
+        setPickItems(res.items);
+      } catch {
+        if (active) {
+          setPickItems([]);
+          setPickFailed(true);
+        }
+      } finally {
+        if (active) setPickLoading(false);
+      }
+    }, pickQuery ? 400 : 0);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+  }, [picking, pickCenter, pickQuery, pickRetry, registerFacilities]);
+
   // 재료는 필터와 무관하게 한 번만 받는다. 실패해도 화면 전체를 막지 않는다 —
   // 아래 로컬 추천·직접 만들기는 그대로 쓸 수 있어야 한다.
   useEffect(() => {
@@ -515,11 +589,12 @@ export default function CourseScreen() {
     }, 900);
   };
 
+  // 스토어 캐시에서 찾는다 — 서버 시설과 목 시설을 모두 아는 건 여기뿐이다
   const stopFacilities = stopIds
-    .map((id) => FACILITIES.find((f) => f.facilityId === id))
+    .map((id) => facilityById(id))
     .filter((f): f is NonNullable<typeof f> => !!f);
 
-  const available = FACILITIES.filter((f) => !stopIds.includes(f.facilityId));
+  const available = pickItems.filter((f) => !stopIds.includes(f.facilityId));
 
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
@@ -947,11 +1022,33 @@ export default function CourseScreen() {
             </View>
           )}
 
-          {/* 시설 선택 목록 (추가용) */}
+          {/* 시설 선택 목록 (추가용) — 관광공사 시설을 서버에서 찾는다 */}
           {picking && (
             <View style={[styles.pickList, { backgroundColor: p.surface, borderColor: p.line }]}>
-              {available.length === 0 ? (
-                <Text style={[styles.pickEmpty, { color: p.muted }]}>추가할 시설이 없어요.</Text>
+              <TextInput
+                value={pickQuery}
+                onChangeText={setPickQuery}
+                placeholder="시설명이나 지역으로 검색"
+                placeholderTextColor={p.muted}
+                returnKeyType="search"
+                style={[styles.pickSearch, { color: p.ink, borderColor: p.line, backgroundColor: p.card }]}
+              />
+              {pickLoading ? (
+                <View style={styles.pickState}>
+                  <ActivityIndicator color={p.accent} />
+                  <Text style={[styles.pickEmpty, { color: p.muted }]}>시설을 찾는 중…</Text>
+                </View>
+              ) : pickFailed ? (
+                // 실패와 '결과 없음'을 나눈다. 전자는 재시도, 후자는 검색어를 바꿀 일이다.
+                <Pressable onPress={() => setPickRetry((n) => n + 1)} style={styles.pickState}>
+                  <Text style={[styles.pickEmpty, { color: p.accent }]}>
+                    시설을 못 불러왔어요. 눌러서 다시 시도하기
+                  </Text>
+                </Pressable>
+              ) : available.length === 0 ? (
+                <Text style={[styles.pickEmpty, { color: p.muted }]}>
+                  {pickQuery.trim() ? '검색 결과가 없어요. 다른 이름으로 찾아보세요.' : '주변에 추가할 시설이 없어요.'}
+                </Text>
               ) : (
                 available
                   .sort((a, b) => (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity))
@@ -1251,9 +1348,8 @@ function CoursePickCard({
   onPress: () => void;
 }) {
   const p = usePalette();
-  const stops = course.stopIds
-    .map((id) => FACILITIES.find((f) => f.facilityId === id)?.name)
-    .filter(Boolean);
+  const { facilityById } = useAppStore();
+  const stops = course.stopIds.map((id) => facilityById(id)?.name).filter(Boolean);
   return (
     <Pressable
       onPress={onPress}
@@ -1537,6 +1633,15 @@ const styles = StyleSheet.create({
   addStopText: { fontSize: 13.5, fontWeight: '800' },
 
   pickList: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.sm },
+  pickSearch: {
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 11,
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  pickState: { alignItems: 'center', gap: 8, paddingVertical: Spacing.lg },
   pickEmpty: { fontSize: 13, textAlign: 'center', paddingVertical: Spacing.lg },
   pickItem: {
     flexDirection: 'row',

@@ -13,6 +13,7 @@ import { DenialReport } from '@/components/denial-report';
 import { FacilityCard } from '@/components/facility-card';
 import { OwnerPromotionSection } from '@/components/owner-promotion-section';
 import { PawBadge } from '@/components/paw-badge';
+import { facilitiesApi } from '@/lib/api';
 import { openInMap } from '@/lib/map-link';
 import { ReviewSection } from '@/components/review-section';
 import { SatisfactionSection } from '@/components/satisfaction-section';
@@ -20,7 +21,7 @@ import { StampAction } from '@/components/stamp-action';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
-import { FACILITIES, formatDistance } from '@/data/mock';
+import { formatDistance } from '@/data/mock';
 import {
   AI_JUDGEABLE_KINDS,
   CATEGORY_LABEL,
@@ -28,6 +29,7 @@ import {
   PAW_MIN_REVIEWS,
   PET_KIND_LABEL,
   ymd,
+  type Facility,
   type PawGrade,
   type PetCheck,
 } from '@/data/types';
@@ -41,6 +43,9 @@ import { primaryPhoneNumber } from '@/lib/phone';
 
 /** 리뷰 로딩 전/집계 미도달 시 헤더 발자국 배지의 기본값 */
 const EMPTY_GRADE: PawGrade = { level: null, label: null, score: null, count: 0, needMore: PAW_MIN_REVIEWS };
+
+/** 대안 시설을 찾을 반경. 가려던 곳에서 걸어서·잠깐 차로 갈 만한 거리. */
+const ALT_RADIUS_M = 10_000;
 
 export default function FacilityDetailScreen() {
   const p = usePalette();
@@ -64,6 +69,8 @@ export default function FacilityDetailScreen() {
     addCalendarEvent,
     facilityById,
     loadFacility,
+    registerFacilities,
+    lastCoords,
   } = useAppStore();
 
   // 서버 검색결과 캐시 우선, 없으면 목데이터
@@ -94,17 +101,51 @@ export default function FacilityDetailScreen() {
   // 판별·만족도·친화도 세 섹션을 토글로 — 한 화면에 다 쌓으면 스크롤이 너무 길다
   const [tab, setTab] = useState<'check' | 'satis' | 'review'>('check');
 
-  const alternatives = useMemo(() => {
-    if (!facility) return [];
-    return FACILITIES.filter(
-      (f) =>
-        f.facilityId !== facility.facilityId &&
-        f.category === facility.category &&
-        f.petAllowed === true,
-    )
-      .sort((a, b) => (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity))
-      .slice(0, 3);
-  }, [facility]);
+  /**
+   * 거부됐을 때 대신 갈 만한 곳.
+   *
+   * 예전에는 목 데이터에서 골라서, 고양시에서 거부당한 사람에게 강릉 시설을 권했다.
+   * 서버에서 **이 시설 근처의** 같은 카테고리·동반 가능 시설을 찾는다 — 기준점은
+   * 사용자 위치가 아니라 시설 좌표다. 가려던 곳 근처여야 대안이 된다.
+   */
+  const [alternatives, setAlternatives] = useState<Facility[]>([]);
+  useEffect(() => {
+    // 거부일 때만 쓰인다. 미리 불러두면 쓰지도 않을 검색을 상세마다 날리게 된다.
+    if (!facility || check?.overall !== 'DENIED') {
+      setAlternatives([]);
+      return;
+    }
+    const center =
+      Number.isFinite(facility.latitude) && Number.isFinite(facility.longitude)
+        ? { latitude: facility.latitude as number, longitude: facility.longitude as number }
+        : lastCoords;
+    if (!center) {
+      setAlternatives([]);
+      return;
+    }
+    let active = true;
+    facilitiesApi
+      .search({
+        latitude: center.latitude,
+        longitude: center.longitude,
+        category: facility.category,
+        petAllowed: 'ALLOWED',
+        radiusM: ALT_RADIUS_M,
+        size: 6,
+      })
+      .then((res) => {
+        if (!active) return;
+        registerFacilities(res.items);
+        setAlternatives(res.items.filter((f) => f.facilityId !== facility.facilityId).slice(0, 3));
+      })
+      .catch(() => {
+        // 대안을 못 찾는 건 조용히 넘어간다. 거부 안내 자체를 가릴 이유가 없다.
+        if (active) setAlternatives([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [facility, check?.overall, lastCoords, registerFacilities]);
 
   // 시설 상세에 들어오면 친화도 리뷰 + 우리 아이 만족도를 서버에서 불러온다.
   useEffect(() => {
