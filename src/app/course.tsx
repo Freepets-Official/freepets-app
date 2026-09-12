@@ -51,7 +51,8 @@ const PICK_FALLBACK_CENTER: Coords = { latitude: 37.5665, longitude: 126.978 };
 export default function CourseScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { pets, satisfactions, facilityById, registerFacilities, lastCoords, setLastCoords } = useAppStore();
+  const { pets, satisfactions, facilityById, registerFacilities, loadFacility, lastCoords, setLastCoords } =
+    useAppStore();
 
   const [selectedPetIds, setSelectedPetIds] = useState<number[]>(pets.map((x) => x.petId));
   const [stopIds, setStopIds] = useState<number[]>([]);
@@ -554,6 +555,27 @@ export default function CourseScreen() {
     setPicking(false);
   };
 
+  /**
+   * 저장해 둔 코스를 빌더로 불러온다.
+   *
+   * 서버의 내 코스 목록(`GET /courses`)은 스톱을 **시설 ID만** 준다. 그 ID가 캐시에
+   * 없으면 빌더가 이름을 못 그려 빈 화면이 된다 — 담은 코스를 열었는데 아무것도 없는
+   * 것처럼 보이던 원인이다. 상세를 미리 받아 캐시를 채운 뒤 스톱을 세운다.
+   */
+  const [openingCourseId, setOpeningCourseId] = useState<number | null>(null);
+  const openSavedCourse = async (course: SavedCourse) => {
+    setOpeningCourseId(course.courseId);
+    try {
+      const missing = course.stopIds.filter((id) => !facilityById(id));
+      await Promise.all(missing.map((id) => loadFacility(id)));
+    } finally {
+      setOpeningCourseId(null);
+    }
+    setStopIds(course.stopIds);
+    setValidated(false);
+    setPicking(false);
+  };
+
   const addStop = (facilityId: number) => {
     setStopIds((prev) => (prev.includes(facilityId) ? prev : [...prev, facilityId]));
     setValidated(false);
@@ -729,13 +751,23 @@ export default function CourseScreen() {
                   <Text style={[styles.blockLabel, { color: p.ink }]}>내 코스 · {savedCourses.length}개</Text>
                   {savedCourses.map((c) => (
                     <View key={c.courseId} style={[styles.savedRow, { borderColor: p.line }]}>
-                      <Ionicons name="bookmark" size={15} color={p.accent} />
-                      <Text style={[styles.savedName, { color: p.ink }]} numberOfLines={1}>
-                        {c.name}
-                      </Text>
-                      <Text style={[styles.savedMeta, { color: p.muted, marginLeft: 'auto' }]}>
-                        {c.stopIds.length}곳
-                      </Text>
+                      {/* 이름 영역만 누르게 한다 — 옆의 공개 토글·삭제와 겹치면 안 된다 */}
+                      <Pressable
+                        onPress={() => void openSavedCourse(c)}
+                        disabled={openingCourseId !== null}
+                        style={({ pressed }) => [styles.savedTap, { opacity: pressed ? 0.6 : 1 }]}>
+                        {openingCourseId === c.courseId ? (
+                          <ActivityIndicator size="small" color={p.accent} />
+                        ) : (
+                          <Ionicons name="bookmark" size={15} color={p.accent} />
+                        )}
+                        <Text style={[styles.savedName, { color: p.ink }]} numberOfLines={1}>
+                          {c.name}
+                        </Text>
+                        <Text style={[styles.savedMeta, { color: p.muted, marginLeft: 'auto' }]}>
+                          {c.stopIds.length}곳
+                        </Text>
+                      </Pressable>
                       {/* 공개 토글 — 켜면 둘러보기 목록에 뜬다. 되돌릴 수 있으니 확인은 묻지 않는다 */}
                       {publicPendingId === c.courseId ? (
                         <ActivityIndicator color={p.muted} size="small" />
@@ -1544,6 +1576,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderWidth: 1, borderRadius: Radius.md, paddingVertical: 11, paddingHorizontal: Spacing.lg,
   },
+  savedTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   savedName: { fontSize: 13.5, fontWeight: '700', flexShrink: 1 },
   savedMeta: { fontSize: 11.5 },
   // 공개 코스는 이름 아래에 올린 사람을 함께 보여준다 — 남의 코스라는 게 한눈에 보여야 한다
