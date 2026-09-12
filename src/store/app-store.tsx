@@ -1222,9 +1222,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [topPlaces],
   );
 
-  // 홈 "좋아한 곳 TOP3"를 로그인 시 서버에서 미리 받아둔다(반려동물 카드 스택 → 한 번에).
+  /**
+   * 홈 "좋아한 곳 TOP3"를 로그인 시 서버에서 미리 받아둔다(반려동물 카드 스택 → 한 번에).
+   *
+   * **로그인 전에는 부르지 않는다.** 의존성에 session.authed만 있고 가드가 없어서, 앱이
+   * 뜨자마자 토큰 없이 GET /pets/satisfactions가 나가 401(COMMON401)이 찍혔다.
+   * 인증 헤더를 안 붙인 게 아니라 붙일 토큰이 아직 없던 것이다.
+   * 반려동물·회원정보 조회와 같은 이유다 — 늦게 온 401이 새 세션을 만료시킬 수도 있다.
+   */
   useEffect(() => {
-    loadTopPlaces();
+    if (!session.authed && !(__DEV__ && DEV_TOKEN)) return;
+    void loadTopPlaces();
   }, [session.authed, loadTopPlaces]);
 
   // 서버 검색으로 받은 시설을 상세 조회용으로 캐시한다(탐색 목록에서 탭 → 상세에서 재조회).
@@ -1518,7 +1526,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // 저장된 세션을 되살린다. 토큰이 남아 있어도 **유효한지는 확인해야 한다** —
   // 만료된 토큰으로 로그인 상태를 만들면 화면은 들어가지는데 모든 조회가 401로
-  // 실패해, 데이터가 텅 빈 채로 로그인된 것처럼 보인다. 서버 재발급 API도 없다.
+  // 실패해, 데이터가 텅 빈 채로 로그인된 것처럼 보인다. (재발급이 붙은 뒤로는 조회가
+  // 알아서 되살리지만, 리프레시까지 죽었으면 여기서 걸러야 한다.)
   //
   // 회원정보 조회로 확인한다. 성공하면 닉네임·아바타까지 같이 채워진다.
   useEffect(() => {
