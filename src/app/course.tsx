@@ -50,6 +50,7 @@ const PICK_FALLBACK_CENTER: Coords = { latitude: 37.5665, longitude: 126.978 };
 
 export default function CourseScreen() {
   const p = usePalette();
+  const router = useRouter();
   const { pets, satisfactions, facilityById, registerFacilities, lastCoords, setLastCoords } = useAppStore();
 
   const [selectedPetIds, setSelectedPetIds] = useState<number[]>(pets.map((x) => x.petId));
@@ -970,7 +971,12 @@ export default function CourseScreen() {
                       )}
                     </View>
 
-                    <View style={styles.stopBody}>
+                    {/* 이름 영역만 눌리게 한다 — 옆의 순서 이동·삭제 버튼과 겹치면 안 된다 */}
+                    <Pressable
+                      onPress={() =>
+                        router.push({ pathname: '/facility/[id]', params: { id: String(f.facilityId) } })
+                      }
+                      style={({ pressed }) => [styles.stopBody, { opacity: pressed ? 0.6 : 1 }]}>
                       <View style={styles.stopTop}>
                         <Text style={[styles.stopCat, { color: p.accent }]}>
                           {CATEGORY_LABEL[f.category]}
@@ -981,7 +987,7 @@ export default function CourseScreen() {
                       <Text style={[styles.stopMeta, { color: p.muted }]}>
                         {formatDistance(f.distanceM)}
                       </Text>
-                    </View>
+                    </Pressable>
 
                     <View style={styles.stopActions}>
                       <Pressable
@@ -1194,6 +1200,17 @@ function CourseCheckAction({
 
 function CourseCheckPanel({ result }: { result: CourseCheckResult }) {
   const p = usePalette();
+  const router = useRouter();
+  /**
+   * 스톱을 누르면 시설 상세로 간다.
+   *
+   * 「조건부」가 왜 조건부인지 확인하려면 시설이 게시한 원문을 봐야 하는데, 코스 판별
+   * 응답에는 원문이 없다(FacilitySummary는 id·이름·카테고리뿐). 그래서 지금까지는
+   * 코스를 벗어나 시설을 다시 검색해 들어갔다가 돌아와야 했다. 뒤로가기로 코스에
+   * 그대로 돌아오므로 판별 결과도 남는다.
+   */
+  const openFacility = (facilityId: number) =>
+    router.push({ pathname: '/facility/[id]', params: { id: String(facilityId) } });
   const tone =
     result.overall === 'DENIED' ? p.danger : result.overall === 'CONDITIONAL' ? p.warn : p.success;
   return (
@@ -1211,7 +1228,10 @@ function CourseCheckPanel({ result }: { result: CourseCheckResult }) {
       </View>
 
       {result.stops.map((st) => (
-        <View key={st.facility.facilityId} style={styles.checkStop}>
+        <Pressable
+          key={st.facility.facilityId}
+          onPress={() => openFacility(st.facility.facilityId)}
+          style={({ pressed }) => [styles.checkStop, { opacity: pressed ? 0.6 : 1 }]}>
           <Text style={[styles.checkTime, { color: p.muted }]}>{st.time}</Text>
           <View style={styles.checkStopBody}>
             <View style={styles.checkStopHead}>
@@ -1219,6 +1239,7 @@ function CourseCheckPanel({ result }: { result: CourseCheckResult }) {
                 {st.facility.name}
               </Text>
               <ResultBadge result={st.overall} />
+              <Ionicons name="chevron-forward" size={15} color={p.muted} />
             </View>
             {st.verdicts.map((v) => (
               <Text key={v.petId} style={[styles.checkReason, { color: p.muted }]}>
@@ -1236,8 +1257,9 @@ function CourseCheckPanel({ result }: { result: CourseCheckResult }) {
                   가까운 곳 중엔 대체할 만한 시설을 찾지 못했어요. 이 스톱은 빼는 걸 권해요.
                 </Text>
               ))}
+            <Text style={[styles.checkOpen, { color: p.accent }]}>눌러서 시설 조건 원문 보기</Text>
           </View>
-        </View>
+        </Pressable>
       ))}
     </View>
   );
@@ -1546,6 +1568,7 @@ const styles = StyleSheet.create({
   checkStopHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   checkStopName: { fontSize: 13.5, fontWeight: '700', flexShrink: 1 },
   checkReason: { fontSize: 11.5, lineHeight: 17 },
+  checkOpen: { fontSize: 12, fontWeight: '700', marginTop: 4 },
   checkAlt: { fontSize: 11.5, lineHeight: 17, fontWeight: '600' },
   stopReason: { fontSize: 11.5, lineHeight: 17, paddingLeft: 30 },
   coldStart: { fontSize: 12, lineHeight: 18 },
