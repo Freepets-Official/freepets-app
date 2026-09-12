@@ -298,7 +298,8 @@ export interface NewReview {
 
 interface AppStore {
   /** 내 사용자 id — 내가 쓴 리뷰 구분 등에 쓴다 */
-  myUserId: number;
+  /** 내 사용자 ID. 서버에서 받기 전에는 `null`이다 — 그때는 내 글 여부를 단정하지 않는다. */
+  myUserId: number | null;
   pets: Pet[];
   addPet: (input: Omit<Pet, 'petId'>) => void;
   removePet: (petId: number) => void;
@@ -476,7 +477,16 @@ interface AppStore {
   switchProfile: () => void;
 }
 
-const MY_USER_ID = 1;
+/**
+ * 내 사용자 ID. **서버가 알려줄 때까지는 모른다(null).**
+ *
+ * 예전에는 1로 박아뒀다. 그래서 ID가 1이 아닌 사람은 자기 리뷰에 삭제 대신 신고가 뜨고,
+ * 사용자 1의 리뷰는 누구에게나 삭제 버튼이 보였다. 모를 때는 남의 리뷰에 삭제가 뜨지
+ * 않는 쪽(= 전부 신고)으로 둔다 — 틀린 추측보다 낫다.
+ *
+ * 지금은 `POST /auth/refresh` 응답에서만 받을 수 있다. 백엔드가 `GET /users/account`에
+ * `userId`를 넣어 주면 로그인 직후부터 알 수 있다(요청해 둠).
+ */
 const AppStoreContext = createContext<AppStore | null>(null);
 
 /**
@@ -510,6 +520,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [stampRegions, setStampRegions] = useState<Region[]>([]);
   // 반려동물별 좋아한 곳 TOP3 (홈) — 서버가 시설명·카테고리까지 계산해 내려준다
   const [topPlaces, setTopPlaces] = useState<Record<number, TopPlace[]>>({});
+  const [myUserId, setMyUserId] = useState<number | null>(null);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   /**
    * 저장된 설정을 읽기 전에는 기록하지 않는다. 불러오기 전에 저장하면 기본값이 덮어써서
@@ -793,7 +804,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const myReviewFor = useCallback(
     (facilityId: number) =>
-      reviews.find((r) => r.facilityId === facilityId && r.userId === MY_USER_ID),
+      reviews.find((r) => r.facilityId === facilityId && myUserId != null && r.userId === myUserId),
     [reviews],
   );
 
@@ -1419,6 +1430,37 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /**
+   * 계정에 딸린 상태를 전부 비운다.
+   *
+   * 로그아웃과 세션 만료가 같은 정리를 해야 한다. 만료 뒤에 반드시 같은 사람이 다시
+   * 로그인한다는 보장이 없는데, 예전에는 만료가 토큰만 지워서 A의 일정·도장·만족도가
+   * B 화면에 그대로 남았다.
+   *
+   * 설정(화면 모드·글씨 크기·앱 잠금)은 기기에 속한 값이라 남긴다.
+   */
+  const clearAccountState = useCallback(() => {
+    setMyUserId(null);
+    setPets([]);
+    setChecks([]);
+    setHiddenCheckIds([]);
+    setReports([]);
+    setReviews([]);
+    setReviewData({});
+    setReviewErrors(new Set());
+    setReportedReviewIds(new Set());
+    setServerDenials({});
+    setCalendarEvents([]);
+    setMedLog(new Set());
+    setSatisfactions([]);
+    setBusinessRegs({});
+    setUserConfirmedIds(new Set());
+    setPendingCallConfirm(null);
+    setAccount({ nickname: '나', avatarUri: null });
+    setStamps([]);
+    void clearStamps();
+  }, []);
+
+  /**
    * 세션 만료 — 401을 받았을 때 부른다.
    *
    * 로그아웃과 **도장 처리가 다르다.** 로그아웃은 기기를 남에게 넘길 수 있다고 보고
@@ -1437,7 +1479,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
     void clearSession();
-  }, []);
+    clearAccountState();
+  }, [clearAccountState]);
 
   // request가 401을 만나면 이 함수를 부른다. api.ts는 React에 기대지 않으므로 등록으로 잇는다.
   useEffect(() => {
@@ -1452,8 +1495,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 복원을 시도하다 로그아웃된다.
    */
   useEffect(() => {
-    setTokensRefreshedHandler(({ accessToken, refreshToken }) => {
+    setTokensRefreshedHandler(({ accessToken, refreshToken, userId }) => {
       refreshedRef.current = { accessToken, refreshToken };
+      if (typeof userId === 'number') setMyUserId(userId);
       setAccessToken(accessToken);
       refreshTokenRef.current = refreshToken;
       /**
@@ -1493,32 +1537,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     refreshTokenRef.current = null;
     setSession({ authed: false, email: null, activeProfile: null });
     void clearSession(); // 남겨두면 다음 실행에 로그아웃한 계정으로 되살아난다
-    // 도장은 서버가 아니라 기기에 있어 계정과 묶여 있지 않다. 안 지우면 다음에 로그인한
-    // 사람에게 앞사람의 도장첩·뱃지가 그대로 보인다. 대신 같은 사람이 다시 로그인해도
-    // 도장은 돌아오지 않는다 — 2단계에서 서버로 옮기면 해소된다.
-    setStamps([]);
-    void clearStamps();
-
-    /**
-     * 계정에 딸린 상태를 전부 비운다.
-     *
-     * 예전에는 도장만 지웠다. 그래서 A로 일정을 만들고 로그아웃한 뒤 B로 들어가면 A의
-     * 일정이 그대로 보였고, B의 조회가 실패하면 A의 반려동물·닉네임까지 남았다.
-     * 남의 계정 화면에 내 데이터가 보이는 것은 기능 문제가 아니라 사고다.
-     *
-     * 설정(화면 모드·글씨 크기·앱 잠금)은 기기에 속한 값이라 남긴다.
-     */
-    setPets([]);
-    setChecks([]);
-    setHiddenCheckIds([]);
-    setReports([]);
-    setReviews([]);
-    setCalendarEvents([]);
-    setMedLog(new Set());
-    setSatisfactions([]);
-    setBusinessRegs({});
-    setAccount({ nickname: '나', avatarUri: null });
-  }, []);
+    // 도장도 여기서 함께 지운다. 기기에 있어 계정과 묶여 있지 않아서, 안 지우면 다음에
+    // 로그인한 사람에게 앞사람의 도장첩·뱃지가 그대로 보인다.
+    clearAccountState();
+  }, [clearAccountState]);
 
   const selectProfile = useCallback((kind: ProfileKind) => {
     setSession((s) => ({ ...s, activeProfile: kind }));
@@ -1780,7 +1802,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
-      myUserId: MY_USER_ID,
+      myUserId,
       pets,
       addPet,
       removePet,

@@ -102,9 +102,11 @@ export function bumpSessionEpoch(): number {
 }
 
 /** 재발급에 성공하면 새 토큰 쌍을 store에 넘겨 기기에도 남기게 한다. */
-let onTokensRefreshed: ((t: { accessToken: string; refreshToken: string }) => void) | null = null;
+let onTokensRefreshed:
+  | ((t: { accessToken: string; refreshToken: string; userId?: number }) => void)
+  | null = null;
 export function setTokensRefreshedHandler(
-  fn: ((t: { accessToken: string; refreshToken: string }) => void) | null,
+  fn: ((t: { accessToken: string; refreshToken: string; userId?: number }) => void) | null,
 ) {
   onTokensRefreshed = fn;
 }
@@ -148,6 +150,7 @@ async function refreshTokens(): Promise<RefreshOutcome> {
     const json = (await res.json().catch(() => null)) as ApiEnvelope<{
       accessToken: string;
       refreshToken: string;
+      userId?: number;
     }> | null;
     /**
      * 서버는 토큰 오류를 전부 401로 주고 코드로 갈라 준다.
@@ -164,7 +167,7 @@ async function refreshTokens(): Promise<RefreshOutcome> {
     if (epoch !== sessionEpoch) return 'stale';
     authToken = json.result.accessToken;
     refreshToken = json.result.refreshToken ?? refreshToken;
-    onTokensRefreshed?.({ accessToken: authToken, refreshToken });
+    onTokensRefreshed?.({ accessToken: authToken, refreshToken, userId: json.result.userId });
     return 'ok';
   } catch {
     // 타임아웃·네트워크 단절. 리프레시 토큰은 멀쩡하므로 세션을 지우지 않는다.

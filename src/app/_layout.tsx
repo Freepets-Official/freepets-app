@@ -33,9 +33,17 @@ function useAuthGate() {
     const seg = segments[0];
     const onAuth = seg === 'login' || seg === 'signup';
     const onPicker = seg === 'profile-select';
+    /**
+     * 약관·개인정보처리방침은 **로그인 없이 읽을 수 있어야 한다.**
+     *
+     * 앱스토어에 낸 개인정보처리방침 URL이 이 경로(`/policy?tab=privacy`)다. 게이트가
+     * 로그인으로 돌려보내면 심사자가 방침을 아예 못 읽는다 — 확정 리젝 사유다.
+     * 앱 안에서도 가입 전에 약관을 확인하려는 사람을 막을 이유가 없다.
+     */
+    const isPublicDoc = seg === 'policy';
 
     if (!session.authed) {
-      if (!onAuth) router.replace('/login');
+      if (!onAuth && !isPublicDoc) router.replace('/login');
     } else if (session.activeProfile == null) {
       if (!onPicker) router.replace('/profile-select');
     } else if (onAuth || onPicker) {
