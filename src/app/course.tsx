@@ -425,7 +425,12 @@ export default function CourseScreen() {
           .catch((e) => ({ ok: false as const, empty: e instanceof ApiError && e.code === 'COURSE4002' })),
         coursesApi.similar(params).catch(() => null),
       ]);
-      if (!active) return;
+      // 화면을 떠났으면 상태를 건드리지 않는다. 로딩만은 내린다 — 켜둔 채 빠져나가면
+      // 다시 들어왔을 때 아무도 끄지 않는 스피너가 남는다.
+      if (!active) {
+        setPersonalLoading(false);
+        return;
+      }
       setLiked(lk.ok ? lk.value : null);
       setLikedEmpty(!lk.ok && lk.empty);
       setPersonalError(!lk.ok && !lk.empty);

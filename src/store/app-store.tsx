@@ -19,6 +19,7 @@ import {
   reviewsApi,
   satisfactionApi,
   setAuthToken,
+  setUnauthorizedHandler,
   type ServerDenialReport,
 } from '@/lib/api';
 import type { Coords } from '@/lib/location';
@@ -1349,6 +1350,29 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     },
     [businessRegs],
   );
+
+  /**
+   * 세션 만료 — 401을 받았을 때 부른다.
+   *
+   * 로그아웃과 **도장 처리가 다르다.** 로그아웃은 기기를 남에게 넘길 수 있다고 보고
+   * 기기에 남은 도장을 지우지만, 만료는 같은 사람이 다시 로그인할 뿐이라 지울 이유가 없다.
+   * 서버에 재발급 API가 없어 토큰을 되살릴 수 없으므로 로그인 화면으로 돌려보낸다.
+   */
+  const expireSession = useCallback(() => {
+    sessionRev.current += 1;
+    setRestoring(false);
+    setAccessToken(null);
+    setAuthToken(null);
+    refreshTokenRef.current = null;
+    setSession({ authed: false, email: null, activeProfile: null });
+    void clearSession();
+  }, []);
+
+  // request가 401을 만나면 이 함수를 부른다. api.ts는 React에 기대지 않으므로 등록으로 잇는다.
+  useEffect(() => {
+    setUnauthorizedHandler(expireSession);
+    return () => setUnauthorizedHandler(null);
+  }, [expireSession]);
 
   const logout = useCallback(() => {
     sessionRev.current += 1; // 복원이 늦게 끝나 로그아웃을 되돌리지 않도록
