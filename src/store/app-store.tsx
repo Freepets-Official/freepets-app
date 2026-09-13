@@ -488,7 +488,8 @@ interface AppStore {
   ) => void;
   /** 현재 액세스 토큰(인증 헤더용). 미로그인이면 null */
   accessToken: string | null;
-  logout: () => void;
+  /** 로그아웃. 탈퇴 직후에는 `skipPushUnregister`로 부른다 — 서버가 이미 토큰을 지웠다. */
+  logout: (opts?: { skipPushUnregister?: boolean }) => void;
   /** 프로필 선택(넷플릭스식) — 고른 프로필로 화면 세트가 바뀐다 */
   selectProfile: (kind: ProfileKind) => void;
   /** 다시 프로필 선택 화면으로 (다중 프로필일 때 전환용) */
@@ -1757,12 +1758,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   const PUSH_UNREGISTER_WAIT_MS = 3000;
 
-  const logout = useCallback(() => {
+  /**
+   * @param opts.skipPushUnregister 탈퇴 뒤에는 건너뛴다. 서버가 탈퇴 시점에 그 계정의
+   *   푸시 토큰을 이미 전부 지우고, 남은 토큰으로 부르면 MEMBER4007만 돌아온다.
+   *   그걸 기다리느라 최대 3초를 서 있을 이유가 없다.
+   */
+  const logout = useCallback((opts?: { skipPushUnregister?: boolean }) => {
     // 등록이 아직 진행 중일 수도 있다. 그 토큰까지 함께 해제한다.
     const pushed = pushTokenRef.current ?? pushPendingRef.current;
     pushTokenRef.current = null;
     pushPendingRef.current = null;
-    if (!pushed) {
+    if (!pushed || opts?.skipPushUnregister) {
       finishLogout();
       return;
     }
