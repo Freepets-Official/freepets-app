@@ -5,7 +5,7 @@ metadata:
   type: reference
 ---
 
-라이브 Swagger(`https://54.116.37.26/v3/api-docs`)와 실호출로 확인한 것들(2026-09-08).
+라이브 Swagger(`https://3.35.195.228.nip.io/v3/api-docs`)와 실호출로 확인한 것들(2026-09-08).
 코드만 읽어서는 안 보이는 서버 쪽 사실이라 리뷰 때마다 다시 파지 말 것.
 
 **`GET /api/v1/courses/public`은 인증이 없다.** 토큰을 받지 않으므로 서버가 호출자를 모르고,
