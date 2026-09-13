@@ -35,7 +35,7 @@ import { API_URL, DEV_TOKEN } from './config';
  * 서버 응답 봉투: { isSuccess, code, message, result }.
  * 성공이면 result만 돌려주고, 실패·네트워크 오류는 ApiError로 던진다.
  *
- * 계약의 단일 소스는 라이브 Swagger: https://54.116.37.26/swagger-ui/index.html
+ * 계약의 단일 소스는 라이브 Swagger: https://3.35.195.228.nip.io/swagger-ui/index.html
  */
 export type ApiEnvelope<T> = {
   isSuccess: boolean;
