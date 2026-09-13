@@ -24,8 +24,24 @@ export function BiometricGate({ children }: { children: ReactNode }) {
   const [authing, setAuthing] = useState(false);
   const appState = useRef(AppState.currentState);
 
+  /**
+   * 생체인증 때문에 앱이 잠깐 백그라운드로 가는 구간.
+   *
+   * Face ID·지문 창이 뜨면 앱은 `inactive`가 되고, 인증이 끝나면 `active`로 돌아온다.
+   * 그런데 아래 AppState 리스너는 그 복귀를 "사용자가 앱을 떠났다 돌아왔다"로 읽고 다시
+   * 잠갔다 — 잠그면 다시 인증창이 뜨고, 그게 또 복귀를 만들어 **무한히 반복**됐다.
+   *
+   * 인증 중이거나 막 끝난 직후의 복귀는 우리가 만든 것이므로 다시 잠그지 않는다.
+   * 리스너는 클로저라 상태가 아니라 ref로 읽어야 한다.
+   */
+  const authingRef = useRef(false);
+  const settleUntilRef = useRef(0);
+  /** 인증 직후 OS가 늦게 보내는 active 이벤트까지 덮을 여유 */
+  const SETTLE_MS = 1500;
+
   const unlock = useCallback(async () => {
-    if (authing) return;
+    if (authingRef.current) return;
+    authingRef.current = true;
     setAuthing(true);
     try {
       const res = await LocalAuthentication.authenticateAsync({
@@ -34,9 +50,11 @@ export function BiometricGate({ children }: { children: ReactNode }) {
       });
       if (res.success) setLocked(false);
     } finally {
+      settleUntilRef.current = Date.now() + SETTLE_MS;
+      authingRef.current = false;
       setAuthing(false);
     }
-  }, [authing]);
+  }, []);
 
   // 잠금이 활성화되면(로그인 + 설정 on) 곧바로 잠근다
   useEffect(() => {
@@ -44,11 +62,13 @@ export function BiometricGate({ children }: { children: ReactNode }) {
     else setLocked(false);
   }, [active]);
 
-  // 백그라운드 → 포그라운드 복귀 시 다시 잠근다
+  // 백그라운드 → 포그라운드 복귀 시 다시 잠근다.
+  // 단, 인증창 때문에 생긴 복귀는 제외한다(위 주석 참고).
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
       const prev = appState.current;
       appState.current = next;
+      if (authingRef.current || Date.now() < settleUntilRef.current) return;
       if (active && prev.match(/inactive|background/) && next === 'active') setLocked(true);
     });
     return () => sub.remove();

@@ -415,6 +415,18 @@ export default function FacilityDetailScreen() {
                     })}
                   </View>
 
+                  {/*
+                    판별 대상이 아닌 아이가 있으면 여기서 이름을 불러준다.
+                    예전에는 선택란에서 조용히 빠져서, 방금 등록한 아이가 보이지 않으면
+                    "등록이 안 됐나" 하고 의심하게 됐다. 왜 없는지 그 자리에서 말해준다.
+                  */}
+                  {special.length > 0 && (
+                    <Text style={[styles.pickHint, { color: p.muted }]}>
+                      {special.map((sp) => `${sp.name}(${PET_KIND_LABEL[sp.kind]})`).join(' · ')}는 AI
+                      판별 대상이 아니에요. 아래 안내를 확인해 주세요.
+                    </Text>
+                  )}
+
                   <Pressable
                     onPress={startCheck}
                     disabled={loading || selectedIds.length === 0}
