@@ -16,6 +16,14 @@ export type ProviderToken = {
   /** 애플 최초 로그인에서만 값이 있다. 그 한 번을 놓치면 서버가 다시 물어볼 방법이 없다 */
   name?: string;
   email?: string;
+  /**
+   * 애플 전용. 서버가 **계정 삭제 시 애플 토큰을 폐기**하는 데 쓴다.
+   *
+   * Apple은 Sign in with Apple을 지원하는 앱에 탈퇴 시 토큰 폐기를 요구한다(5.1.1(v)).
+   * 그런데 이 코드는 **5분 만료·1회용**이라 탈퇴 시점에는 받을 수 없다 — 받으려면 그때
+   * 다시 로그인을 시켜야 한다. 그래서 **로그인할 때** 받아 서버에 맡겨 둔다.
+   */
+  authorizationCode?: string;
 };
 
 const KAKAO_KEY = process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY ?? '';
@@ -136,6 +144,8 @@ export async function getProviderToken(provider: SocialProvider): Promise<Provid
         providerToken: cred.identityToken,
         name,
         email: cred.email ?? undefined,
+        // 탈퇴 때 애플 토큰을 폐기하려면 서버가 이 코드를 갖고 있어야 한다(위 주석 참고).
+        authorizationCode: cred.authorizationCode ?? undefined,
       };
     }
   }

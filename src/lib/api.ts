@@ -365,9 +365,24 @@ export const authApi = {
    * `name`은 **애플 최초 로그인에서만** 보낸다. 애플은 이름을 id_token에 담지 않고 최초
    * 인가 응답에서 단 한 번만 주므로, 그때 못 받으면 서버가 나중에 물어볼 방법이 없다.
    */
-  social: (provider: SocialProvider, providerToken: string, name?: string) =>
+  social: (
+    provider: SocialProvider,
+    providerToken: string,
+    name?: string,
+    /**
+     * 애플 전용. 서버가 **탈퇴 시 애플 토큰을 폐기**하는 데 쓴다(Apple 5.1.1(v) 요구사항).
+     *
+     * 5분 만료·1회용이라 탈퇴 시점에는 받을 수 없다 — 그때 받으려면 재로그인을 시켜야 한다.
+     * 그래서 로그인할 때 함께 보내 서버가 보관한다. 값이 없으면 필드를 아예 빼서 보낸다.
+     */
+    authorizationCode?: string,
+  ) =>
     request<SocialLoginResult>('POST', `/api/v1/auth/social/${provider}`, {
-      body: name ? { providerToken, name } : { providerToken },
+      body: {
+        providerToken,
+        ...(name ? { name } : {}),
+        ...(authorizationCode ? { authorizationCode } : {}),
+      },
     }),
 };
 
