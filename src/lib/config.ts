@@ -7,7 +7,7 @@
  *
  * 값은 `.env`(로컬)·Vercel 환경변수(배포)에서 온다. 없으면 아래 기본값 사용.
  */
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://54.116.37.26';
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://3.35.195.228.nip.io';
 
 /**
  * 개발용 10년 테스트 토큰. 로그인 흐름이 붙기 전까지 보호 API를 이 토큰으로 호출한다.
