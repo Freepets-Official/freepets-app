@@ -35,7 +35,7 @@ import { API_URL, DEV_TOKEN } from './config';
  * 서버 응답 봉투: { isSuccess, code, message, result }.
  * 성공이면 result만 돌려주고, 실패·네트워크 오류는 ApiError로 던진다.
  *
- * 계약의 단일 소스는 라이브 Swagger: https://54.116.37.26/swagger-ui/index.html
+ * 계약의 단일 소스는 라이브 Swagger: https://3.35.195.228.nip.io/swagger-ui/index.html
  */
 export type ApiEnvelope<T> = {
   isSuccess: boolean;
@@ -128,8 +128,23 @@ let refreshInFlight: { epoch: number; promise: Promise<RefreshOutcome> } | null 
  */
 type RefreshOutcome = 'ok' | 'expired' | 'failed' | 'stale';
 
-/** 되살릴 수 없는 토큰 오류. 서버가 전부 401로 주므로 코드로 가른다. */
-const TOKEN_DEAD_CODES = new Set(['TOKEN4001', 'TOKEN4002', 'TOKEN4003', 'TOKEN4004']);
+/**
+ * 되살릴 수 없는 인증 오류. 서버가 전부 401로 주므로 코드로 가른다.
+ *
+ * `MEMBER4007`은 **탈퇴한 계정**이다. 이 서버는 탈퇴·로그아웃 때 서버 쪽 토큰 무효화를
+ * 하지 않아서(JWT 순수 검증, 블랙리스트 없음), 탈퇴 뒤에도 자연 만료 전까지 옛 토큰이
+ * 살아 있다. 그 토큰으로 다른 API를 부르면 매 요청 이 코드가 온다 — 재발급으로는 절대
+ * 풀리지 않으므로 만료와 똑같이 세션을 정리해야 한다.
+ * `MEMBER4005`(토큰의 유저 없음)도 같다.
+ */
+const TOKEN_DEAD_CODES = new Set([
+  'TOKEN4001',
+  'TOKEN4002',
+  'TOKEN4003',
+  'TOKEN4004',
+  'MEMBER4005',
+  'MEMBER4007',
+]);
 
 async function refreshTokens(): Promise<RefreshOutcome> {
   const token = refreshToken;
@@ -297,7 +312,20 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
         throw new ApiError('로그인이 필요해요.', 'NO_SESSION', 401);
       }
 
-      const outcome = await refreshOnce(startEpoch);
+      /**
+       * 재발급으로 풀리지 않는 401이 있다.
+       *
+       * 탈퇴한 계정(MEMBER4007)·없는 유저(MEMBER4005)는 토큰을 새로 받아도 같은 답이 온다.
+       * 굳이 재발급을 한 번 돌고 실패하느니 바로 세션을 정리한다.
+       */
+      const deadBody = (await res
+        .clone()
+        .json()
+        .catch(() => null)) as { code?: string } | null;
+      const outcome =
+        deadBody?.code && TOKEN_DEAD_CODES.has(deadBody.code)
+          ? ('expired' as const)
+          : await refreshOnce(startEpoch);
 
       // 기다리는 사이 로그아웃·재로그인이 있었다면 이 응답은 남의 세션 것이다.
       // 성공으로도 실패로도 취급하지 않고, 화면이 조용히 넘어가게 둔다.
@@ -1378,6 +1406,23 @@ export const coursesApi = {
     ),
 
   /**
+   * 공개/비공개 토글 **전용**.
+   *
+   * 예전에는 `PUT /courses/{id}`로 이름·스톱까지 전부 다시 실어 보내야 공개 여부가 바뀌었다.
+   * 지구본 아이콘 하나 누르는 동작에 코스 전체를 보내는 셈이라, 스톱이 비면 검증에 막혔다.
+   *
+   * 켤 때 `COURSE4045`가 오면 **코스에 담긴 시설 모두에 판별 기록과 리뷰가 있어야 한다**는
+   * 뜻이다. 새로 생긴 제약이 아니라 PUT에도 있던 검증이므로 안내 문구를 그대로 쓴다.
+   */
+  setVisibility: async (courseId: number, isPublic: boolean): Promise<SavedCourse> =>
+    toSavedCourse(
+      await request<SavedCourse>('PATCH', `/api/v1/courses/${courseId}/visibility`, {
+        body: { isPublic },
+        auth: true,
+      }),
+    ),
+
+  /**
    * 그 자리(0부터 시작)의 스톱만 교체한다. 개수가 바뀌는 추가·삭제는 update(전체 교체)를 쓴다.
    * 한 곳 스왑 때마다 stopIds 전체를 다시 구성해 보내지 않으려고 있는 API다.
    */
@@ -1422,9 +1467,18 @@ export const coursesApi = {
     q.set('page', String(params.page ?? 0));
     q.set('size', String(params.size ?? 10));
 
+    /**
+     * 인증 헤더를 **붙인다.**
+     *
+     * 이 API는 로그인 없이도 되지만, 토큰을 보내면 서버가 그 사용자의 아이 취향에 맞는 코스를
+     * 먼저 올려준다. 예전에는 `auth`를 빼서 항상 인기순만 받았다 — 에러가 안 나고 목록도
+     * 채워지므로 화면만 봐서는 알 수 없는 조용한 누락이었다.
+     * 토큰이 없으면 헤더가 안 붙고 그대로 인기순이 온다.
+     */
     const r = await request<{ items: ServerPublicCourse[] | null; total: number | null }>(
       'GET',
       `/api/v1/courses/public?${q.toString()}`,
+      { auth: true },
     );
     const items = (r.items ?? []).map(toPublicCourse);
     // total이 비면 받은 개수로 대신한다. 0으로 떨어뜨리면 항목이 있는데 "0개"로 보인다

@@ -285,12 +285,8 @@ export default function CourseScreen() {
     setPublicPendingId(course.courseId);
     setSaveMessage(null);
     try {
-      const updated = await coursesApi.update(course.courseId, {
-        name: course.name,
-        description: course.description ?? undefined,
-        stopIds: course.stopIds,
-        isPublic: next,
-      });
+      // 토글 전용 엔드포인트. 이름·스톱을 다시 보내지 않으므로 스톱이 비어도 막히지 않는다.
+      const updated = await coursesApi.setVisibility(course.courseId, next);
       setSavedCourses((prev) => prev.map((c) => (c.courseId === updated.courseId ? updated : c)));
       setSaveMessage({
         text: next ? `'${course.name}'을(를) 공개했어요` : `'${course.name}'을(를) 비공개로 바꿨어요`,
@@ -299,8 +295,17 @@ export default function CourseScreen() {
       // 둘러보기를 다시 부르지 않는다. 내 코스는 그 목록에서 걸러지므로 바뀔 게 없고,
       // 부르면 늦게 온 응답이 새 목록을 덮는 경합만 생긴다.
     } catch (e) {
+      /**
+       * COURSE4045 = 코스에 담긴 시설 전부에 판별 기록과 리뷰가 있어야 공개할 수 있다.
+       * 서버 문구가 이미 그 뜻을 담고 있어 그대로 쓰되, 다음에 뭘 하면 되는지 덧붙인다.
+       */
+      const isNeedReview = e instanceof ApiError && e.code === 'COURSE4045';
       setSaveMessage({
-        text: e instanceof Error ? e.message : '공개 설정을 바꾸지 못했어요',
+        text: isNeedReview
+          ? `${e.message}\n코스에 담긴 곳을 판별하고 리뷰를 남긴 뒤 다시 시도해 주세요.`
+          : e instanceof Error
+            ? e.message
+            : '공개 설정을 바꾸지 못했어요',
         failed: true,
       });
     } finally {

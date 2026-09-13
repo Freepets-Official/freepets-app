@@ -322,7 +322,7 @@ export default function SettingsScreen() {
               // 다시 로그인했을 때 사라진 걸 보고서야 알게 된다.
               body: '반려동물·판별 이력은 다시 로그인하면 그대로 있어요.\n다만 이 기기에 모은 여권 도장은 지워집니다.',
               action: '로그아웃',
-              onConfirm: logout,
+              onConfirm: () => logout(),
             })
           }
           tint
@@ -333,7 +333,11 @@ export default function SettingsScreen() {
           onPress={() =>
             setConfirm({
               title: '정말 탈퇴하시겠어요?',
-              body: '탈퇴하면 계정과 등록한 반려동물·리뷰·일정이 모두 삭제되고 되돌릴 수 없어요.',
+              // 실제로 지워지는 것만 적는다. 작성한 리뷰·공개 코스·거부 제보는 남고
+              // 작성자 이름만 "탈퇴한 계정"으로 바뀐다(api-specs/user.md 5번).
+              body:
+                '탈퇴하면 계정과 등록한 반려동물·일정이 삭제되고 되돌릴 수 없어요.\n' +
+                '이미 남긴 리뷰와 공개한 코스는 그대로 남고, 작성자만 「탈퇴한 계정」으로 바뀝니다.',
               action: '탈퇴하기',
               danger: true,
               askPassword: true,
@@ -341,7 +345,9 @@ export default function SettingsScreen() {
                 // 서버에서 실제로 지운 뒤에 세션을 정리한다. 순서가 바뀌면 토큰이 없어
                 // 삭제 요청 자체가 401이 된다.
                 await accountApi.remove(password);
-                logout();
+                // 서버가 탈퇴 시점에 푸시 토큰을 이미 지웠다. 다시 해제하려 들면
+                // 남은 토큰으로 MEMBER4007만 받고 최대 3초를 기다린다.
+                logout({ skipPushUnregister: true });
               },
             })
           }
