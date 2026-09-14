@@ -41,11 +41,14 @@ export function SocialButtons({
   onPress,
   available,
   pending,
+  disabled,
 }: {
   onPress: (key: SocialProvider) => void;
   /** 지금 실제로 동작하는 제공자만 그린다 */
   available: (key: SocialProvider) => boolean;
   pending?: SocialProvider | null;
+  /** 다른 로그인(이메일)이 진행 중일 때 — 두 로그인이 동시에 끝나면 계정이 섞인다 */
+  disabled?: boolean;
 }) {
   const shown = PROVIDERS.filter(
     (pv) => available(pv.key) && (pv.key !== 'apple' || Platform.OS === 'ios'),
@@ -58,10 +61,10 @@ export function SocialButtons({
         <Pressable
           key={pv.key}
           onPress={() => onPress(pv.key)}
-          disabled={pending != null}
+          disabled={pending != null || disabled}
           style={({ pressed }) => [
             styles.btn,
-            { backgroundColor: pv.bg, opacity: pressed || pending != null ? 0.9 : 1 },
+            { backgroundColor: pv.bg, opacity: pressed || pending != null || disabled ? 0.9 : 1 },
             pv.border ? { borderWidth: 1, borderColor: pv.border } : null,
           ]}>
           <View style={styles.mark}>

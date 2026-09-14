@@ -383,6 +383,11 @@ export default function CourseScreen() {
    */
   /** 빌더로 만든 코스의 판별 결과를 구분하는 키. 추천 코스(preset·liked·similar)와 섞이면 안 된다. */
   const BUILDER_KEY = 'builder';
+  /**
+   * 판별 요청의 순번. 서명 검사만으로는 A → B → 다시 A(같은 서명)로 돌아왔을 때 늦게 온
+   * 첫 A 응답을 걸러내지 못한다. 마지막으로 보낸 요청만 결과를 쓴다.
+   */
+  const checkReqRef = useRef(0);
 
   const checkSignature = (key: string, facilityIds: number[]) =>
     `${key}|${[...selectedPetIds].sort((a, b) => a - b).join(',')}|${facilityIds.join(',')}`;
@@ -406,19 +411,22 @@ export default function CourseScreen() {
     setCourseCheckKey(sig);
     setCourseCheckError(null);
     setCourseCheck(null);
+    const reqId = ++checkReqRef.current;
+    const stale = () => reqId !== checkReqRef.current || checkSignature(key, facilityIds) !== sig;
     try {
       const res = await aiApi.courseCheck(selectedPetIds, facilityIds);
-      // 그 사이 아이나 코스가 바뀌었으면 이 응답은 더 이상 화면의 답이 아니다
-      if (checkSignature(key, facilityIds) !== sig) return;
+      // 그 사이 아이나 코스가 바뀌었거나 더 새 요청이 나갔으면 이 응답은 화면의 답이 아니다
+      if (stale()) return;
       setCourseCheck({ key: sig, result: res });
     } catch (e) {
-      if (checkSignature(key, facilityIds) !== sig) return;
+      if (stale()) return;
       setCourseCheckError({
         key: sig,
         message: e instanceof Error ? e.message : '코스를 판별하지 못했어요',
       });
     } finally {
-      setCourseCheckKey((cur) => (cur === sig ? null : cur));
+      // 더 새 요청이 돌고 있으면 그쪽 스피너를 끄지 않는다
+      if (reqId === checkReqRef.current) setCourseCheckKey((cur) => (cur === sig ? null : cur));
     }
   };
   const [loading, setLoading] = useState(false);

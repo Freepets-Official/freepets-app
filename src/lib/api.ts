@@ -107,6 +107,14 @@ export function bumpSessionEpoch(): number {
   sessionEpoch += 1;
   return sessionEpoch;
 }
+/**
+ * 지금 세대. `request()` 밖에서 시간이 걸리는 준비(사진을 Blob으로 읽기 등)를 하는 호출자가
+ * **준비를 시작하기 전에** 잡아 `epoch` 옵션으로 넘긴다. 안 그러면 준비하는 동안 계정이
+ * 바뀌어도 요청은 새 계정의 토큰을 정상값으로 잡고 나간다 — A의 입력이 B 계정에 들어간다.
+ */
+export function getSessionEpoch(): number {
+  return sessionEpoch;
+}
 
 /** 재발급에 성공하면 새 토큰 쌍을 store에 넘겨 기기에도 남기게 한다. */
 let onTokensRefreshed:
@@ -240,13 +248,25 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 const TIMEOUT_MS = 15_000;
 const UPLOAD_TIMEOUT_MS = 60_000;
 
-async function request<T>(method: Method, path: string, opts: { body?: unknown; auth?: boolean } = {}): Promise<T> {
+type RequestOpts = {
+  body?: unknown;
+  auth?: boolean;
+  /** 호출자가 미리 잡아둔 세대. 요청을 보내기 전에 이미 바뀌었으면 보내지 않는다 */
+  epoch?: number;
+  /**
+   * 이 요청에만 쓸 토큰. 로그아웃 **뒤에** 그 계정의 것을 정리해야 할 때(늦게 성공한 푸시
+   * 등록의 해제) 쓴다 — 현재 토큰은 이미 없거나 다른 계정의 것이다. 세대 검사는 하지 않는다.
+   */
+  token?: string;
+};
+
+async function request<T>(method: Method, path: string, opts: RequestOpts = {}): Promise<T> {
   const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData;
   const buildHeaders = (): Record<string, string> => {
     const h: Record<string, string> = {};
     if (opts.body !== undefined && !isForm) h['Content-Type'] = 'application/json';
     if (opts.auth) {
-      const token = currentToken();
+      const token = opts.token ?? currentToken();
       if (token) h.Authorization = `Bearer ${token}`;
     }
     return h;
@@ -288,14 +308,23 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
   /**
    * 애초에 토큰이 있었는가. 없었다면 그 401은 "세션 만료"가 아니라 "아직 로그인 전"이다.
    */
-  const hadToken = !opts.auth || currentToken() != null;
+  const hadToken = !opts.auth || (opts.token ?? currentToken()) != null;
 
-  const startEpoch = sessionEpoch;
+  /**
+   * 세대 검사를 하는 요청인가. 토큰을 명시한 요청은 "그 세션의 뒤처리"라 세대가 바뀐 뒤에
+   * 보내는 것이 목적이다 — 검사하면 영영 못 보낸다.
+   */
+  const guarded = !!opts.auth && opts.token === undefined;
+  const startEpoch = opts.epoch ?? sessionEpoch;
+  if (guarded && startEpoch !== sessionEpoch) {
+    // 준비하는 동안 계정이 바뀌었다. A의 입력을 B로 보내지 않는다
+    throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
+  }
   // 타이머는 본문을 다 읽은 뒤에 끈다. 예외로 빠져나가는 경로에서도 반드시 꺼야 해서
   // 여기부터 함수 끝까지 try/finally로 감싼다.
   try {
     let res = await sendOnce();
-    if (opts.auth && startEpoch !== sessionEpoch) {
+    if (guarded && startEpoch !== sessionEpoch) {
       throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
     }
 
@@ -308,7 +337,7 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
      *
      * 재시도는 한 번만 한다 — 새 토큰으로도 401이면 토큰 문제가 아니다.
      */
-    if (opts.auth && res.status === 401) {
+    if (guarded && res.status === 401) {
       /**
        * 토큰이 없었으면 재발급도, 만료 처리도 의미가 없다.
        *
@@ -366,6 +395,14 @@ async function request<T>(method: Method, path: string, opts: { body?: unknown; 
     }
 
     const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null;
+    /**
+     * 본문을 읽는 동안에도 세션이 바뀔 수 있다 — 헤더는 A 세션에서 받고, `res.json()`을
+     * 기다리는 사이 로그아웃·B 로그인, 그 뒤 A 본문 도착. 출발 시점 검사만으로는 이 경로가
+     * 열려 있어 A의 성공 응답이 B 화면에 그대로 반환됐다. **모든 반환 경로가 세대를 본다.**
+     */
+    if (guarded && startEpoch !== sessionEpoch) {
+      throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
+    }
     if (!json || typeof json.isSuccess !== 'boolean') {
       // 업로드 용량 초과는 nginx가 앱 envelope가 아닌 413(HTML)로 막는다 → 친화 메시지로 변환
       if (res.status === 413) {
@@ -511,13 +548,18 @@ export const petsApi = {
     return (r.pets ?? []).map(toPet);
   },
   /** 등록(multipart) — 성공 시 새 petId 반환. */
-  create: async (input: Omit<Pet, 'petId'>) =>
-    request<{ petId: number }>('POST', '/api/v1/pets', { body: await toForm(input), auth: true }),
+  create: async (input: Omit<Pet, 'petId'>) => {
+    // 사진을 읽는 동안 계정이 바뀌면 이 입력은 그 계정의 것이 아니다 — 준비 전에 세대를 잡는다
+    const epoch = getSessionEpoch();
+    return request<{ petId: number }>('POST', '/api/v1/pets', { body: await toForm(input), auth: true, epoch });
+  },
   /** 단건 조회. */
   get: async (petId: number): Promise<Pet> => toPet(await request<ServerPet>('GET', `/api/v1/pets/${petId}`, { auth: true })),
   /** 수정(전체 필드, multipart PUT). */
-  update: async (petId: number, input: Omit<Pet, 'petId'>): Promise<Pet> =>
-    toPet(await request<ServerPet>('PUT', `/api/v1/pets/${petId}`, { body: await toForm(input), auth: true })),
+  update: async (petId: number, input: Omit<Pet, 'petId'>): Promise<Pet> => {
+    const epoch = getSessionEpoch();
+    return toPet(await request<ServerPet>('PUT', `/api/v1/pets/${petId}`, { body: await toForm(input), auth: true, epoch }));
+  },
   /** 삭제. */
   remove: (petId: number) => request<{ petId: number }>('DELETE', `/api/v1/pets/${petId}`, { auth: true }),
 };
@@ -560,13 +602,14 @@ export const accountApi = {
     }),
 
   update: async (nickname: string, photoUri: string | null): Promise<ServerAccount> => {
+    const epoch = getSessionEpoch();
     const fd = new FormData();
     fd.append('nickname', nickname);
     if (photoUri && !/^https?:/.test(photoUri)) {
       const blob = await (await fetch(photoUri)).blob();
       fd.append('avatar', blob, 'avatar.jpg');
     }
-    return request<ServerAccount>('PATCH', '/api/v1/users/account', { body: fd, auth: true });
+    return request<ServerAccount>('PATCH', '/api/v1/users/account', { body: fd, auth: true, epoch });
   },
 };
 
@@ -580,18 +623,23 @@ export const accountApi = {
  * 유저에게 붙인다(기기 재설치·계정 전환 대응). 그래서 로그인할 때마다 불러도 된다.
  */
 export const pushApi = {
-  register: (token: string, platform: 'IOS' | 'ANDROID') =>
+  /**
+   * `withToken`은 등록을 예약한 세션의 액세스 토큰. 등록·해제는 세대 검사 대신 **예약한
+   * 세션의 토큰으로 끝까지 간다** — 등록이 늦게 성공하면 같은 토큰으로 바로 되돌린다.
+   */
+  register: (token: string, platform: 'IOS' | 'ANDROID', withToken?: string) =>
     request<Record<string, never>>('POST', '/api/v1/users/push-tokens', {
       body: { token, platform },
       auth: true,
+      token: withToken,
     }),
 
   /** 로그아웃·앱 삭제 시. 없는 토큰이어도 서버가 조용히 넘어간다(200). */
-  unregister: (token: string) =>
+  unregister: (token: string, withToken?: string) =>
     request<Record<string, never>>(
       'DELETE',
       `/api/v1/users/push-tokens?token=${encodeURIComponent(token)}`,
-      { auth: true },
+      { auth: true, token: withToken },
     ),
 };
 
