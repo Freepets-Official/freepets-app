@@ -1,26 +1,22 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
+import { BusinessVerify } from '@/components/business-verify';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
-import { FACILITIES, formatDistance } from '@/data/mock';
+import { formatDistance } from '@/data/mock';
 import { CATEGORY_LABEL, REQUIREMENT_LABEL, type Requirement } from '@/data/types';
+import { useFacilityPicker } from '@/hooks/use-facility-picker';
 import { usePalette } from '@/hooks/use-theme';
+import { ApiError, type BusinessIdentity } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
 
 const REQUIREMENTS: Requirement[] = ['LEASH', 'CAGE', 'MUZZLE', 'VACCINATION', 'SMALL_ONLY', 'OUTDOOR_ONLY'];
-
-/** 사업자등록번호 10자리만 남긴다 */
-const digitsOnly = (s: string) => s.replace(/[^0-9]/g, '').slice(0, 10);
-const formatBizNo = (d: string) =>
-  d.length <= 3 ? d : d.length <= 5 ? `${d.slice(0, 3)}-${d.slice(3)}` : `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}`;
-/** 앞 5자리만 보이고 뒤는 가린다 (원본은 저장하지 않으므로 표시용) */
-const maskBizNo = (d: string) => `${d.slice(0, 3)}-${d.slice(3, 5)}-*****`;
 
 /**
  * 사업자 셀프 등록 (F5) — 사업자가 진위확인 후 자기 매장의 출입 조건을 직접 확정한다.
@@ -29,46 +25,31 @@ const maskBizNo = (d: string) => `${d.slice(0, 3)}-${d.slice(3, 5)}-*****`;
 export default function BusinessScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { registerBusiness, businessRegOf, selectProfile } = useAppStore();
+  const { claimFacility, businessRegOf, selectProfile, facilityById } = useAppStore();
 
-  const [bizDigits, setBizDigits] = useState('');
-  const [verified, setVerified] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [bizError, setBizError] = useState<string | null>(null);
+  /** 1단계에서 국세청이 확인한 사업자 정보. 3단계 확정 요청에 다시 실린다 */
+  const [identity, setIdentity] = useState<BusinessIdentity | null>(null);
+  const [bizMasked, setBizMasked] = useState('');
 
   const [facilityId, setFacilityId] = useState<number | null>(null);
-  const [query, setQuery] = useState('');
+  // 인증이 끝나고 아직 매장을 안 골랐을 때만 검색을 돌린다 — 그 전엔 위치 권한을 묻지 않는다
+  const picker = useFacilityPicker(!!identity && facilityId === null);
 
   const [petAllowed, setPetAllowed] = useState(true);
   const [maxWeight, setMaxWeight] = useState('');
+  const [maxWeightInclusive, setMaxWeightInclusive] = useState(true);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [conditionRaw, setConditionRaw] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const [done, setDone] = useState(false);
 
-  const facility = FACILITIES.find((f) => f.facilityId === facilityId) ?? null;
-
-  const candidates = useMemo(() => {
-    const q = query.trim();
-    return FACILITIES.filter((f) => !q || f.name.includes(q) || f.address.includes(q)).slice(0, 6);
-  }, [query]);
-
-  const verify = () => {
-    if (verifying) return;
-    if (bizDigits.length !== 10) return setBizError('사업자등록번호 10자리를 정확히 입력해 주세요');
-    setBizError(null);
-    setVerifying(true);
-    // 데모: 국세청 진위확인 API 호출을 흉내. 실제 연동은 백엔드가 data.go.kr 키로 처리한다.
-    setTimeout(() => {
-      setVerified(true);
-      setVerifying(false);
-    }, 900);
-  };
+  const facility = facilityId !== null ? (facilityById(facilityId) ?? null) : null;
 
   const selectFacility = (id: number) => {
     setFacilityId(id);
-    const f = FACILITIES.find((x) => x.facilityId === id);
+    const f = facilityById(id);
     if (f) {
       // 기존 관광공사 정보를 초깃값으로 채워 사업자가 수정만 하면 되게 한다
       setPetAllowed(f.petAllowed !== false);
@@ -82,8 +63,8 @@ export default function BusinessScreen() {
     setRequirements((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]));
   };
 
-  const submit = () => {
-    if (!facility) return;
+  const submit = async () => {
+    if (!facility || !identity || submitting) return;
     if (petAllowed && !conditionRaw.trim()) {
       return setFormError('손님이 볼 출입 조건을 한 줄이라도 적어 주세요');
     }
@@ -92,18 +73,31 @@ export default function BusinessScreen() {
       return setFormError('최대 허용 체중을 숫자로 입력해 주세요');
     }
     setFormError(null);
-    registerBusiness({
-      facilityId: facility.facilityId,
-      bizNoMasked: maskBizNo(bizDigits),
-      petAllowed,
-      maxWeight: petAllowed ? w : null,
-      requirements: petAllowed ? requirements : [],
-      conditionRaw: petAllowed
-        ? conditionRaw.trim()
-        : '반려동물 동반이 불가능합니다.',
-      confirmedAt: new Date().toISOString(),
-    });
-    setDone(true);
+    setSubmitting(true);
+    try {
+      await claimFacility(
+        facility.facilityId,
+        identity,
+        {
+          petAllowed: petAllowed ? 'ALLOWED' : 'DENIED',
+          maxWeight: petAllowed ? w : null,
+          maxWeightInclusive,
+          requirements: petAllowed ? requirements : [],
+          conditionRaw: petAllowed ? conditionRaw.trim() : '반려동물 동반이 불가능합니다.',
+        },
+        bizMasked,
+      );
+      setDone(true);
+    } catch (e) {
+      // 확정이 안 됐는데 완료 화면을 보여주면 손님 화면에는 옛 조건이 그대로 남는다
+      setFormError(
+        e instanceof ApiError && e.message
+          ? e.message
+          : '조건을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (done && facility) {
@@ -176,53 +170,26 @@ export default function BusinessScreen() {
 
           {/* STEP 1 — 사업자 진위확인 */}
           <View style={styles.stepBlock}>
-            <StepLabel n={1} label="사업자 인증" done={verified} />
-            {verified ? (
+            <StepLabel n={1} label="사업자 인증" done={!!identity} />
+            {identity ? (
               <View style={[styles.verifiedBox, { backgroundColor: p.successSoft, borderColor: p.success }]}>
                 <Ionicons name="checkmark-circle" size={17} color={p.success} />
                 <Text style={[styles.verifiedText, { color: p.ink }]}>
-                  {maskBizNo(bizDigits)} · 진위확인 완료
+                  {bizMasked} · {identity.representativeName} · 진위확인 완료
                 </Text>
               </View>
             ) : (
-              <>
-                <View style={[styles.inputRow, { backgroundColor: p.surface, borderColor: bizError ? p.danger : p.line }]}>
-                  <Ionicons name="business" size={17} color={p.muted} />
-                  <TextInput
-                    value={formatBizNo(bizDigits)}
-                    onChangeText={(t) => setBizDigits(digitsOnly(t))}
-                    placeholder="사업자등록번호 (숫자 10자리)"
-                    placeholderTextColor={p.muted}
-                    keyboardType="number-pad"
-                    style={[styles.input, { color: p.ink }]}
-                  />
-                </View>
-                {bizError && <Text style={[styles.err, { color: p.danger }]}>{bizError}</Text>}
-                <Pressable
-                  onPress={verify}
-                  disabled={verifying}
-                  style={({ pressed }) => [
-                    styles.actionBtn,
-                    { backgroundColor: pressed || verifying ? p.accentDark : p.accent },
-                  ]}>
-                  {verifying ? (
-                    <>
-                      <ActivityIndicator color={p.onAccent} size="small" />
-                      <Text style={[styles.actionBtnText, { color: p.onAccent }]}>진위확인 중…</Text>
-                    </>
-                  ) : (
-                    <Text style={[styles.actionBtnText, { color: p.onAccent }]}>진위확인</Text>
-                  )}
-                </Pressable>
-                <Text style={[styles.hint, { color: p.muted }]}>
-                  국세청 사업자등록정보로 진위만 확인해요. 번호 원본은 저장하지 않습니다.
-                </Text>
-              </>
+              <BusinessVerify
+                onVerified={(id, masked) => {
+                  setIdentity(id);
+                  setBizMasked(masked);
+                }}
+              />
             )}
           </View>
 
-          {/* STEP 2 — 내 매장 선택 */}
-          {verified && (
+          {/* STEP 2 — 내 매장 선택 (서버 검색 — 내 위치 주변 + 키워드) */}
+          {identity && (
             <Animated.View entering={FadeInDown.duration(260)} style={styles.stepBlock}>
               <StepLabel n={2} label="내 매장 선택" done={!!facility} />
               {facility ? (
@@ -242,39 +209,55 @@ export default function BusinessScreen() {
                   <View style={[styles.inputRow, { backgroundColor: p.surface, borderColor: p.line }]}>
                     <Ionicons name="search" size={17} color={p.muted} />
                     <TextInput
-                      value={query}
-                      onChangeText={setQuery}
-                      placeholder="매장명이나 주소로 찾기"
+                      value={picker.query}
+                      onChangeText={picker.setQuery}
+                      placeholder="매장명으로 찾기 (내 위치 30km 안, 키워드면 전국)"
                       placeholderTextColor={p.muted}
                       style={[styles.input, { color: p.ink }]}
                     />
+                    {picker.loading && <ActivityIndicator size="small" color={p.muted} />}
                   </View>
-                  <View style={styles.candidates}>
-                    {candidates.map((f) => (
-                      <Pressable
-                        key={f.facilityId}
-                        onPress={() => selectFacility(f.facilityId)}
-                        style={({ pressed }) => [
-                          styles.candidate,
-                          { borderColor: p.line, backgroundColor: pressed ? p.surface : p.card },
-                        ]}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.candName, { color: p.ink }]}>{f.name}</Text>
-                          <Text style={[styles.candMeta, { color: p.muted }]}>
-                            {CATEGORY_LABEL[f.category]} · {formatDistance(f.distanceM)}
-                          </Text>
-                        </View>
-                        <ConfidenceBadge confidence={f.confidence} size="sm" />
-                      </Pressable>
-                    ))}
-                  </View>
+                  {picker.failed ? (
+                    <Pressable onPress={picker.retry} style={styles.candidate}>
+                      <Ionicons name="refresh" size={15} color={p.muted} />
+                      <Text style={[styles.candMeta, { color: p.muted }]}>
+                        매장을 불러오지 못했어요. 눌러서 다시 시도
+                      </Text>
+                    </Pressable>
+                  ) : !picker.loading && picker.items.length === 0 ? (
+                    <Text style={[styles.hint, { color: p.muted }]}>
+                      {picker.query.trim()
+                        ? '검색 결과가 없어요. 관광공사에 등록된 이름으로 찾아보세요.'
+                        : '주변에 등록된 매장이 없어요. 매장명을 입력해 보세요.'}
+                    </Text>
+                  ) : (
+                    <View style={styles.candidates}>
+                      {picker.items.map((f) => (
+                        <Pressable
+                          key={f.facilityId}
+                          onPress={() => selectFacility(f.facilityId)}
+                          style={({ pressed }) => [
+                            styles.candidate,
+                            { borderColor: p.line, backgroundColor: pressed ? p.surface : p.card },
+                          ]}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.candName, { color: p.ink }]}>{f.name}</Text>
+                            <Text style={[styles.candMeta, { color: p.muted }]} numberOfLines={1}>
+                              {CATEGORY_LABEL[f.category]} · {formatDistance(f.distanceM)} · {f.address}
+                            </Text>
+                          </View>
+                          <ConfidenceBadge confidence={f.confidence} size="sm" />
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
                 </>
               )}
             </Animated.View>
           )}
 
           {/* STEP 3 — 출입 조건 확정 */}
-          {verified && facility && (
+          {identity && facility && (
             <Animated.View entering={FadeInDown.duration(260)} style={styles.stepBlock}>
               <StepLabel n={3} label="출입 조건 확정" done={false} />
 
@@ -317,6 +300,27 @@ export default function BusinessScreen() {
                         style={[styles.input, { color: p.ink }]}
                       />
                       <Text style={[styles.unit, { color: p.muted }]}>kg</Text>
+                      {/* "10kg 이하"와 "10kg 미만"은 현장에서 다른 답이 된다 — 사장님이 정한다 */}
+                      {maxWeight.trim() !== '' && (
+                        <View style={styles.segment}>
+                          {[
+                            { v: true, label: '이하' },
+                            { v: false, label: '미만' },
+                          ].map((opt) => {
+                            const on = maxWeightInclusive === opt.v;
+                            return (
+                              <Pressable
+                                key={opt.label}
+                                onPress={() => setMaxWeightInclusive(opt.v)}
+                                style={[styles.segmentBtn, { backgroundColor: on ? p.accent : 'transparent' }]}>
+                                <Text style={[styles.segmentText, { color: on ? p.onAccent : p.muted }]}>
+                                  {opt.label}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      )}
                     </View>
                   </View>
 
@@ -364,10 +368,20 @@ export default function BusinessScreen() {
               {formError && <Text style={[styles.err, { color: p.danger }]}>{formError}</Text>}
 
               <Pressable
-                onPress={submit}
-                style={({ pressed }) => [styles.actionBtn, { backgroundColor: pressed ? p.accentDark : p.accent }]}>
-                <Ionicons name="shield-checkmark" size={16} color={p.onAccent} />
-                <Text style={[styles.actionBtnText, { color: p.onAccent }]}>조건 확정하기</Text>
+                onPress={() => void submit()}
+                disabled={submitting}
+                style={({ pressed }) => [
+                  styles.actionBtn,
+                  { backgroundColor: pressed || submitting ? p.accentDark : p.accent },
+                ]}>
+                {submitting ? (
+                  <ActivityIndicator color={p.onAccent} size="small" />
+                ) : (
+                  <Ionicons name="shield-checkmark" size={16} color={p.onAccent} />
+                )}
+                <Text style={[styles.actionBtnText, { color: p.onAccent }]}>
+                  {submitting ? '서버에 확정하는 중…' : '조건 확정하기'}
+                </Text>
               </Pressable>
             </Animated.View>
           )}

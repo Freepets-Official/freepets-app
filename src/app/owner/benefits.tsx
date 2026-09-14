@@ -6,7 +6,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
-import { FACILITIES } from '@/data/mock';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -14,10 +13,12 @@ import { useAppStore } from '@/store/app-store';
 export default function BenefitsScreen() {
   const p = usePalette();
   const params = useLocalSearchParams<{ facilityId?: string }>();
-  const { businessRegs, benefitsOf, addBenefit, toggleBenefit, removeBenefit } = useAppStore();
+  const { businessRegs, account, facilityById, benefitsOf, addBenefit, toggleBenefit, removeBenefit } = useAppStore();
 
-  const facilityId = Number(params.facilityId) || Number(Object.keys(businessRegs)[0]);
-  const facility = FACILITIES.find((f) => f.facilityId === facilityId);
+  // 파라미터 없이 들어오면(설정 → 바로) 이번 실행에서 확정한 매장, 그것도 없으면 서버가 기억하는 첫 매장
+  const facilityId =
+    Number(params.facilityId) || Number(Object.keys(businessRegs)[0]) || account.ownedFacilityIds[0];
+  const facility = facilityById(facilityId);
   const list = benefitsOf(facilityId);
 
   const [title, setTitle] = useState('');
