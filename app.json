@@ -11,10 +11,15 @@
     "ios": {
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["nmap"]
+        "LSApplicationQueriesSchemes": [
+          "nmap"
+        ]
       },
       "bundleIdentifier": "com.freepets.app",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "associatedDomains": [
+        "applinks:freepets-app.vercel.app"
+      ]
     },
     "android": {
       "adaptiveIcon": {

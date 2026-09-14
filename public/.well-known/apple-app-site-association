@@ -1,0 +1,28 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "R9X886G4DM.com.freepets.app",
+        "paths": [
+          "/course",
+          "/course?*",
+          "/facility/*"
+        ],
+        "components": [
+          {
+            "/": "/course",
+            "?": {
+              "share": "*"
+            },
+            "comment": "코스 공유 링크"
+          },
+          {
+            "/": "/facility/*",
+            "comment": "시설 상세"
+          }
+        ]
+      }
+    ]
+  }
+}
