@@ -20,6 +20,7 @@ import {
   reviewsApi,
   satisfactionApi,
   businessApi,
+  calendarApi,
   bumpSessionEpoch,
   setAuthToken,
   setRefreshToken,
@@ -34,8 +35,10 @@ import {
 import { DEV_TOKEN } from '@/lib/config';
 import {
   loadCalendarEvents,
+  loadCalendarMigrated,
   loadMedLog,
   saveCalendarEvents,
+  saveCalendarMigrated,
   saveMedLog,
 } from '@/lib/calendar-store';
 import { loadMyReviewIds, saveMyReviewIds } from '@/lib/my-reviews';
@@ -497,10 +500,16 @@ interface AppStore {
 
   /** 반려동물 캘린더 — 접종·약·검진·여행 일정 */
   calendarEvents: CalendarEvent[];
-  addCalendarEvent: (input: Omit<CalendarEvent, 'eventId'>) => void;
-  removeCalendarEvent: (eventId: number) => void;
-  updateCalendarEvent: (eventId: number, patch: Partial<Omit<CalendarEvent, 'eventId'>>) => void;
-  toggleEventReminder: (eventId: number) => void;
+  /**
+   * 일정 변경은 화면에 먼저 반영하고 서버에 보낸다. 서버가 거부하면 되돌리고 false를 준다 —
+   * 호출한 쪽이 사용자에게 알려야 한다(안 그러면 방금 만든 일정이 말없이 사라진다).
+   */
+  addCalendarEvent: (input: Omit<CalendarEvent, 'eventId'>) => Promise<boolean>;
+  removeCalendarEvent: (eventId: number) => Promise<boolean>;
+  updateCalendarEvent: (eventId: number, patch: Partial<Omit<CalendarEvent, 'eventId'>>) => Promise<boolean>;
+  toggleEventReminder: (eventId: number) => Promise<boolean>;
+  /** 캘린더가 다른 달로 넘어가면 그 달 일정을 서버에서 받아 합친다(YYYY-MM) */
+  loadCalendarMonth: (ym: string) => Promise<void>;
   /** 특정 날짜(YYYY-MM-DD)의 일정 (반복 반영) — 시간순 */
   eventsOn: (date: string) => CalendarEvent[];
   /** 약 복용 기록 토글/조회 (eventId+날짜 단위) */
@@ -558,6 +567,19 @@ const AppStoreContext = createContext<AppStore | null>(null);
  * 무언가 하려 하면 서버는 그런 petId를 모른다.
  */
 const SEED_MOCK = __DEV__;
+
+/** Date → YYYY-MM */
+const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+/** 이 일정이 그 달(YYYY-MM)의 어느 날에든 걸리는지 — 서버 한 달 응답과 로컬 상태를 맞출 때 쓴다 */
+function occursInMonth(e: CalendarEvent, ym: string): boolean {
+  const [y, m] = ym.split('-').map(Number);
+  const days = new Date(y, m, 0).getDate();
+  for (let d = 1; d <= days; d++) {
+    if (eventOccursOn(e, `${ym}-${String(d).padStart(2, '0')}`)) return true;
+  }
+  return false;
+}
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [pets, setPets] = useState<Pet[]>(SEED_MOCK ? INITIAL_PETS : []);
@@ -637,15 +659,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<Account>(EMPTY_ACCOUNT);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(SEED_MOCK ? INITIAL_CAL_EVENTS : []);
   /**
-   * 일정·복용 기록을 기기에 남긴다.
-   *
-   * 서버 API는 있지만 연동은 1.1이다. 그때까지 상태로만 두면 앱을 끄는 순간 사라지는데,
-   * 만든 사람은 저장되지 않았다는 걸 알 방법이 없다. 불러오기 전에는 쓰지 않는다 —
-   * 빈 배열이 저장된 값을 덮는다.
+   * 일정의 원본은 서버다(`/calendar-events`). 기기 저장은 **오프라인 캐시**로만 남긴다 —
+   * 지하철에서 앱을 열어도 지난번 일정이 보이고, 서버를 못 받으면 그 캐시가 그대로 화면이다.
+   * 캐시를 불러오기 전에는 쓰지 않는다. 빈 배열이 저장된 값을 덮는다.
    */
   const [calendarLoaded, setCalendarLoaded] = useState(false);
   // 약 복용 기록 — "eventId:YYYY-MM-DD" 집합
   const [medLog, setMedLog] = useState<Set<string>>(new Set());
+  // 콜백에서 최신 값을 읽기 위한 미러(되돌리기용 스냅샷)
+  const calendarEventsRef = useRef(calendarEvents);
+  calendarEventsRef.current = calendarEvents;
+  const medLogRef = useRef(medLog);
+  medLogRef.current = medLog;
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -665,6 +690,101 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (calendarLoaded) void saveMedLog([...medLog]);
   }, [medLog, calendarLoaded]);
+
+  /** 서버에서 받아 온 달(YYYY-MM). 같은 달을 두 번 받지 않는다 */
+  const calendarMonthsRef = useRef<Set<string>>(new Set());
+  /**
+   * 서버가 준 발생 목록을 지금 상태에 합친다. 이미 있는 일정은 서버 값으로 바꾸고, 그 달에
+   * 걸리는데 서버에 없는 일정은 없앤다 — 다른 기기에서 지운 일정이 여기 남으면 안 된다.
+   * 임시 ID(음수, 아직 서버에 안 올라간 것)는 건드리지 않는다.
+   */
+  const mergeCalendarMonth = useCallback((ym: string, snap: { events: CalendarEvent[]; taken: string[] }) => {
+    const seen = new Set(snap.events.map((e) => e.eventId));
+    setCalendarEvents((prev) => {
+      const kept = prev.filter((e) => {
+        if (e.eventId < 0 || seen.has(e.eventId)) return false;
+        // 이 달에 걸리지 않는 일정은 이 응답이 말해줄 수 없다 — 그대로 둔다
+        return !occursInMonth(e, ym);
+      });
+      const pending = prev.filter((e) => e.eventId < 0);
+      return [...kept, ...snap.events, ...pending];
+    });
+    setMedLog((prev) => {
+      const next = new Set([...prev].filter((k) => !k.slice(k.indexOf(':') + 1).startsWith(ym)));
+      for (const k of snap.taken) next.add(k);
+      return next;
+    });
+  }, []);
+
+  const loadCalendarMonth = useCallback(
+    async (ym: string) => {
+      if (!session.authed) return;
+      try {
+        const snap = await calendarApi.month(ym);
+        calendarMonthsRef.current.add(ym);
+        mergeCalendarMonth(ym, snap);
+      } catch {
+        // 못 받으면 캐시가 그대로 보인다. 화면을 막지 않는다
+      }
+    },
+    [session.authed, mergeCalendarMonth],
+  );
+
+  /**
+   * 로그인되면 지난달·이달·다음달을 받는다. 홈의 접종 D-day와 캘린더 첫 화면이 여기서 나온다.
+   *
+   * 그 전에 **1.0이 기기에만 남긴 일정을 서버로 한 번 올린다.** 1.0은 서버 연동이 없어
+   * 일정이 기기에만 있었다. 그냥 서버 목록을 받으면 위 병합이 "서버에 없는 일정"으로 보고
+   * 지워버린다 — 사용자가 몇 달치 접종 일정을 잃는다. 올리지 못한 일정은 임시 ID(음수)로
+   * 바꿔 기기에 남긴다. 사라지지는 않고, 서버에는 없는 상태로 남는다.
+   * 개발용 목 데이터는 올리지 않는다.
+   */
+  useEffect(() => {
+    if (!session.authed) {
+      calendarMonthsRef.current.clear();
+      return;
+    }
+    if (!calendarLoaded) return;
+    let alive = true;
+    void (async () => {
+      if (!SEED_MOCK && !(await loadCalendarMigrated())) {
+        const local = calendarEventsRef.current.filter((e) => e.eventId > 0);
+        const idMap = new Map<number, number>();
+        for (const e of local) {
+          try {
+            idMap.set(e.eventId, await calendarApi.create(e));
+          } catch {
+            idMap.set(e.eventId, -Math.abs(e.eventId) - Date.now());
+          }
+        }
+        if (!alive) return;
+        setCalendarEvents((prev) => prev.map((e) => (idMap.has(e.eventId) ? { ...e, eventId: idMap.get(e.eventId)! } : e)));
+        // 복용 기록도 새 ID로 옮기고, 올라간 일정의 체크는 서버에도 남긴다
+        const moved = new Set<string>();
+        for (const key of medLogRef.current) {
+          const [idStr, date] = key.split(':');
+          const nid = idMap.get(Number(idStr));
+          if (nid === undefined) {
+            moved.add(key);
+            continue;
+          }
+          moved.add(`${nid}:${date}`);
+          if (nid > 0) calendarApi.setMedTaken(nid, date, true).catch(() => {});
+        }
+        setMedLog(moved);
+        await saveCalendarMigrated();
+      }
+      if (!alive) return;
+      const now = new Date();
+      for (const delta of [-1, 0, 1]) {
+        void loadCalendarMonth(ymOf(new Date(now.getFullYear(), now.getMonth() + delta, 1)));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [session.authed, calendarLoaded, loadCalendarMonth]);
+
   const nextEventId = useRef(INITIAL_CAL_EVENTS.length + 1);
   const nextBenefitId = useRef(1);
   const nextPetId = useRef(INITIAL_PETS.length + 1);
@@ -1584,26 +1704,85 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  const addCalendarEvent = useCallback((input: Omit<CalendarEvent, 'eventId'>) => {
-    setCalendarEvents((prev) => [...prev, { ...input, eventId: nextEventId.current++ }]);
-  }, []);
-
-  const removeCalendarEvent = useCallback((eventId: number) => {
-    setCalendarEvents((prev) => prev.filter((e) => e.eventId !== eventId));
-  }, []);
-
-  const updateCalendarEvent = useCallback(
-    (eventId: number, patch: Partial<Omit<CalendarEvent, 'eventId'>>) => {
-      setCalendarEvents((prev) => prev.map((e) => (e.eventId === eventId ? { ...e, ...patch } : e)));
+  /**
+   * 일정 변경 — 화면 먼저, 서버 다음, 실패하면 되돌린다.
+   *
+   * 로그인 전(개발용 목 데이터)에는 로컬에만 쓴다. 새 일정은 서버 ID를 받기 전까지
+   * **음수 임시 ID**로 두어, 그 사이 서버 목록을 받아도 덮이지 않게 한다.
+   */
+  const addCalendarEvent = useCallback(
+    async (input: Omit<CalendarEvent, 'eventId'>) => {
+      if (!session.authed) {
+        setCalendarEvents((prev) => [...prev, { ...input, eventId: nextEventId.current++ }]);
+        return true;
+      }
+      const tempId = -Date.now();
+      setCalendarEvents((prev) => [...prev, { ...input, eventId: tempId }]);
+      try {
+        const eventId = await calendarApi.create(input);
+        setCalendarEvents((prev) => prev.map((e) => (e.eventId === tempId ? { ...e, eventId } : e)));
+        return true;
+      } catch {
+        setCalendarEvents((prev) => prev.filter((e) => e.eventId !== tempId));
+        return false;
+      }
     },
-    [],
+    [session.authed],
   );
 
-  const toggleEventReminder = useCallback((eventId: number) => {
-    setCalendarEvents((prev) =>
-      prev.map((e) => (e.eventId === eventId ? { ...e, reminder: !e.reminder } : e)),
-    );
-  }, []);
+  const removeCalendarEvent = useCallback(
+    async (eventId: number) => {
+      const before = calendarEventsRef.current;
+      setCalendarEvents((prev) => prev.filter((e) => e.eventId !== eventId));
+      if (!session.authed || eventId < 0) return true;
+      try {
+        await calendarApi.remove(eventId);
+        return true;
+      } catch {
+        setCalendarEvents(before);
+        return false;
+      }
+    },
+    [session.authed],
+  );
+
+  const updateCalendarEvent = useCallback(
+    async (eventId: number, patch: Partial<Omit<CalendarEvent, 'eventId'>>) => {
+      const before = calendarEventsRef.current;
+      const target = before.find((e) => e.eventId === eventId);
+      if (!target) return false;
+      const merged: CalendarEvent = { ...target, ...patch };
+      setCalendarEvents((prev) => prev.map((e) => (e.eventId === eventId ? merged : e)));
+      if (!session.authed || eventId < 0) return true;
+      try {
+        await calendarApi.update(eventId, merged);
+        return true;
+      } catch {
+        setCalendarEvents(before);
+        return false;
+      }
+    },
+    [session.authed],
+  );
+
+  const toggleEventReminder = useCallback(
+    async (eventId: number) => {
+      const before = calendarEventsRef.current;
+      const target = before.find((e) => e.eventId === eventId);
+      if (!target) return false;
+      const next = !target.reminder;
+      setCalendarEvents((prev) => prev.map((e) => (e.eventId === eventId ? { ...e, reminder: next } : e)));
+      if (!session.authed || eventId < 0) return true;
+      try {
+        await calendarApi.setReminder(eventId, next);
+        return true;
+      } catch {
+        setCalendarEvents(before);
+        return false;
+      }
+    },
+    [session.authed],
+  );
 
   const eventsOn = useCallback(
     (date: string) =>
@@ -1613,14 +1792,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [calendarEvents],
   );
 
-  const toggleMedTaken = useCallback((eventId: number, date: string) => {
-    setMedLog((prev) => {
+  const toggleMedTaken = useCallback(
+    (eventId: number, date: string) => {
       const key = `${eventId}:${date}`;
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  }, []);
+      const before = medLogRef.current;
+      const taken = !before.has(key);
+      setMedLog((prev) => {
+        const next = new Set(prev);
+        taken ? next.add(key) : next.delete(key);
+        return next;
+      });
+      if (!session.authed || eventId < 0) return;
+      // 실패하면 되돌린다 — 체크가 남아 있는데 서버엔 없으면 다른 기기에서 "안 먹였다"로 보인다
+      calendarApi.setMedTaken(eventId, date, taken).catch(() => setMedLog(before));
+    },
+    [session.authed],
+  );
 
   const isMedTaken = useCallback(
     (eventId: number, date: string) => medLog.has(`${eventId}:${date}`),
@@ -2259,6 +2446,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       removeCalendarEvent,
       updateCalendarEvent,
       toggleEventReminder,
+      loadCalendarMonth,
       eventsOn,
       toggleMedTaken,
       isMedTaken,
@@ -2346,6 +2534,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       removeCalendarEvent,
       updateCalendarEvent,
       toggleEventReminder,
+      loadCalendarMonth,
       eventsOn,
       toggleMedTaken,
       isMedTaken,

@@ -21,6 +21,9 @@ import type {
   SimilarCourse,
   SimilarStop,
   Region,
+  CalendarEvent,
+  CalEventType,
+  CalRepeat,
   Confidence,
   ConfidenceSource,
   Requirement,
@@ -1615,6 +1618,129 @@ export const satisfactionApi = {
       `/api/v1/facilities/${facilityId}/pets/${petId}/satisfaction`,
       { body: { score }, auth: true },
     ),
+};
+
+// ─────────────────────────── 반려동물 캘린더 ───────────────────────────
+// GET    /calendar-events?month=YYYY-MM         — 그 달에 걸리는 일정(반복·기간 전개, 복용 여부 포함)
+// POST   /calendar-events                       — 생성(multipart)
+// PATCH  /calendar-events/{id}                  — 수정(multipart, date·eventType·title 필수)
+// DELETE /calendar-events/{id}
+// PUT    /calendar-events/{id}/med-log/{date}   — 그날 복용 체크
+// DELETE /calendar-events/{id}/med-log/{date}   — 체크 해제
+// PATCH  /calendar-events/{id}/reminder         — 알림 on/off
+//
+// 앱은 일정을 "기준 일정 + 반복 규칙"으로 들고 직접 전개한다(`eventOccursOn`). 서버 목록은
+// 이미 전개된 **발생(occurrence)** 단위라, 받은 뒤 eventId로 접어 기준 일정을 복원한다.
+type ServerCalType = 'VACCINE' | 'MED' | 'CHECKUP' | 'TRAVEL' | 'ETC';
+const CAL_TYPE_TO_SERVER: Record<CalEventType, ServerCalType> = {
+  VACCINE: 'VACCINE', MED: 'MED', CHECKUP: 'CHECKUP', TRAVEL: 'TRAVEL', OTHER: 'ETC',
+};
+const CAL_TYPE_FROM_SERVER: Record<string, CalEventType> = {
+  VACCINE: 'VACCINE', MED: 'MED', CHECKUP: 'CHECKUP', TRAVEL: 'TRAVEL', ETC: 'OTHER',
+};
+
+type ServerOccurrence = {
+  eventId: number;
+  petId?: number | null;
+  eventType?: string;
+  title?: string;
+  date?: string;
+  endDate?: string | null;
+  time?: string | null;
+  repeatType?: string;
+  reminderEnabled?: boolean;
+  notes?: string | null;
+  taken?: boolean;
+};
+
+export type CalendarSnapshot = {
+  events: CalendarEvent[];
+  /** "eventId:YYYY-MM-DD" — 그날 복용을 체크한 발생 */
+  taken: string[];
+};
+
+function occurrenceToEvent(o: ServerOccurrence): CalendarEvent {
+  const repeat = (o.repeatType ?? 'NONE') as CalRepeat;
+  return {
+    eventId: o.eventId,
+    petId: typeof o.petId === 'number' ? o.petId : null,
+    type: CAL_TYPE_FROM_SERVER[o.eventType ?? ''] ?? 'OTHER',
+    title: o.title ?? '',
+    date: o.date ?? '',
+    endDate: o.endDate || null,
+    time: o.time ? o.time.slice(0, 5) : null,
+    repeat: ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(repeat) ? repeat : 'NONE',
+    reminder: o.reminderEnabled ?? false,
+    notes: o.notes || null,
+  };
+}
+
+/**
+ * 발생 목록 → 기준 일정.
+ *
+ * 같은 eventId가 여러 날에 걸쳐 오면(반복·기간) **가장 이른 날**을 기준일로 삼는다. 서버가
+ * 기준일을 그대로 실어 보내면 전부 같은 값이라 상관없고, 발생일을 보내면 이 창 안에서
+ * 처음 보이는 날이 기준이 된다 — 그 뒤 발생은 반복 규칙으로 앱이 똑같이 그려낸다.
+ */
+function foldOccurrences(list: ServerOccurrence[]): CalendarSnapshot {
+  const byId = new Map<number, CalendarEvent>();
+  const taken: string[] = [];
+  for (const o of list) {
+    if (typeof o.eventId !== 'number' || !o.date) continue;
+    const ev = occurrenceToEvent(o);
+    const cur = byId.get(o.eventId);
+    if (!cur || ev.date < cur.date) byId.set(o.eventId, ev);
+    if (o.taken) taken.push(`${o.eventId}:${o.date}`);
+  }
+  return { events: [...byId.values()], taken };
+}
+
+/** 앱 일정 → 서버 create/update용 multipart. null·빈 값은 싣지 않는다(서버가 없음으로 본다). */
+function calendarForm(e: Omit<CalendarEvent, 'eventId'>): FormData {
+  const fd = new FormData();
+  fd.append('eventType', CAL_TYPE_TO_SERVER[e.type]);
+  fd.append('title', e.title);
+  fd.append('date', e.date);
+  fd.append('repeatType', e.repeat);
+  fd.append('reminderEnabled', e.reminder ? 'true' : 'false');
+  if (e.petId !== null) fd.append('petId', String(e.petId));
+  if (e.endDate) fd.append('endDate', e.endDate);
+  if (e.time) fd.append('time', e.time);
+  if (e.notes) fd.append('notes', e.notes);
+  return fd;
+}
+
+export const calendarApi = {
+  /** 한 달치(YYYY-MM). 여러 달을 합칠 때는 호출한 쪽이 eventId로 중복을 걷어낸다. */
+  month: async (ym: string): Promise<CalendarSnapshot> => {
+    const r = await request<{ events?: ServerOccurrence[] }>(
+      'GET',
+      `/api/v1/calendar-events?month=${encodeURIComponent(ym)}`,
+      { auth: true },
+    );
+    return foldOccurrences(r.events ?? []);
+  },
+  create: async (e: Omit<CalendarEvent, 'eventId'>): Promise<number> => {
+    const r = await request<{ eventId: number }>('POST', '/api/v1/calendar-events', {
+      body: calendarForm(e),
+      auth: true,
+    });
+    return r.eventId;
+  },
+  /** 전체 수정. 서버가 date·eventType·title을 매번 요구해 병합된 일정을 통째로 보낸다. */
+  update: (eventId: number, e: Omit<CalendarEvent, 'eventId'>) =>
+    request<unknown>('PATCH', `/api/v1/calendar-events/${eventId}`, { body: calendarForm(e), auth: true }),
+  remove: (eventId: number) =>
+    request<unknown>('DELETE', `/api/v1/calendar-events/${eventId}`, { auth: true }),
+  setReminder: (eventId: number, enabled: boolean) =>
+    request<unknown>('PATCH', `/api/v1/calendar-events/${eventId}/reminder`, {
+      body: { reminderEnabled: enabled },
+      auth: true,
+    }),
+  setMedTaken: (eventId: number, date: string, taken: boolean) =>
+    request<unknown>(taken ? 'PUT' : 'DELETE', `/api/v1/calendar-events/${eventId}/med-log/${date}`, {
+      auth: true,
+    }),
 };
 
 // ─────────────────────────── 사업자(진위확인·내 매장 조건 확정) ───────────────────────────

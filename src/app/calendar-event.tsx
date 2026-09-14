@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useRef } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DateField } from '@/components/date-field';
@@ -57,9 +57,11 @@ export default function CalendarEventScreen() {
       reminder,
       notes: notes.trim() || null,
     };
-    if (editing) updateCalendarEvent(editing.eventId, payload);
-    else addCalendarEvent(payload);
-    router.back();
+    // 서버가 거부하면 화면을 닫지 않는다 — 닫히면 저장된 줄 알고 나간다
+    void (editing ? updateCalendarEvent(editing.eventId, payload) : addCalendarEvent(payload)).then((ok) => {
+      if (ok) router.back();
+      else Alert.alert('저장 실패', '일정을 서버에 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    });
   };
 
   return (
