@@ -27,6 +27,8 @@ import type {
   ReviewTag,
 } from '@/data/types';
 import { REVIEW_TAG_LABEL } from '@/data/types';
+import type { Gamification, TierAnimal, TierColor } from '@/data/level';
+import { MAX_LEVEL, TIER_ANIMAL_LABEL, TIER_COLOR_LABEL } from '@/data/level';
 
 import { API_URL, DEV_TOKEN } from './config';
 
@@ -1603,4 +1605,57 @@ export const satisfactionApi = {
       `/api/v1/facilities/${facilityId}/pets/${petId}/satisfaction`,
       { body: { score }, auth: true },
     ),
+};
+
+// ─────────────────────────── 게이미피케이션(집사 레벨·발바닥 티어) ───────────────────────────
+// GET   /me/gamification               — 레벨·누적 XP·발바닥 티어·받은 배지
+// PATCH /me/gamification/notification  — 레벨업 알림 on/off
+//
+// XP는 **계정 단위**다(판별·리뷰·제보·만족도·코스 공개/복사). 반려동물별로 나뉘지 않는다.
+// 레벨 곡선(`100 × L × (L−1) / 2`, 최대 70)과 티어 구성은 서버가 확정했다 — `data/level.ts` 참고.
+type ServerGamification = {
+  level?: number;
+  totalXp?: number;
+  xpToNextLevel?: number;
+  tierAnimal?: string;
+  tierColor?: string;
+  tierLabel?: string;
+  tierBadgeImageUrl?: string | null;
+  levelUpNotificationEnabled?: boolean;
+  badges?: { code?: string; label?: string; description?: string; earnedAt?: string | null }[];
+};
+
+export const gamificationApi = {
+  /** 내 레벨·티어·배지. 값이 빠져 있어도 화면이 깨지지 않게 여기서 기본값을 채운다. */
+  me: async (): Promise<Gamification> => {
+    const r = await request<ServerGamification>('GET', '/api/v1/me/gamification', { auth: true });
+    const animal = (r.tierAnimal ?? 'DOG') as TierAnimal;
+    const color = (r.tierColor ?? 'RED') as TierColor;
+    return {
+      level: Math.min(Math.max(Math.trunc(r.level ?? 1), 1), MAX_LEVEL),
+      totalXp: Math.max(r.totalXp ?? 0, 0),
+      xpToNextLevel: Math.max(r.xpToNextLevel ?? 0, 0),
+      tierAnimal: TIER_ANIMAL_LABEL[animal] ? animal : 'DOG',
+      tierColor: TIER_COLOR_LABEL[color] ? color : 'RED',
+      tierLabel: r.tierLabel ?? '',
+      // 빈 문자열이 오면 <Image>가 조용히 깨진다. 없는 것과 같게 만든다
+      tierBadgeImageUrl: r.tierBadgeImageUrl ? r.tierBadgeImageUrl : null,
+      levelUpNotificationEnabled: r.levelUpNotificationEnabled ?? true,
+      badges: (r.badges ?? []).map((b) => ({
+        code: b.code ?? '',
+        label: b.label ?? '배지',
+        description: b.description ?? '',
+        earnedAt: b.earnedAt ?? null,
+      })),
+    };
+  },
+  /** 레벨업 알림 on/off. 서버가 확정한 값을 돌려준다. */
+  setLevelUpNotification: async (enabled: boolean): Promise<boolean> => {
+    const r = await request<{ levelUpNotificationEnabled?: boolean }>(
+      'PATCH',
+      '/api/v1/me/gamification/notification',
+      { body: { levelUpNotificationEnabled: enabled }, auth: true },
+    );
+    return r.levelUpNotificationEnabled ?? enabled;
+  },
 };
