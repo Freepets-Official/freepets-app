@@ -491,7 +491,8 @@ interface AppStore {
   authenticate: (
     email: string,
     tokens: { accessToken: string; refreshToken: string; userId?: number },
-  , provider?: LoginProvider) => void;
+    provider?: LoginProvider,
+  ) => void;
   /** 현재 액세스 토큰(인증 헤더용). 미로그인이면 null */
   accessToken: string | null;
   /** 로그아웃. 탈퇴 직후에는 `skipPushUnregister`로 부른다 — 서버가 이미 토큰을 지웠다. */
