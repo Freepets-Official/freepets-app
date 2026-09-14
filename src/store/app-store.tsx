@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 
-import { clearSession, loadSession, saveSession } from '@/lib/token-store';
+import { clearSession, loadSession, saveSession, type LoginProvider } from '@/lib/token-store';
 import { clearStamps, loadStamps, saveStamps } from '@/lib/stamp-store';
 import { loadHiddenChecks, saveHiddenChecks } from '@/lib/hidden-checks';
 import { getFcmToken } from '@/lib/push';
@@ -182,6 +182,12 @@ export type ProfileKind = 'consumer' | 'owner';
 export interface Session {
   authed: boolean;
   email: string | null;
+  /**
+   * 어느 방법으로 로그인했는지. 네이버·카카오는 이메일을 안 줘서 설정의 「계정 정보」가
+   * 비어 있었다 — "소셜 계정"이라고만 적혀 있으면 탈퇴하고 다시 들어올 때 어느 버튼을
+   * 눌러야 하는지 모른다. 옛 저장분에는 없어 null일 수 있다.
+   */
+  provider: LoginProvider | null;
   /** 현재 활성 프로필. null이면 아직 안 골랐다는 뜻(프로필 선택 화면으로) */
   activeProfile: ProfileKind | null;
 }
@@ -534,6 +540,7 @@ interface AppStore {
   authenticate: (
     email: string,
     tokens: { accessToken: string; refreshToken: string; userId?: number },
+    provider?: LoginProvider,
   ) => void;
   /** 현재 액세스 토큰(인증 헤더용). 미로그인이면 null */
   accessToken: string | null;
@@ -644,7 +651,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [businessRegs, setBusinessRegs] = useState<Record<number, BusinessReg>>({});
   const [promotions, setPromotions] = useState<Record<number, Promotion>>({});
   const [benefits, setBenefits] = useState<Record<number, Benefit[]>>({});
-  const [session, setSession] = useState<Session>({ authed: false, email: null, activeProfile: null });
+  const [session, setSession] = useState<Session>({ authed: false, email: null, provider: null, activeProfile: null });
   // 백엔드 인증 토큰. 기기에도 남긴다(네이티브 SecureStore / 웹 localStorage) —
   // 남기지 않으면 새로고침·앱 재실행마다 로그인해야 한다.
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -655,6 +662,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 끼어들 수 있는데, 그때 복원이 늦게 끝나면 **옛 계정으로 되돌려놓는다.**
   // 네이버 로그인에서 돌아오는 흐름이 복원과 나란히 도는 실제 경로가 있다.
   const sessionRev = useRef(0);
+  /** 토큰 재발급 뒤 세션을 다시 저장할 때 제공자를 잃지 않으려고 미러로 든다 */
+  const providerRef = useRef<LoginProvider | null>(null);
   const refreshTokenRef = useRef<string | null>(null);
   const [account, setAccount] = useState<Account>(EMPTY_ACCOUNT);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(SEED_MOCK ? INITIAL_CAL_EVENTS : []);
@@ -1829,6 +1838,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setSession({
       authed: true,
       email,
+      provider: 'email',
       // 프로필이 하나뿐이면 바로 자동 로그인, 둘이면 선택 화면(activeProfile=null)으로 보낸다
       activeProfile: Object.keys(businessRegs).length > 0 ? null : 'consumer',
     });
@@ -1869,7 +1879,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         setAccessToken(refreshedRef.current?.accessToken ?? saved.accessToken);
         refreshTokenRef.current = refreshedRef.current?.refreshToken ?? saved.refreshToken;
         setAccount(accountFrom(me));
-        setSession({ authed: true, email: saved.email, activeProfile: 'consumer' });
+        providerRef.current = saved.provider ?? null;
+        setSession({ authed: true, email: saved.email, provider: saved.provider ?? null, activeProfile: 'consumer' });
       } catch (e) {
         if (stale()) return;
         // 인증 실패(만료·폐기)와 서버 장애를 구분한다. 502·네트워크 오류로 지워버리면
@@ -1882,7 +1893,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         } else {
           setAccessToken(refreshedRef.current?.accessToken ?? saved.accessToken);
           refreshTokenRef.current = refreshedRef.current?.refreshToken ?? saved.refreshToken;
-          setSession({ authed: true, email: saved.email, activeProfile: 'consumer' });
+          providerRef.current = saved.provider ?? null;
+          setSession({ authed: true, email: saved.email, provider: saved.provider ?? null, activeProfile: 'consumer' });
         }
       } finally {
         // 세션이 바뀌었으면 그쪽이 이미 restoring을 내렸다
@@ -1896,7 +1908,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const authenticate = useCallback(
-    (email: string, tokens: { accessToken: string; refreshToken: string; userId?: number }) => {
+    (
+      email: string,
+      tokens: { accessToken: string; refreshToken: string; userId?: number },
+      provider: LoginProvider = 'email',
+    ) => {
+      providerRef.current = provider;
       // 진행 중인 복원이 이 로그인을 덮어쓰지 않도록 세대를 올린다
       bumpSessionEpoch();
       refreshedRef.current = null;
@@ -1911,6 +1928,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setSession({
         authed: true,
         email,
+        provider,
         activeProfile: Object.keys(businessRegs).length > 0 ? null : 'consumer',
       });
       // 다음 실행에서 되살릴 수 있게 기기에 남긴다. 이메일까지 담는 이유는 서버가
@@ -1919,6 +1937,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         email: email || null,
+        provider,
       });
     },
     [businessRegs],
@@ -2005,7 +2024,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setAuthToken(null);
     setRefreshToken(null);
     refreshTokenRef.current = null;
-    setSession({ authed: false, email: null, activeProfile: null });
+    providerRef.current = null;
+    setSession({ authed: false, email: null, provider: null, activeProfile: null });
     void clearSession();
     clearAccountState();
   }, [clearAccountState]);
@@ -2036,7 +2056,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
        * 서버 회원정보에 이메일이 없어 다시 채울 방법도 없다.
        */
       const email = restoredEmailRef.current ?? sessionRef.current.email ?? null;
-      void saveSession({ accessToken, refreshToken, email });
+      void saveSession({ accessToken, refreshToken, email, provider: providerRef.current });
     });
     return () => setTokensRefreshedHandler(null);
   }, []);
@@ -2051,7 +2071,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setAuthToken(null);
     setRefreshToken(null);
     refreshTokenRef.current = null;
-    setSession({ authed: false, email: null, activeProfile: null });
+    providerRef.current = null;
+    setSession({ authed: false, email: null, provider: null, activeProfile: null });
     void clearSession(); // 남겨두면 다음 실행에 로그아웃한 계정으로 되살아난다
     // 도장도 여기서 함께 지운다. 기기에 있어 계정과 묶여 있지 않아서, 안 지우면 다음에
     // 로그인한 사람에게 앞사람의 도장첩·뱃지가 그대로 보인다.
