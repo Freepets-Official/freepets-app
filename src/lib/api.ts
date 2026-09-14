@@ -1468,6 +1468,27 @@ export const coursesApi = {
     request<{ courseId: number }>('DELETE', `/api/v1/courses/${courseId}`, { auth: true }),
 
   /**
+   * 공유 코드 발급. 같은 코스에 다시 부르면 같은 코드가 오는지, 새 코드가 오는지는 서버가
+   * 정한다 — 앱은 매번 받은 값을 쓴다. 공개 여부와 무관하게 코드로는 담을 수 있다.
+   */
+  share: async (courseId: number): Promise<string> => {
+    const r = await request<{ courseId: number; shareCode?: string }>(
+      'POST',
+      `/api/v1/courses/${courseId}/share`,
+      { auth: true },
+    );
+    if (!r.shareCode) throw new ApiError('공유 코드를 받지 못했어요', 'COURSE_SHARE_EMPTY');
+    return r.shareCode;
+  },
+  /** 공유 코드로 남의 코스를 내 코스로 복사한다. 원본과 연결되지 않은 독립 사본이 생긴다. */
+  copyShared: async (shareCode: string): Promise<SavedCourse> =>
+    toSavedCourse(
+      await request<SavedCourse>('POST', `/api/v1/courses/shared/${encodeURIComponent(shareCode)}/copy`, {
+        auth: true,
+      }),
+    ),
+
+  /**
    * 스톱 순서만 최근접 이웃으로 다듬는다. **아무것도 저장하지 않는다** — 결과를 저장하려면
    * 반환된 순서를 코스 저장/수정 API에 다시 넣어야 한다.
    *
