@@ -1257,19 +1257,36 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 못 받아도 앱은 그대로 돌아간다. 레벨은 부가 정보라 카드만 빠진다.
    */
   const [gamification, setGamification] = useState<Gamification | null>(null);
+  /**
+   * 알림 토글의 순서 규칙.
+   *
+   * PATCH가 도는 동안 도착한 GET(로그인 직후·당겨서 새로고침)은 토글이 바뀌기 전 값을 실어
+   * 와서 화면을 되돌린다. 그래서 PATCH가 진행 중이면 GET 결과의 토글 값은 버리고 나머지만
+   * 받는다. 토글을 연타하면 마지막 PATCH만 결과를 쓰고, 실패는 "반대값"이 아니라 **서버가
+   * 마지막으로 확정한 값**으로 되돌린다.
+   */
+  const notifPatchSeqRef = useRef(0);
+  const notifConfirmedRef = useRef<boolean | null>(null);
+  const applyGamification = useCallback((g: Gamification) => {
+    const patching = notifPatchSeqRef.current > 0;
+    if (!patching) notifConfirmedRef.current = g.levelUpNotificationEnabled;
+    setGamification((prev) =>
+      patching && prev ? { ...g, levelUpNotificationEnabled: prev.levelUpNotificationEnabled } : g,
+    );
+  }, []);
   useEffect(() => {
     if (!session.authed) return;
     let alive = true;
     gamificationApi
       .me()
       .then((g) => {
-        if (alive) setGamification(g);
+        if (alive) applyGamification(g);
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [session.authed, session.key]);
+  }, [session.authed, session.key, applyGamification]);
 
   /**
    * 레벨업 알림 on/off.
@@ -1278,14 +1295,23 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 되돌린다.** 껐다고 보이는데 알림이 계속 오는 것이 안 꺼지는 것보다 나쁘다.
    */
   const setLevelUpNotification = useCallback(async (enabled: boolean) => {
+    const seq = ++notifPatchSeqRef.current;
+    const rev = sessionRev.current;
     setGamification((g) => (g ? { ...g, levelUpNotificationEnabled: enabled } : g));
     try {
       const saved = await gamificationApi.setLevelUpNotification(enabled);
+      // 더 새 PATCH가 나갔거나 세션이 바뀌었으면 그쪽이 결과를 쓴다
+      if (seq !== notifPatchSeqRef.current || rev !== sessionRev.current) return true;
+      notifConfirmedRef.current = saved;
       setGamification((g) => (g ? { ...g, levelUpNotificationEnabled: saved } : g));
       return true;
     } catch {
-      setGamification((g) => (g ? { ...g, levelUpNotificationEnabled: !enabled } : g));
+      if (seq !== notifPatchSeqRef.current || rev !== sessionRev.current) return false;
+      const back = notifConfirmedRef.current;
+      if (back !== null) setGamification((g) => (g ? { ...g, levelUpNotificationEnabled: back } : g));
       return false;
+    } finally {
+      if (seq === notifPatchSeqRef.current) notifPatchSeqRef.current = 0;
     }
   }, []);
 
@@ -1514,7 +1540,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         .catch(() => {}),
       gamificationApi
         .me()
-        .then(setGamification)
+        .then(applyGamification)
         .catch(() => {}),
     ]);
   }, [session.authed, session.key]);
