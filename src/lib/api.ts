@@ -21,6 +21,8 @@ import type {
   SimilarCourse,
   SimilarStop,
   Region,
+  Confidence,
+  ConfidenceSource,
   Requirement,
   Review,
   ReviewPetInfo,
@@ -524,7 +526,15 @@ export const petsApi = {
  * `userId`는 **아직 서버가 주지 않는다.** 백엔드가 넣기로 했고, 오면 그대로 쓰인다.
  * 선택 필드로 받아두면 서버만 배포해도 이미 나간 앱이 값을 집는다 — 앱을 다시 낼 필요가 없다.
  */
-type ServerAccount = { nickname: string; avatarUri: string | null; userId?: number };
+type ServerAccount = {
+  nickname: string;
+  avatarUri: string | null;
+  userId?: number;
+  /** 계정에 붙은 프로필. 매장을 하나라도 확정하면 'owner'가 생긴다 */
+  profiles?: string[];
+  /** 이 계정이 사업자 확인으로 확정한 시설 — 대시보드의 「내 매장」 목록 */
+  ownedFacilityIds?: number[];
+};
 
 export const accountApi = {
   /** 내 회원정보 조회. */
@@ -1605,6 +1615,83 @@ export const satisfactionApi = {
       `/api/v1/facilities/${facilityId}/pets/${petId}/satisfaction`,
       { body: { score }, auth: true },
     ),
+};
+
+// ─────────────────────────── 사업자(진위확인·내 매장 조건 확정) ───────────────────────────
+// POST /business/verify                       — 국세청 사업자등록정보 진위확인
+// POST /business/facilities/{id}/claim        — 내 매장의 출입 조건을 사업자 확인으로 확정
+//
+// claim은 세션이 아니라 **요청마다 사업자 정보를 다시 받는다.** 그래서 화면은 1단계에서
+// 확인한 번호·대표자명·개업일을 3단계까지 들고 있어야 한다. 번호 원본은 기기에 남기지 않는다.
+export type BusinessIdentity = {
+  /** 숫자 10자리 */
+  businessNumber: string;
+  representativeName: string;
+  /** YYYYMMDD 8자리 */
+  openingDate: string;
+};
+
+export type BusinessVerifyResult = {
+  valid: boolean;
+  /** 서버 상태 코드(계속사업자·휴업·폐업 등). 화면은 statusLabel을 쓴다 */
+  status: string;
+  statusLabel: string;
+};
+
+export type BusinessClaimInput = {
+  petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING';
+  maxWeight: number | null;
+  /** true면 "N kg 이하", false면 "N kg 미만" */
+  maxWeightInclusive: boolean;
+  requirements: Requirement[];
+  conditionRaw: string;
+};
+
+export type BusinessClaimResult = {
+  facilityId: number;
+  confidence: Confidence;
+  confidenceSource: ConfidenceSource;
+  confirmedAt: string;
+};
+
+export const businessApi = {
+  /** 진위확인. 유효하지 않아도 200으로 오고 `valid:false` + 상태 라벨(휴업·폐업 등)이 실린다. */
+  verify: async (id: BusinessIdentity): Promise<BusinessVerifyResult> => {
+    const r = await request<Partial<BusinessVerifyResult>>('POST', '/api/v1/business/verify', {
+      body: id,
+      auth: true,
+    });
+    return {
+      valid: r.valid === true,
+      status: r.status ?? '',
+      statusLabel: r.statusLabel ?? (r.valid ? '확인됨' : '확인되지 않음'),
+    };
+  },
+  /**
+   * 내 매장 조건 확정. 서버가 시설의 신뢰도를 `CONFIRMED / OWNER`로 올리고 확정 시각을 돌려준다.
+   * maxWeight는 제한이 없으면 아예 보내지 않는다 — 0을 보내면 "0kg까지"가 된다.
+   */
+  claim: async (facilityId: number, id: BusinessIdentity, input: BusinessClaimInput): Promise<BusinessClaimResult> => {
+    const body: Record<string, unknown> = {
+      ...id,
+      petAllowed: input.petAllowed,
+      maxWeightInclusive: input.maxWeightInclusive,
+      requirements: input.requirements,
+      conditionRaw: input.conditionRaw,
+    };
+    if (input.maxWeight !== null && input.maxWeight > 0) body.maxWeight = input.maxWeight;
+    const r = await request<Partial<BusinessClaimResult>>(
+      'POST',
+      `/api/v1/business/facilities/${facilityId}/claim`,
+      { body, auth: true },
+    );
+    return {
+      facilityId: r.facilityId ?? facilityId,
+      confidence: r.confidence ?? 'CONFIRMED',
+      confidenceSource: r.confidenceSource ?? 'OWNER',
+      confirmedAt: r.confirmedAt ?? new Date().toISOString(),
+    };
+  },
 };
 
 // ─────────────────────────── 게이미피케이션(집사 레벨·발바닥 티어) ───────────────────────────

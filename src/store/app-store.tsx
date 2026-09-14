@@ -19,11 +19,15 @@ import {
   pushApi,
   reviewsApi,
   satisfactionApi,
+  businessApi,
   bumpSessionEpoch,
   setAuthToken,
   setRefreshToken,
   setTokensRefreshedHandler,
   setUnauthorizedHandler,
+  type BusinessClaimInput,
+  type BusinessClaimResult,
+  type BusinessIdentity,
   type DenialAlert,
   type ServerDenialReport,
 } from '@/lib/api';
@@ -183,6 +187,25 @@ export interface Session {
 export interface Account {
   nickname: string;
   avatarUri: string | null;
+  /** 사업자 확인으로 확정한 내 매장. 서버(`GET /users/account`)가 준다 — 기기를 바꿔도 남는다 */
+  ownedFacilityIds: number[];
+}
+
+const EMPTY_ACCOUNT: Account = { nickname: '나', avatarUri: null, ownedFacilityIds: [] };
+
+/**
+ * 서버 회원정보 → Account. PATCH 응답처럼 `ownedFacilityIds`가 빠진 응답은 이전 값을 지킨다 —
+ * 프로필 사진을 바꿨다고 매장 목록이 사라지면 안 된다.
+ */
+function accountFrom(
+  a: { nickname: string; avatarUri: string | null; ownedFacilityIds?: number[] },
+  prev?: Account,
+): Account {
+  return {
+    nickname: a.nickname,
+    avatarUri: a.avatarUri,
+    ownedFacilityIds: a.ownedFacilityIds ?? prev?.ownedFacilityIds ?? [],
+  };
 }
 
 export type ReportType = 'ENTERED' | 'DENIED' | 'CONDITION_CHANGED';
@@ -449,6 +472,16 @@ interface AppStore {
   businessRegs: Record<number, BusinessReg>;
   registerBusiness: (reg: BusinessReg) => void;
   businessRegOf: (facilityId: number) => BusinessReg | null;
+  /**
+   * 내 매장 조건을 서버에 확정한다(`POST /business/facilities/{id}/claim`).
+   * 성공하면 로컬 override·내 매장 목록·시설 캐시를 같이 갱신한다. 실패는 ApiError로 던진다.
+   */
+  claimFacility: (
+    facilityId: number,
+    identity: BusinessIdentity,
+    input: BusinessClaimInput,
+    bizNoMasked: string,
+  ) => Promise<BusinessClaimResult>;
   /** 사업자 확정 조건을 반영한 시설 — 판별·표시는 모두 이걸 기준으로 한다 */
   effectiveFacility: (f: Facility) => Facility;
 
@@ -601,7 +634,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 네이버 로그인에서 돌아오는 흐름이 복원과 나란히 도는 실제 경로가 있다.
   const sessionRev = useRef(0);
   const refreshTokenRef = useRef<string | null>(null);
-  const [account, setAccount] = useState<Account>({ nickname: '나', avatarUri: null });
+  const [account, setAccount] = useState<Account>(EMPTY_ACCOUNT);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(SEED_MOCK ? INITIAL_CAL_EVENTS : []);
   /**
    * 일정·복용 기록을 기기에 남긴다.
@@ -1315,7 +1348,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         .catch(() => {}),
       accountApi
         .get()
-        .then((a) => setAccount({ nickname: a.nickname, avatarUri: a.avatarUri }))
+        .then((a) => setAccount(accountFrom(a)))
         .catch(() => {}),
       denialApi
         .alerts()
@@ -1437,6 +1470,37 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const businessRegOf = useCallback(
     (facilityId: number) => businessRegs[facilityId] ?? null,
     [businessRegs],
+  );
+
+  /**
+   * 서버에 확정하고, 성공했을 때만 로컬에 반영한다.
+   *
+   * 예전에는 registerBusiness가 React state에만 썼다 — 앱을 껐다 켜면 등록이 사라졌고
+   * 손님 화면의 '확정'도 이 기기에서만 보였다. 이제 서버가 시설 자체를 CONFIRMED/OWNER로
+   * 올리므로, 확정 뒤 상세를 다시 받아 캐시를 서버 값으로 맞춘다.
+   */
+  const claimFacility = useCallback(
+    async (facilityId: number, identity: BusinessIdentity, input: BusinessClaimInput, bizNoMasked: string) => {
+      const res = await businessApi.claim(facilityId, identity, input);
+      registerBusiness({
+        facilityId,
+        bizNoMasked,
+        petAllowed: input.petAllowed === 'ALLOWED',
+        maxWeight: input.maxWeight,
+        requirements: input.requirements,
+        conditionRaw: input.conditionRaw,
+        confirmedAt: res.confirmedAt,
+      });
+      setAccount((prev) =>
+        prev.ownedFacilityIds.includes(facilityId)
+          ? prev
+          : { ...prev, ownedFacilityIds: [...prev.ownedFacilityIds, facilityId] },
+      );
+      // 상세를 못 받아도 확정은 이미 끝났다. 캐시는 다음 조회에서 맞춰진다
+      void loadFacility(facilityId).catch(() => {});
+      return res;
+    },
+    [registerBusiness, loadFacility],
   );
 
   const effectiveFacility = useCallback(
@@ -1564,9 +1628,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   );
 
   // 매장을 하나라도 등록하면 사업자 프로필이 계정에 생긴다 (A-하이브리드: 가입은 소비자 하나)
+  // 이번 실행에서 확정한 것(businessRegs)뿐 아니라 **서버가 기억하는 매장**도 센다.
+  // 안 그러면 기기를 바꾸거나 앱을 다시 깔았을 때 사업자 프로필이 사라진 것처럼 보인다.
   const availableProfiles = useMemo<ProfileKind[]>(
-    () => (Object.keys(businessRegs).length > 0 ? ['consumer', 'owner'] : ['consumer']),
-    [businessRegs],
+    () =>
+      Object.keys(businessRegs).length > 0 || account.ownedFacilityIds.length > 0
+        ? ['consumer', 'owner']
+        : ['consumer'],
+    [businessRegs, account.ownedFacilityIds],
   );
 
   const login = useCallback((email: string) => {
@@ -1612,7 +1681,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
          */
         setAccessToken(refreshedRef.current?.accessToken ?? saved.accessToken);
         refreshTokenRef.current = refreshedRef.current?.refreshToken ?? saved.refreshToken;
-        setAccount({ nickname: me.nickname, avatarUri: me.avatarUri });
+        setAccount(accountFrom(me));
         setSession({ authed: true, email: saved.email, activeProfile: 'consumer' });
       } catch (e) {
         if (stale()) return;
@@ -1726,7 +1795,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setTopPlaces({});
     setPromotions({});
     setBenefits({});
-    setAccount({ nickname: '나', avatarUri: null });
+    setAccount(EMPTY_ACCOUNT);
     setStamps([]);
     void clearStamps();
     setGamification(null);
@@ -1863,7 +1932,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       .get()
       .then((a) => {
         if (!alive) return;
-        setAccount({ nickname: a.nickname, avatarUri: a.avatarUri });
+        setAccount(accountFrom(a));
         // 서버가 userId를 주기 시작하면 그때부터 내 글 판정이 기기 기록 없이도 정확해진다.
         if (typeof a.userId === 'number') setMyUserId(a.userId);
       })
@@ -1888,7 +1957,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setAccount((prev) => ({ ...prev, ...patch }));
     try {
       const a = await accountApi.update(nickname, photoUri);
-      setAccount({ nickname: a.nickname, avatarUri: a.avatarUri });
+      setAccount((prev) => accountFrom(a, prev));
     } catch (e) {
       setAccount(before);
       throw e;
@@ -2175,6 +2244,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       confidenceOf,
       businessRegs,
       registerBusiness,
+      claimFacility,
       businessRegOf,
       effectiveFacility,
       promotions,
@@ -2261,6 +2331,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       confidenceOf,
       businessRegs,
       registerBusiness,
+      claimFacility,
       businessRegOf,
       effectiveFacility,
       promotions,
