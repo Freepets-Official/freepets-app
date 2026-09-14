@@ -4,6 +4,8 @@
  */
 const EVENTS_KEY = 'freepets.calendarEvents';
 const MEDLOG_KEY = 'freepets.medLog';
+/** 1.0의 기기 전용 일정을 서버로 한 번 올렸는지 */
+const MIGRATED_KEY = 'freepets.calendarMigrated';
 
 async function read(key: string): Promise<unknown> {
   try {
@@ -35,3 +37,9 @@ export async function loadMedLog(): Promise<string[]> {
 }
 
 export const saveMedLog = (keys: string[]) => write(MEDLOG_KEY, keys);
+
+export async function loadCalendarMigrated(): Promise<boolean> {
+  return (await read(MIGRATED_KEY)) === true;
+}
+
+export const saveCalendarMigrated = () => write(MIGRATED_KEY, true);
