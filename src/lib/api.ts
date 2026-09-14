@@ -51,7 +51,7 @@ export type ApiEnvelope<T> = {
   result: T;
 };
 
-export type LoginResult = { accessToken: string; refreshToken: string; userId?: number };
+export type LoginResult = { accessToken: string; refreshToken: string; userId?: number | string };
 
 export class ApiError extends Error {
   code?: string;
@@ -118,10 +118,10 @@ export function getSessionEpoch(): number {
 
 /** 재발급에 성공하면 새 토큰 쌍을 store에 넘겨 기기에도 남기게 한다. */
 let onTokensRefreshed:
-  | ((t: { accessToken: string; refreshToken: string; userId?: number }) => void)
+  | ((t: { accessToken: string; refreshToken: string; userId?: number | string }) => void)
   | null = null;
 export function setTokensRefreshedHandler(
-  fn: ((t: { accessToken: string; refreshToken: string; userId?: number }) => void) | null,
+  fn: ((t: { accessToken: string; refreshToken: string; userId?: number | string }) => void) | null,
 ) {
   onTokensRefreshed = fn;
 }
@@ -180,7 +180,7 @@ async function refreshTokens(): Promise<RefreshOutcome> {
     const json = (await res.json().catch(() => null)) as ApiEnvelope<{
       accessToken: string;
       refreshToken: string;
-      userId?: number;
+      userId?: number | string;
     }> | null;
     /**
      * 서버는 토큰 오류를 전부 401로 주고 코드로 갈라 준다.
@@ -574,7 +574,7 @@ export const petsApi = {
 type ServerAccount = {
   nickname: string;
   avatarUri: string | null;
-  userId?: number;
+  userId?: number | string;
   /** 계정에 붙은 프로필. 매장을 하나라도 확정하면 'owner'가 생긴다 */
   profiles?: string[];
   /** 이 계정이 사업자 확인으로 확정한 시설 — 대시보드의 「내 매장」 목록 */
@@ -756,6 +756,9 @@ type ServerFacilityDetail = {
   petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING';
   petConditionRaw: string | null;
   confirmedAt: string | null;
+  /** 서버가 실제로 내려준다(2026-09-12 명세). 사업자 확정·거부 제보 하향이 여기 실린다 */
+  confidence?: string | null;
+  confidenceSource?: string | null;
   imageUrl: string | null;
   thumbnailUrl: string | null;
 };
@@ -780,10 +783,19 @@ export type FacilityDetail = Pick<
   | 'confirmedAt'
 > & { distanceM: number | null; address: string | null };
 
+const CONFIDENCES = new Set<string>(['CONFIRMED', 'LIKELY', 'ESTIMATED', 'UNVERIFIED']);
+const CONFIDENCE_SOURCES = new Set<string>(['OWNER', 'CROWD', 'PARSED', 'USER_CALL', 'DENIAL_REPORT', 'NONE', 'SERVER']);
+
 function toFacilityDetail(s: ServerFacilityDetail): FacilityDetail {
-  // confirmedAt이 있으면 서버가 동반 조건을 확정한 것이다. 다만 확정 주체(사업자/사용자)는
-  // 응답에 없어 SERVER로 둔다 — 없는 근거를 지어내면 사용자가 잘못 신뢰한다.
+  /**
+   * 신뢰도는 **서버 값을 그대로** 쓴다. 예전에는 confirmedAt 유무로 지어냈는데, 사업자가
+   * 확정한 뒤 거부 제보가 들어와 서버가 UNVERIFIED/DENIAL_REPORT를 줘도 앱은 "확정"을 그렸다.
+   * 옛 서버가 두 필드를 안 주는 경우에만 confirmedAt으로 추정한다.
+   */
   const confirmed = s.confirmedAt !== null;
+  const confidence = s.confidence && CONFIDENCES.has(s.confidence) ? (s.confidence as Confidence) : null;
+  const source =
+    s.confidenceSource && CONFIDENCE_SOURCES.has(s.confidenceSource) ? (s.confidenceSource as ConfidenceSource) : null;
   return {
     facilityId: s.facilityId,
     name: s.name,
@@ -797,8 +809,8 @@ function toFacilityDetail(s: ServerFacilityDetail): FacilityDetail {
     longitude: s.longitude ?? undefined,
     petAllowed: s.petAllowed === 'ALLOWED' ? true : s.petAllowed === 'DENIED' ? false : null,
     petConditionRaw: s.petConditionRaw,
-    confidence: confirmed ? 'CONFIRMED' : 'ESTIMATED',
-    confidenceSource: confirmed ? 'SERVER' : 'PARSED',
+    confidence: confidence ?? (confirmed ? 'CONFIRMED' : 'ESTIMATED'),
+    confidenceSource: source ?? (confirmed ? 'SERVER' : 'PARSED'),
     confirmedAt: s.confirmedAt,
   };
 }

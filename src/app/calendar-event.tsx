@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, useRef } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DateField } from '@/components/date-field';
@@ -15,6 +15,7 @@ import {
   type CalRepeat,
 } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
+import { notify } from '@/lib/notify';
 import { useAppStore } from '@/store/app-store';
 
 const TYPES: CalEventType[] = ['VACCINE', 'MED', 'CHECKUP', 'TRAVEL', 'OTHER'];
@@ -25,7 +26,7 @@ export default function CalendarEventScreen() {
   const p = usePalette();
   const router = useRouter();
   const params = useLocalSearchParams<{ date?: string; eventId?: string }>();
-  const { pets, calendarEvents, addCalendarEvent, updateCalendarEvent } = useAppStore();
+  const { pets, calendarEvents, addCalendarEvent, updateCalendarEvent, calendarErrorRef } = useAppStore();
 
   // 편집 모드: eventId가 있으면 그 일정을 찾아 폼을 채운다
   const editing = params.eventId ? calendarEvents.find((e) => String(e.eventId) === params.eventId) : undefined;
@@ -53,14 +54,16 @@ export default function CalendarEventScreen() {
       // 안 그러면 화면에 안 보이는 기간이 데이터에만 남아 캘린더에 막대가 그려진다.
       endDate: type === 'TRAVEL' && endDate && endDate > date ? endDate : null,
       time: time.trim() || null,
-      repeat,
+      // 기간 일정은 반복할 수 없다(서버 CALENDAR4007). 화면도 칩을 감추지만 값은 여기서도 못 박는다
+      repeat: type === 'TRAVEL' && endDate && endDate > date ? 'NONE' : repeat,
       reminder,
       notes: notes.trim() || null,
     };
     // 서버가 거부하면 화면을 닫지 않는다 — 닫히면 저장된 줄 알고 나간다
     void (editing ? updateCalendarEvent(editing.eventId, payload) : addCalendarEvent(payload)).then((ok) => {
       if (ok) router.back();
-      else Alert.alert('저장 실패', '일정을 서버에 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      // 서버가 이유를 말해줬으면 그걸 보여준다 — "저장 실패"만으로는 뭘 고칠지 모른다
+      else notify('저장 실패', calendarErrorRef.current ?? '일정을 서버에 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
     });
   };
 
@@ -104,6 +107,7 @@ export default function CalendarEventScreen() {
             onChangeText={setTitle}
             placeholder="예) 종합백신 2차 · 심장사상충 예방약"
             placeholderTextColor={p.muted}
+            maxLength={100}
             style={[styles.input, { backgroundColor: p.surface, borderColor: p.line, color: p.ink }]}
           />
 
@@ -151,19 +155,23 @@ export default function CalendarEventScreen() {
             <DateField value={time} onChange={setTime} placeholder="시간 선택" mode="time" />
           </View>
 
-          {/* 반복 */}
+          {/* 반복 — 기간 일정(여행 종료일)에는 못 건다. 서버가 거부하고(CALENDAR4007), 8/22~24 여행에 매일이 붙으면 25일부터 점이 계속 찍힌다 */}
           <Text style={[styles.label, { color: p.ink }]}>반복</Text>
-          <View style={styles.petRow}>
-            {REPEATS.map((r) => (
-              <Chip
-                key={r}
-                label={CAL_REPEAT_LABEL[r]}
-                on={repeat === r}
-                color={p.accent}
-                onPress={() => setRepeat(r)}
-              />
-            ))}
-          </View>
+          {type === 'TRAVEL' && endDate && endDate > date ? (
+            <Text style={{ color: p.muted, fontSize: 13 }}>기간이 있는 일정은 반복할 수 없어요.</Text>
+          ) : (
+            <View style={styles.petRow}>
+              {REPEATS.map((r) => (
+                <Chip
+                  key={r}
+                  label={CAL_REPEAT_LABEL[r]}
+                  on={repeat === r}
+                  color={p.accent}
+                  onPress={() => setRepeat(r)}
+                />
+              ))}
+            </View>
+          )}
 
           {/* 알림 */}
           <View style={[styles.reminderRow, { backgroundColor: p.surface, borderColor: p.line }]}>
@@ -189,6 +197,7 @@ export default function CalendarEventScreen() {
             onChangeText={setNotes}
             placeholder="예) 강릉동물병원 · 12시간 공복"
             placeholderTextColor={p.muted}
+            maxLength={1000}
             multiline
             /**
              * 키보드 인셋만으로는 부족하다. 그건 스크롤 **여백**을 늘릴 뿐 화면을 옮기지

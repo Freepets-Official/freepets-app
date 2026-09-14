@@ -1,6 +1,6 @@
-import type { StoredSession } from './token-store';
+import type { LoginProvider, StoredSession } from './token-store';
 
-export type { StoredSession };
+export type { LoginProvider, StoredSession };
 
 /**
  * 웹은 SecureStore가 없다(네이티브 키체인이 없으므로). localStorage를 쓴다.

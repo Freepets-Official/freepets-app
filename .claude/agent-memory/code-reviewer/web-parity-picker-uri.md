@@ -20,4 +20,8 @@ metadata:
 - 네이티브 `SecureStore`는 값 하나가 **2048바이트를 넘으면 경고·실패**한다. 배열 전체를 한 키에 넣는
   구조는 항목이 쌓이면 웹은 멀쩡한데 네이티브만 조용히 저장에 실패한다.
 
-관련: [[courses-regions-partial-tree]]
+- `react-native-web`의 `Alert.alert`는 **빈 함수**(`node_modules/react-native-web/dist/exports/Alert/index.js`).
+  실패를 `Alert.alert`로만 알리는 경로는 웹에서 **무음**이다 — 저장 실패인데 화면이 안 닫히고 아무 말도 없다.
+  웹 짝이 있는 알림 유틸이 있는지, 없으면 `Platform.OS === 'web'` 분기(`window.alert`)가 있는지 본다.
+
+관련: [[courses-regions-partial-tree]] [[occurrence-fold-anchor]]

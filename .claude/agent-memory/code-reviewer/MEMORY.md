@@ -2,3 +2,10 @@
 - [courses/regions는 부분 트리](courses-regions-partial-tree.md) — 시설이 있는 (시도,시군구) 조합만 온다. 분모·주소 파싱 사전으로 쓰면 틀어진다
 - [courses API 계약 함정](api-courses-contract.md) — `/courses/public`은 무인증이라 내 코스도 섞인다 · SaveRequest에 `public`/`isPublic` 두 이름
 - [docs/02는 낡았다](docs-02-is-stale.md) — 02·09는 설계 초안 그대로. 어긋남을 PR 결함으로 올리기 전에 누적 부채인지 구분
+- [복원 미러 ref 타이밍](restore-mirror-ref-timing.md) — 재발급 콜백이 읽는 ref(providerRef 등)는 복원의 첫 await 전에 채워야 저장분이 null로 안 덮인다
+- [expo-store-review 실제 동작](store-review-semantics.md) — hasAction은 isAvailableAsync 상위집합 · 버튼에서 requestReview는 애플 금지 · 웹 openURL은 _blank
+- [딥링크가 세션 복원보다 먼저](deeplink-before-session-restore.md) — mount effect의 auth 호출은 토큰 없이 나간다. DEV_TOKEN이 가린다
+- [딥링크·로그인 왕복](deeplink-login-roundtrip.md) — 웹 네이버 로그인은 전체 리로드(모듈 변수 소실) · AASA는 .well-known만 · Android intentFilters 짝 확인
+- [발생 단위 응답 접기](occurrence-fold-anchor.md) — 캘린더 `date`는 발생일. 앵커로 되쓰면 편집 때 반복 앵커가 밀려 과거 발생 유실
+- [라이브 실측 불가](api-calendar-live-host.md) — 09-14 기준 DEV 토큰 TOKEN4001, 옛 호스트 죽음. 계약은 api-specs/*.md로 판정
+- [business·account·detail 계약 함정](api-business-contract.md) — radiusM 생략=전국 · verify 불일치는 4xx · 상세가 confidence를 실제로 줌 · userId는 문자열

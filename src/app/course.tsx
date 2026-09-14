@@ -9,6 +9,7 @@ import { Text } from '@/components/text';
 import { ResultBadge } from '@/components/badge';
 import { Chip } from '@/components/chip';
 import { courseShareUrl } from '@/constants/links';
+import { copyText } from '@/lib/clipboard';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import {
   PRESET_COURSES,
@@ -52,8 +53,17 @@ const PICK_FALLBACK_CENTER: Coords = { latitude: 37.5665, longitude: 126.978 };
 export default function CourseScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { pets, satisfactions, facilityById, registerFacilities, loadFacility, lastCoords, setLastCoords } =
-    useAppStore();
+  const {
+    pets,
+    satisfactions,
+    facilityById,
+    registerFacilities,
+    loadFacility,
+    lastCoords,
+    setLastCoords,
+    restoring,
+    session,
+  } = useAppStore();
 
   const [selectedPetIds, setSelectedPetIds] = useState<number[]>(pets.map((x) => x.petId));
   const [stopIds, setStopIds] = useState<number[]>([]);
@@ -290,11 +300,22 @@ export default function CourseScreen() {
     setSaveMessage(null);
     try {
       const code = await coursesApi.share(course.courseId);
-      await Share.share({
-        message: `반갑꼬리 여행 코스 '${course.name}' (${course.stopIds.length}곳)\n${courseShareUrl(code)}\n\n앱에서 담기 → 여행 코스 → 공유 코드: ${code}`,
-      });
+      const message = `반갑꼬리 여행 코스 '${course.name}' (${course.stopIds.length}곳)\n${courseShareUrl(code)}\n\n앱에서 담기 → 여행 코스 → 공유 코드: ${code}`;
+      try {
+        await Share.share({ message });
+      } catch {
+        /**
+         * 웹에서 `navigator.share`가 없거나(데스크톱 파이어폭스·비보안 컨텍스트) 사용자 제스처가
+         * 만료되면(서버가 몇 초 걸린 뒤) 시트가 안 뜬다. 코드는 이미 발급됐으니 클립보드로
+         * 넘기고 화면에 코드를 남긴다 — 아무 일도 안 일어나는 버튼이 되면 안 된다.
+         */
+        const copied = await copyText(message);
+        setSaveMessage({
+          text: copied ? `링크와 코드를 복사했어요 · 공유 코드 ${code}` : `공유 코드 ${code} — 여행 코스 화면에서 담을 수 있어요`,
+          failed: false,
+        });
+      }
     } catch (e) {
-      // 시트를 그냥 닫은 것도 여기로 올 수 있다(웹) — 서버 오류만 알린다
       if (e instanceof ApiError) setSaveMessage({ text: e.message || '공유 코드를 받지 못했어요', failed: true });
     } finally {
       setSharingId(null);
@@ -307,9 +328,11 @@ export default function CourseScreen() {
    */
   const [shareInput, setShareInput] = useState('');
   const [importing, setImporting] = useState(false);
-  const importShared = async (raw: string) => {
-    const code = raw.trim();
-    if (!code || importing) return;
+  const importShared = async (raw: string): Promise<boolean> => {
+    // 카톡 메시지를 통째로 붙여넣으면 링크에서 코드를 뽑는다
+    const fromUrl = raw.match(/[?&]share=([^&\s]+)/);
+    const code = decodeURIComponent((fromUrl ? fromUrl[1] : raw).trim());
+    if (!code || importing) return false;
     setImporting(true);
     setSaveMessage(null);
     try {
@@ -317,26 +340,38 @@ export default function CourseScreen() {
       setSavedCourses((prev) => [created, ...prev.filter((c) => c.courseId !== created.courseId)]);
       setShareInput('');
       setSaveMessage({ text: `'${created.name}'을(를) 내 코스에 담았어요`, failed: false });
+      // 화면을 열며 나간 목록 조회가 늦게 도착하면 방금 담은 코스를 덮는다 — 다시 받아 맞춘다
+      void reloadSaved().catch(() => {});
+      return true;
     } catch (e) {
       const notFound = e instanceof ApiError && e.status === 404;
       setSaveMessage({
         text: notFound ? '그 코드의 코스를 찾지 못했어요. 코드를 다시 확인해 주세요.' : e instanceof Error ? e.message : '코스를 담지 못했어요',
         failed: true,
       });
+      return false;
     } finally {
       setImporting(false);
     }
   };
 
-  // 공유 링크로 들어온 경우 — 한 번만 담는다. 파라미터가 그대로여도 다시 돌지 않는다
-  const { share: shareParam } = useLocalSearchParams<{ share?: string }>();
+  /**
+   * 공유 링크(`?share=`)로 들어온 경우.
+   *
+   * 세션 복원이 끝나기 전에 담으면 토큰 없이 나가 401이 된다 — 이 화면의 이펙트가 스토어의
+   * 복원보다 먼저 돌기 때문이다(개발 모드는 DEV_TOKEN이 가려 재현이 안 됐다). 복원이 끝나고
+   * 로그인돼 있을 때만 담고, 시도한 뒤에는 **주소에서 파라미터를 지운다** — 남겨두면
+   * 새로고침·재로그인마다 사본이 하나씩 더 생긴다.
+   */
+  const { share: shareParam } = useLocalSearchParams<{ share?: string | string[] }>();
+  const shareCode = Array.isArray(shareParam) ? shareParam[0] : shareParam;
   const importedParamRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!shareParam || importedParamRef.current === shareParam) return;
-    importedParamRef.current = shareParam;
-    void importShared(shareParam);
+    if (!shareCode || restoring || !session.authed || importedParamRef.current === shareCode) return;
+    importedParamRef.current = shareCode;
+    void importShared(shareCode).finally(() => router.setParams({ share: '' }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shareParam]);
+  }, [shareCode, restoring, session.authed]);
 
   /**
    * 내 코스를 공개/비공개로 바꾼다. 서버 `PUT /courses/{id}`는 부분 수정이 아니라 **전체 교체**라
@@ -939,7 +974,7 @@ export default function CourseScreen() {
                   onChangeText={setShareInput}
                   placeholder="공유받은 코스 코드"
                   placeholderTextColor={p.muted}
-                  autoCapitalize="characters"
+                  autoCapitalize="none"
                   autoCorrect={false}
                   returnKeyType="done"
                   onSubmitEditing={() => void importShared(shareInput)}

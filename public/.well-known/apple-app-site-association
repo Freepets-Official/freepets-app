@@ -4,11 +4,6 @@
     "details": [
       {
         "appID": "R9X886G4DM.com.freepets.app",
-        "paths": [
-          "/course",
-          "/course?*",
-          "/facility/*"
-        ],
         "components": [
           {
             "/": "/course",

@@ -1,8 +1,8 @@
-import { DefaultTheme, Stack, ThemeProvider, useGlobalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider, useGlobalSearchParams, usePathname, useRouter, useSegments, type Href } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable } from 'react-native';
 
 import { AppSplash } from '@/components/app-splash';
@@ -28,8 +28,36 @@ import { AppStoreProvider, useAppStore } from '@/store/app-store';
  * 게이트가 로그인 화면으로 보낸다. 그 순간 주소가 사라져서, 로그인을 마쳐도 홈에 떨어지고
  * 공유받은 코스는 어디에도 없다. 그래서 보내기 전에 기억했다가 로그인 뒤 그리로 보낸다.
  * 한 번 쓰면 지운다 — 다음 로그인까지 남아 있으면 엉뚱한 화면으로 간다.
+ *
+ * 웹은 `sessionStorage`에 둔다. 네이버 로그인이 페이지를 통째로 떠났다 돌아와서(전체 리로드)
+ * 모듈 변수는 그 사이 사라진다. 탭이 닫히면 같이 사라지니 남아서 엉뚱한 곳으로 보낼 일도 없다.
+ * **앱을 연 직후의 첫 판정에서만** 기억한다 — 세션 만료로 게이트가 열릴 때까지 기억하면
+ * 다음에 다른 계정으로 로그인해도 그 화면으로 튀고, 공유 코스면 사본이 하나 더 생긴다.
  */
-let pendingHref: string | null = null;
+const PENDING_KEY = 'freepets.pendingHref';
+let pendingHrefMemory: string | null = null;
+const pendingHref = {
+  get(): string | null {
+    if (Platform.OS !== 'web') return pendingHrefMemory;
+    try {
+      return window.sessionStorage.getItem(PENDING_KEY);
+    } catch {
+      return null;
+    }
+  },
+  set(v: string | null) {
+    if (Platform.OS !== 'web') {
+      pendingHrefMemory = v;
+      return;
+    }
+    try {
+      if (v) window.sessionStorage.setItem(PENDING_KEY, v);
+      else window.sessionStorage.removeItem(PENDING_KEY);
+    } catch {
+      // 사생활 보호 모드 — 기억 못 하면 홈으로 간다
+    }
+  },
+};
 
 function useAuthGate() {
   const { session, restoring } = useAppStore();
@@ -37,6 +65,8 @@ function useAuthGate() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useGlobalSearchParams<Record<string, string | string[]>>();
+  /** 복원이 끝난 뒤 첫 판정인가 — 링크로 들어온 주소는 이때만 의미가 있다 */
+  const firstDecisionRef = useRef(true);
 
   useEffect(() => {
     // 저장된 세션을 확인하는 동안은 아무 데로도 보내지 않는다. 여기서 판단하면
@@ -54,23 +84,28 @@ function useAuthGate() {
      */
     const isPublicDoc = seg === 'policy';
 
+    const first = firstDecisionRef.current;
+    firstDecisionRef.current = false;
+
     if (!session.authed) {
       if (!onAuth && !isPublicDoc) {
-        // 홈·탭은 기억할 가치가 없다. 파라미터가 있는 깊은 주소만 남긴다(공유 링크가 그렇다)
-        const qs = Object.entries(params)
-          .filter(([, v]) => typeof v === 'string' && v)
-          .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v as string)}`)
-          .join('&');
-        pendingHref = pathname !== '/' && qs ? `${pathname}?${qs}` : null;
+        if (first) {
+          // 홈·탭은 기억할 가치가 없다. 파라미터가 있는 깊은 주소만 남긴다(공유 링크가 그렇다)
+          const qs = Object.entries(params)
+            .flatMap(([k, v]) => (Array.isArray(v) ? v : [v]).filter((x): x is string => typeof x === 'string' && !!x).map((x) => [k, x] as const))
+            .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+            .join('&');
+          pendingHref.set(pathname !== '/' && qs ? `${pathname}?${qs}` : null);
+        }
         router.replace('/login');
       }
     } else if (session.activeProfile == null) {
       if (!onPicker) router.replace('/profile-select');
     } else if (onAuth || onPicker) {
-      const target = pendingHref;
-      pendingHref = null;
+      const target = pendingHref.get();
+      pendingHref.set(null);
       // 사업자 프로필로 들어온 사람에게 코스 화면을 들이밀지 않는다 — 소비자 화면이다
-      if (target && session.activeProfile !== 'owner') router.replace(target as never);
+      if (target && session.activeProfile !== 'owner') router.replace(target as Href);
       else router.replace(session.activeProfile === 'owner' ? '/owner-dashboard' : '/');
     }
   }, [restoring, session.authed, session.activeProfile, segments, router, pathname, params]);

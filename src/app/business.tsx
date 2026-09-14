@@ -16,7 +16,8 @@ import { usePalette } from '@/hooks/use-theme';
 import { ApiError, type BusinessIdentity } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
 
-const REQUIREMENTS: Requirement[] = ['LEASH', 'CAGE', 'MUZZLE', 'VACCINATION', 'SMALL_ONLY', 'OUTDOOR_ONLY'];
+// 서버 enum 8종 전부. 빠진 게 있으면 서버가 프리필로 준 값을 화면에서 끌 수 없다
+const REQUIREMENTS: Requirement[] = ['LEASH', 'CAGE', 'MUZZLE', 'VACCINATION', 'SMALL_ONLY', 'OUTDOOR_ONLY', 'STROLLER', 'MANNER_BELT'];
 
 /**
  * 사업자 셀프 등록 (F5) — 사업자가 진위확인 후 자기 매장의 출입 조건을 직접 확정한다.
@@ -211,7 +212,7 @@ export default function BusinessScreen() {
                     <TextInput
                       value={picker.query}
                       onChangeText={picker.setQuery}
-                      placeholder="매장명으로 찾기 (이름을 넣으면 100km까지)"
+                      placeholder="매장명으로 찾기 (이름을 넣으면 전국)"
                       placeholderTextColor={p.muted}
                       style={[styles.input, { color: p.ink }]}
                     />
@@ -227,8 +228,8 @@ export default function BusinessScreen() {
                   ) : !picker.loading && picker.items.length === 0 ? (
                     <Text style={[styles.hint, { color: p.muted }]}>
                       {picker.query.trim()
-                        ? '100km 안에서는 못 찾았어요. 관광공사에 등록된 이름인지, 매장 근처에서 다시 시도해 주세요.'
-                        : '주변 30km에 등록된 매장이 없어요. 매장명을 입력하면 100km까지 찾아요.'}
+                        ? '그 이름의 매장을 못 찾았어요. 관광공사에 등록된 이름으로 찾아보세요.'
+                        : '주변 30km에 등록된 매장이 없어요. 매장명을 입력하면 전국에서 찾아요.'}
                     </Text>
                   ) : (
                     <View style={styles.candidates}>
@@ -243,7 +244,7 @@ export default function BusinessScreen() {
                           <View style={{ flex: 1 }}>
                             <Text style={[styles.candName, { color: p.ink }]}>{f.name}</Text>
                             <Text style={[styles.candMeta, { color: p.muted }]} numberOfLines={1}>
-                              {CATEGORY_LABEL[f.category]} · {formatDistance(f.distanceM)} · {f.address}
+                              {CATEGORY_LABEL[f.category]}{f.distanceM !== null ? ` · ${formatDistance(f.distanceM)}` : ''} · {f.address}
                             </Text>
                           </View>
                           <ConfidenceBadge confidence={f.confidence} size="sm" />

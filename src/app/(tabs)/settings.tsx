@@ -2,18 +2,19 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter } from 'expo-router';
 import { useState, type ComponentProps, type ReactNode } from 'react';
-import { Alert, Linking, Modal, Platform, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Linking, Modal, Platform, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
 import { Screen } from '@/components/screen';
 import { SUPPORT_EMAIL, SUPPORT_MAIL_SUBJECT } from '@/constants/contact';
-import { requestAppReview } from '@/lib/app-review';
+import { openStoreReview } from '@/lib/app-review';
 import { CardShadow, Radius, Spacing, type ThemeMode } from '@/constants/theme';
 import { FONT_SIZE_LABEL, type FontSizeMode } from '@/data/types';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { ApiError, accountApi } from '@/lib/api';
 import type { LoginProvider } from '@/lib/token-store';
+import { notify } from '@/lib/notify';
 import { useAppStore } from '@/store/app-store';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -101,7 +102,7 @@ export default function SettingsScreen() {
     const hardware = await LocalAuthentication.hasHardwareAsync();
     const enrolled = await LocalAuthentication.isEnrolledAsync();
     if (!hardware || !enrolled) {
-      Alert.alert('생체인증을 사용할 수 없어요', '기기 설정에서 Face ID·지문을 먼저 등록해주세요.');
+      notify('생체인증을 사용할 수 없어요', '기기 설정에서 Face ID·지문을 먼저 등록해주세요.');
       return;
     }
     updateSettings({ appLock: true });
@@ -260,7 +261,7 @@ export default function SettingsScreen() {
             value={gamification.levelUpNotificationEnabled}
             onChange={(v) => {
               void setLevelUpNotification(v).then((ok) => {
-                if (!ok) Alert.alert('알림 설정', '설정을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+                if (!ok) notify('알림 설정', '설정을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
               });
             }}
             last
@@ -330,7 +331,7 @@ export default function SettingsScreen() {
             icon="star-outline"
             label="앱 평가하기"
             sub="별점 하나가 다음 집사에게 닿아요"
-            onPress={() => void requestAppReview()}
+            onPress={() => void openStoreReview()}
             chevron
           />
         )}
