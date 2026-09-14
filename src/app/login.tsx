@@ -25,7 +25,8 @@ export default function LoginScreen() {
   // 소셜 로그인 실패도 같은 자리에 보여준다 — 훅이 따로 들고 있으면 화면에 아무것도 안 뜬다
   const shownError = error ?? social.error;
 
-  const canSubmit = email.trim().length > 0 && pw.length > 0 && !loading;
+  // 소셜 로그인이 도는 동안 이메일 로그인을 막는다. 둘이 동시에 끝나면 A의 데이터 위에 B 토큰이 얹힌다
+  const canSubmit = email.trim().length > 0 && pw.length > 0 && !loading && social.pending == null;
 
   // 실제 백엔드 로그인 — 성공 시 토큰 저장 + 세션 진입
   const submit = async () => {
@@ -127,6 +128,7 @@ export default function LoginScreen() {
               onPress={social.signIn}
               available={social.isProviderAvailable}
               pending={social.pending}
+              disabled={loading}
             />
 
             {/* 회원가입 */}

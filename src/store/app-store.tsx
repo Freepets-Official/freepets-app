@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Platform } from 'react-native';
 
+import { clearPushToken, loadPushToken, savePushToken } from '@/lib/push-token-store';
 import { clearSession, loadSession, saveSession, type LoginProvider } from '@/lib/token-store';
 import { clearStamps, loadStamps, saveStamps } from '@/lib/stamp-store';
 import { loadHiddenChecks, saveHiddenChecks } from '@/lib/hidden-checks';
@@ -188,6 +189,14 @@ export interface Session {
    * 눌러야 하는지 모른다. 옛 저장분에는 없어 null일 수 있다.
    */
   provider: LoginProvider | null;
+  /**
+   * 세션 식별자. 로그인할 때마다 바뀐다(로그아웃은 0).
+   *
+   * 로그인 상태를 `authed` 불리언 하나로만 보면, A로 로그인된 채 B 인증이 끝났을 때 값이
+   * true → true라 데이터를 다시 받는 이펙트가 돌지 않는다 — A의 반려동물이 B 화면에 남는다.
+   * 데이터를 받는 이펙트는 이 값도 함께 본다.
+   */
+  key: number;
   /** 현재 활성 프로필. null이면 아직 안 골랐다는 뜻(프로필 선택 화면으로) */
   activeProfile: ProfileKind | null;
 }
@@ -651,7 +660,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [businessRegs, setBusinessRegs] = useState<Record<number, BusinessReg>>({});
   const [promotions, setPromotions] = useState<Record<number, Promotion>>({});
   const [benefits, setBenefits] = useState<Record<number, Benefit[]>>({});
-  const [session, setSession] = useState<Session>({ authed: false, email: null, provider: null, activeProfile: null });
+  const [session, setSession] = useState<Session>({ authed: false, email: null, provider: null, key: 0, activeProfile: null });
   // 백엔드 인증 토큰. 기기에도 남긴다(네이티브 SecureStore / 웹 localStorage) —
   // 남기지 않으면 새로고침·앱 재실행마다 로그인해야 한다.
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -792,7 +801,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [session.authed, calendarLoaded, loadCalendarMonth]);
+  }, [session.authed, session.key, calendarLoaded, loadCalendarMonth]);
 
   const nextEventId = useRef(INITIAL_CAL_EVENTS.length + 1);
   const nextBenefitId = useRef(1);
@@ -834,7 +843,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [session.authed]);
+  }, [session.authed, session.key]);
 
   // 서버에서 판별 이력을 불러온다. 목록이 주는 건 **요약뿐**이라 아이별 판별(verdicts)이
   // 비어 있다 — 필요할 때 hydrateCheck(GET /pet-checks/{checkId})로 채운다.
@@ -874,7 +883,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [session.authed]);
+  }, [session.authed, session.key]);
 
   /**
    * 반려동물 등록·수정·삭제.
@@ -896,19 +905,28 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * 실패 롤백은 **같은 세션 안에서만** 한다.
+   *
+   * 요청 중 재발급까지 만료되면 `expireSession()`이 상태를 비운 뒤 요청이 예외를 던진다.
+   * 그때 `before`를 되살리면 방금 비운 계정 상태가 돌아온다 — 다른 계정으로 다시 로그인하지
+   * 않아도, 초기화 직후 옛 반려동물이 화면에 다시 뜬다.
+   */
   const removePet = useCallback(async (petId: number) => {
+    const rev = sessionRev.current;
     const before = petsRef.current;
     setPets((prev) => prev.filter((p) => p.petId !== petId));
     if (petId <= 0) return; // 서버에 없는 임시 항목
     try {
       await petsApi.remove(petId);
     } catch (e) {
-      setPets(before);
+      if (rev === sessionRev.current) setPets(before);
       throw e;
     }
   }, []);
 
   const updatePet = useCallback(async (petId: number, patch: Partial<Omit<Pet, 'petId'>>) => {
+    const rev = sessionRev.current;
     const before = petsRef.current;
     setPets((prev) => prev.map((p) => (p.petId === petId ? { ...p, ...patch } : p)));
     const existing = before.find((p) => p.petId === petId);
@@ -917,7 +935,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     try {
       await petsApi.update(petId, full);
     } catch (e) {
-      setPets(before);
+      if (rev === sessionRev.current) setPets(before);
       throw e;
     }
   }, []);
@@ -1215,7 +1233,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [session.authed]);
+  }, [session.authed, session.key]);
 
   /**
    * 집사 레벨·발바닥 티어. `GET /me/gamification`.
@@ -1239,7 +1257,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [session.authed]);
+  }, [session.authed, session.key]);
 
   /**
    * 레벨업 알림 on/off.
@@ -1445,7 +1463,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!session.authed && !(__DEV__ && DEV_TOKEN)) return;
     void loadTopPlaces();
-  }, [session.authed, loadTopPlaces]);
+  }, [session.authed, session.key, loadTopPlaces]);
 
   // 서버 검색으로 받은 시설을 상세 조회용으로 캐시한다(탐색 목록에서 탭 → 상세에서 재조회).
   const registerFacilities = useCallback((fs: Facility[]) => {
@@ -1488,7 +1506,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         .then(setGamification)
         .catch(() => {}),
     ]);
-  }, [session.authed]);
+  }, [session.authed, session.key]);
 
   const loadFacility = useCallback(async (id: number) => {
     if (!Number.isInteger(id) || id <= 0) return; // 숫자가 아니면 서버가 400이 아니라 500을 낸다
@@ -1741,6 +1759,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const removeCalendarEvent = useCallback(
     async (eventId: number) => {
+      const rev = sessionRev.current;
       const before = calendarEventsRef.current;
       setCalendarEvents((prev) => prev.filter((e) => e.eventId !== eventId));
       if (!session.authed || eventId < 0) return true;
@@ -1748,7 +1767,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         await calendarApi.remove(eventId);
         return true;
       } catch {
-        setCalendarEvents(before);
+        if (rev === sessionRev.current) setCalendarEvents(before);
         return false;
       }
     },
@@ -1757,6 +1776,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const updateCalendarEvent = useCallback(
     async (eventId: number, patch: Partial<Omit<CalendarEvent, 'eventId'>>) => {
+      const rev = sessionRev.current;
       const before = calendarEventsRef.current;
       const target = before.find((e) => e.eventId === eventId);
       if (!target) return false;
@@ -1767,7 +1787,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         await calendarApi.update(eventId, merged);
         return true;
       } catch {
-        setCalendarEvents(before);
+        if (rev === sessionRev.current) setCalendarEvents(before);
         return false;
       }
     },
@@ -1776,6 +1796,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const toggleEventReminder = useCallback(
     async (eventId: number) => {
+      const rev = sessionRev.current;
       const before = calendarEventsRef.current;
       const target = before.find((e) => e.eventId === eventId);
       if (!target) return false;
@@ -1786,7 +1807,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         await calendarApi.setReminder(eventId, next);
         return true;
       } catch {
-        setCalendarEvents(before);
+        if (rev === sessionRev.current) setCalendarEvents(before);
         return false;
       }
     },
@@ -1804,6 +1825,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const toggleMedTaken = useCallback(
     (eventId: number, date: string) => {
       const key = `${eventId}:${date}`;
+      const rev = sessionRev.current;
       const before = medLogRef.current;
       const taken = !before.has(key);
       setMedLog((prev) => {
@@ -1813,7 +1835,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       });
       if (!session.authed || eventId < 0) return;
       // 실패하면 되돌린다 — 체크가 남아 있는데 서버엔 없으면 다른 기기에서 "안 먹였다"로 보인다
-      calendarApi.setMedTaken(eventId, date, taken).catch(() => setMedLog(before));
+      calendarApi.setMedTaken(eventId, date, taken).catch(() => {
+        if (rev === sessionRev.current) setMedLog(before);
+      });
     },
     [session.authed],
   );
@@ -1839,6 +1863,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       authed: true,
       email,
       provider: 'email',
+      key: sessionRev.current,
       // 프로필이 하나뿐이면 바로 자동 로그인, 둘이면 선택 화면(activeProfile=null)으로 보낸다
       activeProfile: Object.keys(businessRegs).length > 0 ? null : 'consumer',
     });
@@ -1880,7 +1905,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         refreshTokenRef.current = refreshedRef.current?.refreshToken ?? saved.refreshToken;
         setAccount(accountFrom(me));
         providerRef.current = saved.provider ?? null;
-        setSession({ authed: true, email: saved.email, provider: saved.provider ?? null, activeProfile: 'consumer' });
+        setSession({ authed: true, email: saved.email, provider: saved.provider ?? null, key: sessionRev.current, activeProfile: 'consumer' });
       } catch (e) {
         if (stale()) return;
         // 인증 실패(만료·폐기)와 서버 장애를 구분한다. 502·네트워크 오류로 지워버리면
@@ -1894,7 +1919,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           setAccessToken(refreshedRef.current?.accessToken ?? saved.accessToken);
           refreshTokenRef.current = refreshedRef.current?.refreshToken ?? saved.refreshToken;
           providerRef.current = saved.provider ?? null;
-          setSession({ authed: true, email: saved.email, provider: saved.provider ?? null, activeProfile: 'consumer' });
+          setSession({ authed: true, email: saved.email, provider: saved.provider ?? null, key: sessionRev.current, activeProfile: 'consumer' });
         }
       } finally {
         // 세션이 바뀌었으면 그쪽이 이미 restoring을 내렸다
@@ -1907,6 +1932,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // 앱 시작에 한 번만 — 이후 로그인/로그아웃은 authenticate·logout이 관리한다
   }, []);
 
+  /** clearAccountState는 이 아래에서 정의된다. 선언 순서 때문에 ref로 잇는다 */
+  const clearAccountStateRef = useRef<() => void>(() => {});
   const authenticate = useCallback(
     (
       email: string,
@@ -1914,6 +1941,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       provider: LoginProvider = 'email',
     ) => {
       providerRef.current = provider;
+      /**
+       * 이미 다른 계정으로 들어와 있는 상태에서 인증이 끝났다(이메일·소셜 동시 진행).
+       * 토큰만 바꾸면 A의 반려동물·판별 이력 위에 B가 얹힌다 — 먼저 비운다.
+       */
+      if (sessionRef.current.authed) clearAccountStateRef.current();
       // 진행 중인 복원이 이 로그인을 덮어쓰지 않도록 세대를 올린다
       bumpSessionEpoch();
       refreshedRef.current = null;
@@ -1929,6 +1961,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         authed: true,
         email,
         provider,
+        key: sessionRev.current,
         activeProfile: Object.keys(businessRegs).length > 0 ? null : 'consumer',
       });
       // 다음 실행에서 되살릴 수 있게 기기에 남긴다. 이메일까지 담는 이유는 서버가
@@ -2006,6 +2039,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     void clearStamps();
     setGamification(null);
   }, []);
+  clearAccountStateRef.current = clearAccountState;
 
   /**
    * 세션 만료 — 401을 받았을 때 부른다.
@@ -2025,7 +2059,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setRefreshToken(null);
     refreshTokenRef.current = null;
     providerRef.current = null;
-    setSession({ authed: false, email: null, provider: null, activeProfile: null });
+    setSession({ authed: false, email: null, provider: null, key: 0, activeProfile: null });
     void clearSession();
     clearAccountState();
   }, [clearAccountState]);
@@ -2061,6 +2095,30 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => setTokensRefreshedHandler(null);
   }, []);
 
+  /**
+   * 푸시 등록·해제.
+   *
+   * 셋이 서로 경쟁했다 — (a) 등록 POST가 도는 중 로그아웃 DELETE가 먼저 끝나 등록만 남고,
+   * (b) OFF의 DELETE가 도는 중 ON의 POST가 먼저 끝나 "설정은 ON인데 서버엔 없고",
+   * (c) 앱을 다시 켠 직후엔 해제할 토큰이 메모리에 없었다.
+   *
+   * 그래서 셋을 한 줄로 세운다(`enqueuePush`): 앞 작업이 끝나야 다음이 나간다. 요청은 세대
+   * 검사 대신 **예약한 세션의 액세스 토큰으로 끝까지 간다** — 로그아웃 뒤에 끝난 등록도
+   * 같은 토큰으로 바로 되돌릴 수 있다. 등록한 토큰은 기기에도 남겨 재실행 직후에도 해제한다.
+   */
+  const pushTokenRef = useRef<string | null>(null);
+  const pushPendingRef = useRef<string | null>(null);
+  const pushChainRef = useRef<Promise<void>>(Promise.resolve());
+  const enqueuePush = useCallback((op: () => Promise<void>) => {
+    const next = pushChainRef.current.then(op, op);
+    pushChainRef.current = next.catch(() => {});
+    return next;
+  }, []);
+  const accessTokenRef = useRef(accessToken);
+  accessTokenRef.current = accessToken;
+  const notifPushRef = useRef(settings.notifPush);
+  notifPushRef.current = settings.notifPush;
+
   const finishLogout = useCallback(() => {
     bumpSessionEpoch();
     refreshedRef.current = null;
@@ -2072,7 +2130,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setRefreshToken(null);
     refreshTokenRef.current = null;
     providerRef.current = null;
-    setSession({ authed: false, email: null, provider: null, activeProfile: null });
+    setSession({ authed: false, email: null, provider: null, key: 0, activeProfile: null });
     void clearSession(); // 남겨두면 다음 실행에 로그아웃한 계정으로 되살아난다
     // 도장도 여기서 함께 지운다. 기기에 있어 계정과 묶여 있지 않아서, 안 지우면 다음에
     // 로그인한 사람에게 앞사람의 도장첩·뱃지가 그대로 보인다.
@@ -2095,19 +2153,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    *   그걸 기다리느라 최대 3초를 서 있을 이유가 없다.
    */
   const logout = useCallback((opts?: { skipPushUnregister?: boolean }) => {
-    // 등록이 아직 진행 중일 수도 있다. 그 토큰까지 함께 해제한다.
-    const pushed = pushTokenRef.current ?? pushPendingRef.current;
-    pushTokenRef.current = null;
-    pushPendingRef.current = null;
-    if (!pushed || opts?.skipPushUnregister) {
+    if (opts?.skipPushUnregister) {
       finishLogout();
       return;
     }
+    // 등록이 아직 진행 중이면 큐가 그 등록을 먼저 끝내고 이 해제를 보낸다.
+    // 이 계정의 토큰을 지금 잡아둔다 — finishLogout이 지운 뒤에 나가도 같은 토큰으로 간다.
+    const withToken = accessTokenRef.current ?? undefined;
+    const pushed = pushTokenRef.current ?? pushPendingRef.current;
+    pushTokenRef.current = null;
+    pushPendingRef.current = null;
+    const unregister = enqueuePush(async () => {
+      const token = pushed ?? (await loadPushToken());
+      if (!token) return;
+      await pushApi.unregister(token, withToken);
+      void clearPushToken();
+    }).catch(() => {});
     void Promise.race([
-      pushApi.unregister(pushed).catch(() => {}),
+      unregister,
       new Promise((resolve) => setTimeout(resolve, PUSH_UNREGISTER_WAIT_MS)),
     ]).then(finishLogout);
-  }, [finishLogout]);
+  }, [finishLogout, enqueuePush]);
 
   const selectProfile = useCallback((kind: ProfileKind) => {
     setSession((s) => ({ ...s, activeProfile: kind }));
@@ -2148,7 +2214,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [session.authed]);
+  }, [session.authed, session.key]);
 
   // 수정: 낙관적으로 로컬 반영 후 서버 PATCH. 서버가 준 최종값(아바타 URL 등)으로 다시 맞춘다.
   /**
@@ -2159,6 +2225,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 되돌리고 오류를 던져, 호출한 쪽이 사용자에게 알리고 화면을 닫지 않게 한다.
    */
   const updateAccount = useCallback(async (patch: Partial<Account>) => {
+    const rev = sessionRev.current;
     const before = accountRef.current;
     const nickname = patch.nickname ?? before.nickname;
     const photoUri = patch.avatarUri ?? before.avatarUri;
@@ -2167,7 +2234,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       const a = await accountApi.update(nickname, photoUri);
       setAccount((prev) => accountFrom(a, prev));
     } catch (e) {
-      setAccount(before);
+      if (rev === sessionRev.current) setAccount(before);
       throw e;
     }
   }, []);
@@ -2274,60 +2341,55 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * `GET /me/denial-alerts`로도 볼 수 있다. 다만 해제하려면 그때 등록한 토큰이 필요해서
    * 값을 들고 있는다.
    */
-  const pushTokenRef = useRef<string | null>(null);
-  /**
-   * 등록이 끝나기 전에 OFF·로그아웃이 오면 `pushTokenRef`가 아직 비어 있어 해제를
-   * 건너뛰었고, 뒤늦게 끝난 등록만 서버에 남았다. 등록을 시작하는 순간 토큰을 기록해
-   * 그 사이에 들어온 해제가 이 토큰도 지우게 한다.
-   */
-  const pushPendingRef = useRef<string | null>(null);
   useEffect(() => {
     if (!accessToken || !settingsLoaded) return;
-    let alive = true;
-    (async () => {
+    const rev = sessionRev.current;
+    const withToken = accessToken;
+    const wantOn = settings.notifPush;
+    void enqueuePush(async () => {
       /**
-       * 알림을 꺼두면 **서버에서 토큰을 지운다.**
-       *
-       * 예전에는 설정을 보지 않고 등록만 해서, 사용자가 꺼도 서버에는 그대로 남았다.
-       * 개인정보처리방침에 "끄면 저장된 푸시 토큰도 함께 삭제됩니다"라고 적어둔 터라
-       * 문서와 동작이 어긋나 있었다.
+       * 알림을 꺼두면 **서버에서 토큰을 지운다.** 개인정보처리방침이 "끄면 저장된 푸시 토큰도
+       * 함께 삭제됩니다"라고 약속한다. 메모리에 없으면(재실행 직후) 기기에 남긴 값을 쓴다.
        */
-      if (!settings.notifPush) {
-        const registered = pushTokenRef.current ?? pushPendingRef.current;
-        if (registered) {
-          // 해제가 성공해야 참조를 버린다. 먼저 지우면 실패했을 때 다시 시도할 정보가 없다.
-          const ok = await pushApi
-            .unregister(registered)
-            .then(() => true)
-            .catch(() => false);
-          if (ok) {
-            pushTokenRef.current = null;
-            pushPendingRef.current = null;
-          }
+      if (!wantOn) {
+        const registered = pushTokenRef.current ?? pushPendingRef.current ?? (await loadPushToken());
+        if (!registered) return;
+        // 해제가 성공해야 참조를 버린다. 먼저 지우면 실패했을 때 다시 시도할 정보가 없다
+        const ok = await pushApi
+          .unregister(registered, withToken)
+          .then(() => true)
+          .catch(() => false);
+        if (ok) {
+          pushTokenRef.current = null;
+          pushPendingRef.current = null;
+          void clearPushToken();
         }
         return;
       }
       const token = await getFcmToken();
-      if (!alive || !token) return;
+      if (!token) return;
+      // 토큰을 받는 사이 로그아웃했으면 그 계정 이름으로 등록하지 않는다
+      if (sessionRev.current !== rev) return;
       pushPendingRef.current = token;
       try {
-        await pushApi.register(token, Platform.OS === 'ios' ? 'IOS' : 'ANDROID');
-        // 등록이 도는 사이 화면을 벗어났거나 알림이 꺼졌으면 바로 되돌린다.
-        if (!alive || !settings.notifPush) {
-          await pushApi.unregister(token).catch(() => {});
-          pushPendingRef.current = null;
-          return;
-        }
-        pushTokenRef.current = token;
+        await pushApi.register(token, Platform.OS === 'ios' ? 'IOS' : 'ANDROID', withToken);
       } catch {
-        // 등록 실패는 알림이 안 오는 것으로 끝난다. 로그인·사용을 막지 않는다.
+        // 등록 실패는 알림이 안 오는 것으로 끝난다. 로그인·사용을 막지 않는다
         pushPendingRef.current = null;
+        return;
       }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [accessToken, settings.notifPush, settingsLoaded]);
+      // 등록이 도는 사이 로그아웃했거나 알림을 껐으면 **같은 토큰으로** 바로 되돌린다.
+      // 토큰 재발급으로 이펙트가 다시 돌 뿐인 경우는 되돌리지 않는다 — 새 등록과 경쟁한다.
+      if (sessionRev.current !== rev || !notifPushRef.current) {
+        await pushApi.unregister(token, withToken).catch(() => {});
+        pushPendingRef.current = null;
+        return;
+      }
+      pushTokenRef.current = token;
+      pushPendingRef.current = null;
+      void savePushToken(token);
+    });
+  }, [accessToken, settings.notifPush, settingsLoaded, enqueuePush]);
 
   /** 지역 트리 재조회. 화면의 재시도 버튼이 쓴다 — 없으면 앱을 다시 켤 때까지 도장을 못 찍는다. */
   const reloadStampRegions = useCallback(async () => {
