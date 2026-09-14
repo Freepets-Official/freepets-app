@@ -13,7 +13,12 @@ export type StoredSession = {
   accessToken: string;
   refreshToken: string | null;
   email: string | null;
+  /** 어느 방법으로 들어왔는지. 예전 저장분에는 없어서 복원하면 null이 된다 */
+  provider?: LoginProvider | null;
 };
+
+/** 로그인 방법 — 소셜 4종 + 이메일 */
+export type LoginProvider = 'kakao' | 'naver' | 'google' | 'apple' | 'email';
 
 const KEY = 'freepets.session';
 
