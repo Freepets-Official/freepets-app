@@ -12,6 +12,7 @@ import { CardShadow, Radius, Spacing, type ThemeMode } from '@/constants/theme';
 import { FONT_SIZE_LABEL, type FontSizeMode } from '@/data/types';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { ApiError, accountApi } from '@/lib/api';
+import type { LoginProvider } from '@/lib/token-store';
 import { useAppStore } from '@/store/app-store';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -48,6 +49,15 @@ const SHOW_NOTICES = false;
  * 화면과 라우트는 지우지 않는다. 1.1에서 verify·claim·profiles 파생까지 묶어 제대로 연다.
  */
 const SHOW_BUSINESS = false;
+
+/** 설정 「계정 정보」에 어느 방법으로 들어왔는지 적는다 — 탈퇴·재로그인 때 버튼을 헷갈리지 않게 */
+const PROVIDER_LABEL: Record<LoginProvider, string> = {
+  kakao: '카카오',
+  naver: '네이버',
+  google: '구글',
+  apple: 'Apple',
+  email: '이메일',
+};
 
 export default function SettingsScreen() {
   const p = usePalette();
@@ -122,7 +132,11 @@ export default function SettingsScreen() {
         <Row
           icon="mail-outline"
           label="계정 정보"
-          sub={session.email || '소셜 계정으로 로그인'}
+          sub={
+            session.provider
+              ? `${PROVIDER_LABEL[session.provider]} 계정${session.email ? ` · ${session.email}` : ''}`
+              : session.email || '소셜 계정으로 로그인'
+          }
           last
         />
       </Group>

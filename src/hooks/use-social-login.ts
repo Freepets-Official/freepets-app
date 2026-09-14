@@ -52,7 +52,7 @@ export function useSocialLogin() {
       setPending('naver');
       try {
         const res = await authApi.social('naver', got.providerToken, got.name, got.authorizationCode);
-        if (alive) authenticate(got.email ?? '', res);
+        if (alive) authenticate(got.email ?? '', res, 'naver');
       } catch (e) {
         if (alive)
           setError(
@@ -82,7 +82,7 @@ export function useSocialLogin() {
         }
         // ② 서버 교환 — 여기서부터는 모든 제공자·플랫폼이 같은 길
         const res = await authApi.social(provider, got.providerToken, got.name, got.authorizationCode);
-        authenticate(got.email ?? '', res);
+        authenticate(got.email ?? '', res, provider);
         // isNewUser여도 추가로 물을 것이 없다. 프로필 선택은 authenticate가 세운 세션 상태에
         // 따라 라우터(useAuthGate)가 알아서 안내한다 — 비밀번호는 어느 경로에도 없다.
       } catch (e) {
