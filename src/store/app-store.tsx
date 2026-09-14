@@ -2050,7 +2050,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     void clearStamps();
     setGamification(null);
   }, []);
-  clearAccountStateRef.current = clearAccountState;
+  useLayoutEffect(() => {
+    clearAccountStateRef.current = clearAccountState;
+  }, [clearAccountState]);
 
   /**
    * 세션 만료 — 401을 받았을 때 부른다.
