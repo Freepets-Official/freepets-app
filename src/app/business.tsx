@@ -211,7 +211,7 @@ export default function BusinessScreen() {
                     <TextInput
                       value={picker.query}
                       onChangeText={picker.setQuery}
-                      placeholder="매장명으로 찾기 (내 위치 30km 안, 키워드면 전국)"
+                      placeholder="매장명으로 찾기 (이름을 넣으면 100km까지)"
                       placeholderTextColor={p.muted}
                       style={[styles.input, { color: p.ink }]}
                     />
@@ -227,8 +227,8 @@ export default function BusinessScreen() {
                   ) : !picker.loading && picker.items.length === 0 ? (
                     <Text style={[styles.hint, { color: p.muted }]}>
                       {picker.query.trim()
-                        ? '검색 결과가 없어요. 관광공사에 등록된 이름으로 찾아보세요.'
-                        : '주변에 등록된 매장이 없어요. 매장명을 입력해 보세요.'}
+                        ? '100km 안에서는 못 찾았어요. 관광공사에 등록된 이름인지, 매장 근처에서 다시 시도해 주세요.'
+                        : '주변 30km에 등록된 매장이 없어요. 매장명을 입력하면 100km까지 찾아요.'}
                     </Text>
                   ) : (
                     <View style={styles.candidates}>

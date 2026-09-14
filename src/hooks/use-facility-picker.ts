@@ -7,7 +7,14 @@ import { useAppStore } from '@/store/app-store';
 
 /** 위치를 안 주면 여기서 찾는다(서울시청). 키워드로 좁히면 전국 어디든 나온다 */
 const FALLBACK_CENTER: Coords = { latitude: 37.5665, longitude: 126.978 };
-const RADIUS_M = 30_000;
+/** 키워드 없이 둘러볼 때 — 주변 */
+const NEARBY_M = 30_000;
+/**
+ * 키워드가 있을 때 — 서버가 허용하는 최대(100km). 사장님이 매장 앞에서 등록한다는 보장이
+ * 없다(집에서, 여행지에서). 전국 검색은 서버가 `radiusM` 상한을 두고 있어 아직 불가능하다 —
+ * 백엔드에 "키워드 검색은 반경 생략 시 전국"을 요청해 둔 상태.
+ */
+const KEYWORD_M = 100_000;
 const PAGE_SIZE = 30;
 
 /**
@@ -56,7 +63,7 @@ export function useFacilityPicker(enabled: boolean, category?: Category) {
           longitude: center.longitude,
           keyword: query.trim() || undefined,
           category,
-          radiusM: RADIUS_M,
+          radiusM: query.trim() ? KEYWORD_M : NEARBY_M,
           size: PAGE_SIZE,
         });
         if (!active) return;

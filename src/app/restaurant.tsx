@@ -145,7 +145,7 @@ export default function RestaurantScreen() {
                 <TextInput
                   value={picker.query}
                   onChangeText={picker.setQuery}
-                  placeholder="식당 이름으로 찾기"
+                  placeholder="식당 이름으로 찾기 (이름을 넣으면 100km까지)"
                   placeholderTextColor={p.muted}
                   style={[styles.searchInput, { color: p.ink }]}
                 />
@@ -158,8 +158,8 @@ export default function RestaurantScreen() {
               ) : !picker.loading && candidates.length === 0 ? (
                 <Text style={[styles.empty, { color: p.muted }]}>
                   {picker.query.trim()
-                    ? '검색 결과가 없어요. 관광공사에 등록된 이름으로 찾아보세요.'
-                    : '주변에 등록할 음식점이 없어요. 식당 이름을 입력해 보세요.'}
+                    ? '100km 안에서는 못 찾았어요. 관광공사에 등록된 이름인지, 식당 근처에서 다시 시도해 주세요.'
+                    : '주변 30km에 등록할 음식점이 없어요. 이름을 입력하면 100km까지 찾아요.'}
                 </Text>
               ) : (
                 candidates.map((f) => (
