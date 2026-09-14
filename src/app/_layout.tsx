@@ -1,4 +1,4 @@
-import { DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider, useGlobalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -21,10 +21,22 @@ import { AppStoreProvider, useAppStore } from '@/store/app-store';
  * - 프로필 선택 완료 → 해당 프로필 홈(일반=탭, 사업자=대시보드)
  * 그 외 임의 화면(시설 상세 등)으로의 이동은 막지 않는다.
  */
+/**
+ * 로그인 전에 딥링크로 들어온 목적지.
+ *
+ * 카톡의 코스 공유 링크(`/course?share=…`)를 눌러 앱이 열렸는데 로그인이 안 돼 있으면
+ * 게이트가 로그인 화면으로 보낸다. 그 순간 주소가 사라져서, 로그인을 마쳐도 홈에 떨어지고
+ * 공유받은 코스는 어디에도 없다. 그래서 보내기 전에 기억했다가 로그인 뒤 그리로 보낸다.
+ * 한 번 쓰면 지운다 — 다음 로그인까지 남아 있으면 엉뚱한 화면으로 간다.
+ */
+let pendingHref: string | null = null;
+
 function useAuthGate() {
   const { session, restoring } = useAppStore();
   const segments = useSegments();
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useGlobalSearchParams<Record<string, string | string[]>>();
 
   useEffect(() => {
     // 저장된 세션을 확인하는 동안은 아무 데로도 보내지 않는다. 여기서 판단하면
@@ -43,13 +55,25 @@ function useAuthGate() {
     const isPublicDoc = seg === 'policy';
 
     if (!session.authed) {
-      if (!onAuth && !isPublicDoc) router.replace('/login');
+      if (!onAuth && !isPublicDoc) {
+        // 홈·탭은 기억할 가치가 없다. 파라미터가 있는 깊은 주소만 남긴다(공유 링크가 그렇다)
+        const qs = Object.entries(params)
+          .filter(([, v]) => typeof v === 'string' && v)
+          .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v as string)}`)
+          .join('&');
+        pendingHref = pathname !== '/' && qs ? `${pathname}?${qs}` : null;
+        router.replace('/login');
+      }
     } else if (session.activeProfile == null) {
       if (!onPicker) router.replace('/profile-select');
     } else if (onAuth || onPicker) {
-      router.replace(session.activeProfile === 'owner' ? '/owner-dashboard' : '/');
+      const target = pendingHref;
+      pendingHref = null;
+      // 사업자 프로필로 들어온 사람에게 코스 화면을 들이밀지 않는다 — 소비자 화면이다
+      if (target && session.activeProfile !== 'owner') router.replace(target as never);
+      else router.replace(session.activeProfile === 'owner' ? '/owner-dashboard' : '/');
     }
-  }, [restoring, session.authed, session.activeProfile, segments, router]);
+  }, [restoring, session.authed, session.activeProfile, segments, router, pathname, params]);
 }
 
 /**

@@ -21,12 +21,19 @@ import type {
   SimilarCourse,
   SimilarStop,
   Region,
+  CalendarEvent,
+  CalEventType,
+  CalRepeat,
+  Confidence,
+  ConfidenceSource,
   Requirement,
   Review,
   ReviewPetInfo,
   ReviewTag,
 } from '@/data/types';
 import { REVIEW_TAG_LABEL } from '@/data/types';
+import type { Gamification, TierAnimal, TierColor } from '@/data/level';
+import { MAX_LEVEL, TIER_ANIMAL_LABEL, TIER_COLOR_LABEL } from '@/data/level';
 
 import { API_URL, DEV_TOKEN } from './config';
 
@@ -522,7 +529,15 @@ export const petsApi = {
  * `userId`는 **아직 서버가 주지 않는다.** 백엔드가 넣기로 했고, 오면 그대로 쓰인다.
  * 선택 필드로 받아두면 서버만 배포해도 이미 나간 앱이 값을 집는다 — 앱을 다시 낼 필요가 없다.
  */
-type ServerAccount = { nickname: string; avatarUri: string | null; userId?: number };
+type ServerAccount = {
+  nickname: string;
+  avatarUri: string | null;
+  userId?: number;
+  /** 계정에 붙은 프로필. 매장을 하나라도 확정하면 'owner'가 생긴다 */
+  profiles?: string[];
+  /** 이 계정이 사업자 확인으로 확정한 시설 — 대시보드의 「내 매장」 목록 */
+  ownedFacilityIds?: number[];
+};
 
 export const accountApi = {
   /** 내 회원정보 조회. */
@@ -1453,6 +1468,27 @@ export const coursesApi = {
     request<{ courseId: number }>('DELETE', `/api/v1/courses/${courseId}`, { auth: true }),
 
   /**
+   * 공유 코드 발급. 같은 코스에 다시 부르면 같은 코드가 오는지, 새 코드가 오는지는 서버가
+   * 정한다 — 앱은 매번 받은 값을 쓴다. 공개 여부와 무관하게 코드로는 담을 수 있다.
+   */
+  share: async (courseId: number): Promise<string> => {
+    const r = await request<{ courseId: number; shareCode?: string }>(
+      'POST',
+      `/api/v1/courses/${courseId}/share`,
+      { auth: true },
+    );
+    if (!r.shareCode) throw new ApiError('공유 코드를 받지 못했어요', 'COURSE_SHARE_EMPTY');
+    return r.shareCode;
+  },
+  /** 공유 코드로 남의 코스를 내 코스로 복사한다. 원본과 연결되지 않은 독립 사본이 생긴다. */
+  copyShared: async (shareCode: string): Promise<SavedCourse> =>
+    toSavedCourse(
+      await request<SavedCourse>('POST', `/api/v1/courses/shared/${encodeURIComponent(shareCode)}/copy`, {
+        auth: true,
+      }),
+    ),
+
+  /**
    * 스톱 순서만 최근접 이웃으로 다듬는다. **아무것도 저장하지 않는다** — 결과를 저장하려면
    * 반환된 순서를 코스 저장/수정 API에 다시 넣어야 한다.
    *
@@ -1603,4 +1639,257 @@ export const satisfactionApi = {
       `/api/v1/facilities/${facilityId}/pets/${petId}/satisfaction`,
       { body: { score }, auth: true },
     ),
+};
+
+// ─────────────────────────── 반려동물 캘린더 ───────────────────────────
+// GET    /calendar-events?month=YYYY-MM         — 그 달에 걸리는 일정(반복·기간 전개, 복용 여부 포함)
+// POST   /calendar-events                       — 생성(multipart)
+// PATCH  /calendar-events/{id}                  — 수정(multipart, date·eventType·title 필수)
+// DELETE /calendar-events/{id}
+// PUT    /calendar-events/{id}/med-log/{date}   — 그날 복용 체크
+// DELETE /calendar-events/{id}/med-log/{date}   — 체크 해제
+// PATCH  /calendar-events/{id}/reminder         — 알림 on/off
+//
+// 앱은 일정을 "기준 일정 + 반복 규칙"으로 들고 직접 전개한다(`eventOccursOn`). 서버 목록은
+// 이미 전개된 **발생(occurrence)** 단위라, 받은 뒤 eventId로 접어 기준 일정을 복원한다.
+type ServerCalType = 'VACCINE' | 'MED' | 'CHECKUP' | 'TRAVEL' | 'ETC';
+const CAL_TYPE_TO_SERVER: Record<CalEventType, ServerCalType> = {
+  VACCINE: 'VACCINE', MED: 'MED', CHECKUP: 'CHECKUP', TRAVEL: 'TRAVEL', OTHER: 'ETC',
+};
+const CAL_TYPE_FROM_SERVER: Record<string, CalEventType> = {
+  VACCINE: 'VACCINE', MED: 'MED', CHECKUP: 'CHECKUP', TRAVEL: 'TRAVEL', ETC: 'OTHER',
+};
+
+type ServerOccurrence = {
+  eventId: number;
+  petId?: number | null;
+  eventType?: string;
+  title?: string;
+  date?: string;
+  endDate?: string | null;
+  time?: string | null;
+  repeatType?: string;
+  reminderEnabled?: boolean;
+  notes?: string | null;
+  taken?: boolean;
+};
+
+export type CalendarSnapshot = {
+  events: CalendarEvent[];
+  /** "eventId:YYYY-MM-DD" — 그날 복용을 체크한 발생 */
+  taken: string[];
+};
+
+function occurrenceToEvent(o: ServerOccurrence): CalendarEvent {
+  const repeat = (o.repeatType ?? 'NONE') as CalRepeat;
+  return {
+    eventId: o.eventId,
+    petId: typeof o.petId === 'number' ? o.petId : null,
+    type: CAL_TYPE_FROM_SERVER[o.eventType ?? ''] ?? 'OTHER',
+    title: o.title ?? '',
+    date: o.date ?? '',
+    endDate: o.endDate || null,
+    time: o.time ? o.time.slice(0, 5) : null,
+    repeat: ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(repeat) ? repeat : 'NONE',
+    reminder: o.reminderEnabled ?? false,
+    notes: o.notes || null,
+  };
+}
+
+/**
+ * 발생 목록 → 기준 일정.
+ *
+ * 같은 eventId가 여러 날에 걸쳐 오면(반복·기간) **가장 이른 날**을 기준일로 삼는다. 서버가
+ * 기준일을 그대로 실어 보내면 전부 같은 값이라 상관없고, 발생일을 보내면 이 창 안에서
+ * 처음 보이는 날이 기준이 된다 — 그 뒤 발생은 반복 규칙으로 앱이 똑같이 그려낸다.
+ */
+function foldOccurrences(list: ServerOccurrence[]): CalendarSnapshot {
+  const byId = new Map<number, CalendarEvent>();
+  const taken: string[] = [];
+  for (const o of list) {
+    if (typeof o.eventId !== 'number' || !o.date) continue;
+    const ev = occurrenceToEvent(o);
+    const cur = byId.get(o.eventId);
+    if (!cur || ev.date < cur.date) byId.set(o.eventId, ev);
+    if (o.taken) taken.push(`${o.eventId}:${o.date}`);
+  }
+  return { events: [...byId.values()], taken };
+}
+
+/** 앱 일정 → 서버 create/update용 multipart. null·빈 값은 싣지 않는다(서버가 없음으로 본다). */
+function calendarForm(e: Omit<CalendarEvent, 'eventId'>): FormData {
+  const fd = new FormData();
+  fd.append('eventType', CAL_TYPE_TO_SERVER[e.type]);
+  fd.append('title', e.title);
+  fd.append('date', e.date);
+  fd.append('repeatType', e.repeat);
+  fd.append('reminderEnabled', e.reminder ? 'true' : 'false');
+  if (e.petId !== null) fd.append('petId', String(e.petId));
+  if (e.endDate) fd.append('endDate', e.endDate);
+  if (e.time) fd.append('time', e.time);
+  if (e.notes) fd.append('notes', e.notes);
+  return fd;
+}
+
+export const calendarApi = {
+  /** 한 달치(YYYY-MM). 여러 달을 합칠 때는 호출한 쪽이 eventId로 중복을 걷어낸다. */
+  month: async (ym: string): Promise<CalendarSnapshot> => {
+    const r = await request<{ events?: ServerOccurrence[] }>(
+      'GET',
+      `/api/v1/calendar-events?month=${encodeURIComponent(ym)}`,
+      { auth: true },
+    );
+    return foldOccurrences(r.events ?? []);
+  },
+  create: async (e: Omit<CalendarEvent, 'eventId'>): Promise<number> => {
+    const r = await request<{ eventId: number }>('POST', '/api/v1/calendar-events', {
+      body: calendarForm(e),
+      auth: true,
+    });
+    return r.eventId;
+  },
+  /** 전체 수정. 서버가 date·eventType·title을 매번 요구해 병합된 일정을 통째로 보낸다. */
+  update: (eventId: number, e: Omit<CalendarEvent, 'eventId'>) =>
+    request<unknown>('PATCH', `/api/v1/calendar-events/${eventId}`, { body: calendarForm(e), auth: true }),
+  remove: (eventId: number) =>
+    request<unknown>('DELETE', `/api/v1/calendar-events/${eventId}`, { auth: true }),
+  setReminder: (eventId: number, enabled: boolean) =>
+    request<unknown>('PATCH', `/api/v1/calendar-events/${eventId}/reminder`, {
+      body: { reminderEnabled: enabled },
+      auth: true,
+    }),
+  setMedTaken: (eventId: number, date: string, taken: boolean) =>
+    request<unknown>(taken ? 'PUT' : 'DELETE', `/api/v1/calendar-events/${eventId}/med-log/${date}`, {
+      auth: true,
+    }),
+};
+
+// ─────────────────────────── 사업자(진위확인·내 매장 조건 확정) ───────────────────────────
+// POST /business/verify                       — 국세청 사업자등록정보 진위확인
+// POST /business/facilities/{id}/claim        — 내 매장의 출입 조건을 사업자 확인으로 확정
+//
+// claim은 세션이 아니라 **요청마다 사업자 정보를 다시 받는다.** 그래서 화면은 1단계에서
+// 확인한 번호·대표자명·개업일을 3단계까지 들고 있어야 한다. 번호 원본은 기기에 남기지 않는다.
+export type BusinessIdentity = {
+  /** 숫자 10자리 */
+  businessNumber: string;
+  representativeName: string;
+  /** YYYYMMDD 8자리 */
+  openingDate: string;
+};
+
+export type BusinessVerifyResult = {
+  valid: boolean;
+  /** 서버 상태 코드(계속사업자·휴업·폐업 등). 화면은 statusLabel을 쓴다 */
+  status: string;
+  statusLabel: string;
+};
+
+export type BusinessClaimInput = {
+  petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING';
+  maxWeight: number | null;
+  /** true면 "N kg 이하", false면 "N kg 미만" */
+  maxWeightInclusive: boolean;
+  requirements: Requirement[];
+  conditionRaw: string;
+};
+
+export type BusinessClaimResult = {
+  facilityId: number;
+  confidence: Confidence;
+  confidenceSource: ConfidenceSource;
+  confirmedAt: string;
+};
+
+export const businessApi = {
+  /** 진위확인. 유효하지 않아도 200으로 오고 `valid:false` + 상태 라벨(휴업·폐업 등)이 실린다. */
+  verify: async (id: BusinessIdentity): Promise<BusinessVerifyResult> => {
+    const r = await request<Partial<BusinessVerifyResult>>('POST', '/api/v1/business/verify', {
+      body: id,
+      auth: true,
+    });
+    return {
+      valid: r.valid === true,
+      status: r.status ?? '',
+      statusLabel: r.statusLabel ?? (r.valid ? '확인됨' : '확인되지 않음'),
+    };
+  },
+  /**
+   * 내 매장 조건 확정. 서버가 시설의 신뢰도를 `CONFIRMED / OWNER`로 올리고 확정 시각을 돌려준다.
+   * maxWeight는 제한이 없으면 아예 보내지 않는다 — 0을 보내면 "0kg까지"가 된다.
+   */
+  claim: async (facilityId: number, id: BusinessIdentity, input: BusinessClaimInput): Promise<BusinessClaimResult> => {
+    const body: Record<string, unknown> = {
+      ...id,
+      petAllowed: input.petAllowed,
+      maxWeightInclusive: input.maxWeightInclusive,
+      requirements: input.requirements,
+      conditionRaw: input.conditionRaw,
+    };
+    if (input.maxWeight !== null && input.maxWeight > 0) body.maxWeight = input.maxWeight;
+    const r = await request<Partial<BusinessClaimResult>>(
+      'POST',
+      `/api/v1/business/facilities/${facilityId}/claim`,
+      { body, auth: true },
+    );
+    return {
+      facilityId: r.facilityId ?? facilityId,
+      confidence: r.confidence ?? 'CONFIRMED',
+      confidenceSource: r.confidenceSource ?? 'OWNER',
+      confirmedAt: r.confirmedAt ?? new Date().toISOString(),
+    };
+  },
+};
+
+// ─────────────────────────── 게이미피케이션(집사 레벨·발바닥 티어) ───────────────────────────
+// GET   /me/gamification               — 레벨·누적 XP·발바닥 티어·받은 배지
+// PATCH /me/gamification/notification  — 레벨업 알림 on/off
+//
+// XP는 **계정 단위**다(판별·리뷰·제보·만족도·코스 공개/복사). 반려동물별로 나뉘지 않는다.
+// 레벨 곡선(`100 × L × (L−1) / 2`, 최대 70)과 티어 구성은 서버가 확정했다 — `data/level.ts` 참고.
+type ServerGamification = {
+  level?: number;
+  totalXp?: number;
+  xpToNextLevel?: number;
+  tierAnimal?: string;
+  tierColor?: string;
+  tierLabel?: string;
+  tierBadgeImageUrl?: string | null;
+  levelUpNotificationEnabled?: boolean;
+  badges?: { code?: string; label?: string; description?: string; earnedAt?: string | null }[];
+};
+
+export const gamificationApi = {
+  /** 내 레벨·티어·배지. 값이 빠져 있어도 화면이 깨지지 않게 여기서 기본값을 채운다. */
+  me: async (): Promise<Gamification> => {
+    const r = await request<ServerGamification>('GET', '/api/v1/me/gamification', { auth: true });
+    const animal = (r.tierAnimal ?? 'DOG') as TierAnimal;
+    const color = (r.tierColor ?? 'RED') as TierColor;
+    return {
+      level: Math.min(Math.max(Math.trunc(r.level ?? 1), 1), MAX_LEVEL),
+      totalXp: Math.max(r.totalXp ?? 0, 0),
+      xpToNextLevel: Math.max(r.xpToNextLevel ?? 0, 0),
+      tierAnimal: TIER_ANIMAL_LABEL[animal] ? animal : 'DOG',
+      tierColor: TIER_COLOR_LABEL[color] ? color : 'RED',
+      tierLabel: r.tierLabel ?? '',
+      // 빈 문자열이 오면 <Image>가 조용히 깨진다. 없는 것과 같게 만든다
+      tierBadgeImageUrl: r.tierBadgeImageUrl ? r.tierBadgeImageUrl : null,
+      levelUpNotificationEnabled: r.levelUpNotificationEnabled ?? true,
+      badges: (r.badges ?? []).map((b) => ({
+        code: b.code ?? '',
+        label: b.label ?? '배지',
+        description: b.description ?? '',
+        earnedAt: b.earnedAt ?? null,
+      })),
+    };
+  },
+  /** 레벨업 알림 on/off. 서버가 확정한 값을 돌려준다. */
+  setLevelUpNotification: async (enabled: boolean): Promise<boolean> => {
+    const r = await request<{ levelUpNotificationEnabled?: boolean }>(
+      'PATCH',
+      '/api/v1/me/gamification/notification',
+      { body: { levelUpNotificationEnabled: enabled }, auth: true },
+    );
+    return r.levelUpNotificationEnabled ?? enabled;
+  },
 };

@@ -1,14 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
+import { BusinessVerify } from '@/components/business-verify';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
-import { FACILITIES, formatDistance } from '@/data/mock';
+import { formatDistance } from '@/data/mock';
 import {
   decisionVerdict,
   F6_DECISION,
@@ -17,11 +18,13 @@ import {
   type DecisionAnswers,
 } from '@/data/restaurant';
 import { CATEGORY_LABEL } from '@/data/types';
+import { useFacilityPicker } from '@/hooks/use-facility-picker';
 import { usePalette } from '@/hooks/use-theme';
+import { ApiError, type BusinessIdentity } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
 
-type Step = 'pick' | 'decision' | 'checklist' | 'result' | 'done';
-const STEP_ORDER: Step[] = ['pick', 'decision', 'checklist', 'result'];
+type Step = 'verify' | 'pick' | 'decision' | 'checklist' | 'result' | 'done';
+const STEP_ORDER: Step[] = ['verify', 'pick', 'decision', 'checklist', 'result'];
 
 /**
  * F6 반려동물 동반 음식점 등록 지원.
@@ -31,20 +34,26 @@ const STEP_ORDER: Step[] = ['pick', 'decision', 'checklist', 'result'];
 export default function RestaurantScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { businessRegOf, registerBusiness } = useAppStore();
+  const { businessRegOf, claimFacility, facilityById } = useAppStore();
 
-  const [step, setStep] = useState<Step>('pick');
+  const [step, setStep] = useState<Step>('verify');
+  /**
+   * 국세청이 확인한 사업자 정보. 서버의 매장 확정(claim)이 요청마다 이걸 요구해서
+   * 신고 흐름 앞에 인증 단계를 뒀다 — 예전에는 아무나 아무 식당이나 '동반 음식점'으로 만들 수 있었다.
+   */
+  const [identity, setIdentity] = useState<BusinessIdentity | null>(null);
+  const [bizMasked, setBizMasked] = useState('');
   const [facilityId, setFacilityId] = useState<number | null>(null);
   const [decision, setDecision] = useState<Partial<DecisionAnswers>>({});
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const facility = FACILITIES.find((f) => f.facilityId === facilityId) ?? null;
+  const facility = facilityId !== null ? (facilityById(facilityId) ?? null) : null;
 
-  // 아직 동반 등록 안 된 음식점만 대상
-  const candidates = useMemo(
-    () => FACILITIES.filter((f) => f.category === 'RESTAURANT' && !businessRegOf(f.facilityId)),
-    [businessRegOf],
-  );
+  // 내 위치 주변 음식점을 서버에서 찾는다. 이미 동반 등록된 곳은 뺀다
+  const picker = useFacilityPicker(step === 'pick', 'RESTAURANT');
+  const candidates = picker.items.filter((f) => !businessRegOf(f.facilityId));
 
   const { eligible, missing } = selfCheck(checklist);
   const verdict = decisionVerdict(decision);
@@ -52,20 +61,33 @@ export default function RestaurantScreen() {
 
   const stepIndex = STEP_ORDER.indexOf(step);
 
-  const complete = () => {
-    if (!facility) return;
-    // 신고 완료 → F5와 동일하게 확정·사업자 확인으로 편입 (registerBusiness 재사용)
-    registerBusiness({
-      facilityId: facility.facilityId,
-      bizNoMasked: '동반 음식점 신고',
-      petAllowed: true,
-      maxWeight: null,
-      requirements: ['LEASH', 'VACCINATION'],
-      conditionRaw:
-        '반려동물 동반 영업장 · 개·고양이 동반 가능(예방접종 필수) · 목줄 착용 · 조리공간 출입 불가. 예방접종은 반갑꼬리 출입증으로 확인할 수 있어요.',
-      confirmedAt: new Date().toISOString(),
-    });
-    setStep('done');
+  const complete = async () => {
+    if (!facility || !identity || submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      // 신고 완료 → F5와 같은 서버 확정(claim). 동반 음식점의 기본 조건을 사업자 확인으로 올린다
+      await claimFacility(
+        facility.facilityId,
+        identity,
+        {
+          petAllowed: 'ALLOWED',
+          maxWeight: null,
+          maxWeightInclusive: true,
+          requirements: ['LEASH', 'VACCINATION'],
+          conditionRaw:
+            '반려동물 동반 영업장 · 개·고양이 동반 가능(예방접종 필수) · 목줄 착용 · 조리공간 출입 불가. 예방접종은 반갑꼬리 출입증으로 확인할 수 있어요.',
+        },
+        bizMasked,
+      );
+      setStep('done');
+    } catch (e) {
+      setSubmitError(
+        e instanceof ApiError && e.message ? e.message : '등록을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -89,7 +111,7 @@ export default function RestaurantScreen() {
           )}
 
           {/* ── 헤드 ── */}
-          {step === 'pick' && (
+          {step === 'verify' && (
             <View style={styles.head}>
               <Text style={[styles.eyebrow, { color: p.accent }]}>사장님께 · 2026 신규 제도</Text>
               <Text style={[styles.title, { color: p.ink }]}>이제 우리 식당도{'\n'}반려동물을 받을 수 있어요</Text>
@@ -100,13 +122,44 @@ export default function RestaurantScreen() {
             </View>
           )}
 
-          {/* ── STEP: 매장 선택 ── */}
+          {/* ── STEP: 사업자 인증 ── */}
+          {step === 'verify' && (
+            <Animated.View entering={FadeIn.duration(200)} style={styles.block}>
+              <Text style={[styles.blockLabel, { color: p.ink }]}>먼저 사장님인지 확인할게요</Text>
+              <BusinessVerify
+                onVerified={(id, masked) => {
+                  setIdentity(id);
+                  setBizMasked(masked);
+                  setStep('pick');
+                }}
+              />
+            </Animated.View>
+          )}
+
+          {/* ── STEP: 매장 선택 (서버 검색 — 내 위치 주변 음식점) ── */}
           {step === 'pick' && (
             <Animated.View entering={FadeIn.duration(200)} style={styles.block}>
               <Text style={[styles.blockLabel, { color: p.ink }]}>어느 매장인가요?</Text>
-              {candidates.length === 0 ? (
+              <View style={[styles.searchRow, { backgroundColor: p.surface, borderColor: p.line }]}>
+                <Ionicons name="search" size={17} color={p.muted} />
+                <TextInput
+                  value={picker.query}
+                  onChangeText={picker.setQuery}
+                  placeholder="식당 이름으로 찾기 (이름을 넣으면 100km까지)"
+                  placeholderTextColor={p.muted}
+                  style={[styles.searchInput, { color: p.ink }]}
+                />
+                {picker.loading && <ActivityIndicator size="small" color={p.muted} />}
+              </View>
+              {picker.failed ? (
+                <Pressable onPress={picker.retry}>
+                  <Text style={[styles.empty, { color: p.muted }]}>음식점을 불러오지 못했어요. 눌러서 다시 시도</Text>
+                </Pressable>
+              ) : !picker.loading && candidates.length === 0 ? (
                 <Text style={[styles.empty, { color: p.muted }]}>
-                  등록할 음식점이 없어요. 내 매장이 목록에 없으면 문의로 알려주세요.
+                  {picker.query.trim()
+                    ? '100km 안에서는 못 찾았어요. 관광공사에 등록된 이름인지, 식당 근처에서 다시 시도해 주세요.'
+                    : '주변 30km에 등록할 음식점이 없어요. 이름을 입력하면 100km까지 찾아요.'}
                 </Text>
               ) : (
                 candidates.map((f) => (
@@ -123,8 +176,8 @@ export default function RestaurantScreen() {
                     ]}>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.pickName, { color: p.ink }]}>{f.name}</Text>
-                      <Text style={[styles.pickMeta, { color: p.muted }]}>
-                        {CATEGORY_LABEL[f.category]} · {f.address}
+                      <Text style={[styles.pickMeta, { color: p.muted }]} numberOfLines={1}>
+                        {CATEGORY_LABEL[f.category]} · {formatDistance(f.distanceM)} · {f.address}
                       </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={p.accent} />
@@ -299,7 +352,13 @@ export default function RestaurantScreen() {
                     ※ 요건·신고 방법은 지자체별로 다를 수 있어요. 최종 기준과 신고는 관할 구청에서 확인하세요.
                   </Text>
 
-                  <PrimaryBtn p={p} label="신고를 마쳤어요 · 우리 식당 등록" onPress={complete} />
+                  {submitError && <Text style={[styles.hint, { color: p.danger }]}>{submitError}</Text>}
+                  <PrimaryBtn
+                    p={p}
+                    label={submitting ? '서버에 등록하는 중…' : '신고를 마쳤어요 · 우리 식당 등록'}
+                    onPress={() => void complete()}
+                    disabled={submitting}
+                  />
                 </>
               )}
             </Animated.View>
@@ -407,6 +466,16 @@ const styles = StyleSheet.create({
   hint: { fontSize: 13, lineHeight: 19 },
   empty: { fontSize: 13.5, paddingVertical: Spacing.lg, textAlign: 'center' },
 
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 12,
+  },
+  searchInput: { flex: 1, fontSize: 15, padding: 0 },
   pickRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter, useScrollToTop } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
@@ -29,8 +29,15 @@ export default function CalendarScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
 
-  const { pets, eventsOn, toggleEventReminder, removeCalendarEvent, toggleMedTaken, isMedTaken } =
-    useAppStore();
+  const {
+    pets,
+    eventsOn,
+    toggleEventReminder,
+    removeCalendarEvent,
+    toggleMedTaken,
+    isMedTaken,
+    loadCalendarMonth,
+  } = useAppStore();
 
   const today = ymd(new Date());
   const [cursor, setCursor] = useState(() => new Date());
@@ -38,6 +45,11 @@ export default function CalendarScreen() {
 
   const y = cursor.getFullYear();
   const m = cursor.getMonth();
+
+  // 달을 넘기면 그 달 일정을 서버에서 받는다(로그인 전이나 이미 받은 달은 스토어가 건너뛴다)
+  useEffect(() => {
+    void loadCalendarMonth(`${y}-${String(m + 1).padStart(2, '0')}`);
+  }, [y, m, loadCalendarMonth]);
 
   // 월 그리드 42칸 (6주) — 그 달 1일이 속한 주의 일요일부터
   const cells = useMemo(() => {
@@ -213,7 +225,11 @@ export default function CalendarScreen() {
             }
             onToggleTaken={() => toggleMedTaken(e.eventId, selected)}
             onToggleReminder={() => toggleEventReminder(e.eventId)}
-            onDelete={() => removeCalendarEvent(e.eventId)}
+            onDelete={() => {
+              void removeCalendarEvent(e.eventId).then((ok) => {
+                if (!ok) Alert.alert('삭제 실패', '일정을 서버에서 지우지 못했어요. 잠시 후 다시 시도해 주세요.');
+              });
+            }}
           />
         ))}
         {dayEvents.length === 0 && (

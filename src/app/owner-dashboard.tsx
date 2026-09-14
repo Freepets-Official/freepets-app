@@ -1,13 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useState, type ComponentProps } from 'react';
+import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
 import { PawBadge } from '@/components/paw-badge';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
-import { FACILITIES } from '@/data/mock';
 import { pawGradeOf, sinceText } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
@@ -21,11 +20,34 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 export default function OwnerDashboard() {
   const p = usePalette();
   const router = useRouter();
-  const { businessRegs, reviewsOf, recentDenialsOf, checks, session, switchProfile, logout } =
-    useAppStore();
+  const {
+    businessRegs,
+    account,
+    facilityById,
+    loadFacility,
+    reviewsOf,
+    recentDenialsOf,
+    checks,
+    session,
+    switchProfile,
+    logout,
+  } = useAppStore();
 
-  const owned = Object.values(businessRegs)
-    .map((reg) => FACILITIES.find((f) => f.facilityId === reg.facilityId))
+  /**
+   * 내 매장 = 이번 실행에서 확정한 것 ∪ 서버가 기억하는 것(`ownedFacilityIds`).
+   * 예전에는 목 FACILITIES에서만 찾아서, 실제 시설을 등록한 사장님은 대시보드가 비어 있었다.
+   */
+  const ownedIds = useMemo(() => {
+    const ids = new Set<number>(account.ownedFacilityIds);
+    for (const k of Object.keys(businessRegs)) ids.add(Number(k));
+    return [...ids];
+  }, [account.ownedFacilityIds, businessRegs]);
+  // 캐시에 없는 매장(앱을 새로 켠 뒤)은 상세를 받아온다. 받기 전까지는 목록에서 빠져 있다
+  useEffect(() => {
+    for (const id of ownedIds) if (!facilityById(id)) void loadFacility(id);
+  }, [ownedIds, facilityById, loadFacility]);
+  const owned = ownedIds
+    .map((id) => facilityById(id))
     .filter((f): f is NonNullable<typeof f> => !!f);
   // 매장이 여러 곳이면 관리 대상 매장을 고를 수 있다
   const [selectedId, setSelectedId] = useState<number | null>(null);

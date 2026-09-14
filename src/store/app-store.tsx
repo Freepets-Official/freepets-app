@@ -14,23 +14,31 @@ import {
   aiApi,
   denialApi,
   facilitiesApi,
+  gamificationApi,
   petsApi,
   pushApi,
   reviewsApi,
   satisfactionApi,
+  businessApi,
+  calendarApi,
   bumpSessionEpoch,
   setAuthToken,
   setRefreshToken,
   setTokensRefreshedHandler,
   setUnauthorizedHandler,
+  type BusinessClaimInput,
+  type BusinessClaimResult,
+  type BusinessIdentity,
   type DenialAlert,
   type ServerDenialReport,
 } from '@/lib/api';
 import { DEV_TOKEN } from '@/lib/config';
 import {
   loadCalendarEvents,
+  loadCalendarMigrated,
   loadMedLog,
   saveCalendarEvents,
+  saveCalendarMigrated,
   saveMedLog,
 } from '@/lib/calendar-store';
 import { loadMyReviewIds, saveMyReviewIds } from '@/lib/my-reviews';
@@ -38,6 +46,7 @@ import { loadSettings, saveSettings } from '@/lib/settings-store';
 import type { Coords } from '@/lib/location';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, pawGradeOf, vaccinationDday } from '@/data/types';
+import type { Gamification } from '@/data/level';
 import { matchRegion, type Stamp } from '@/data/stamps';
 import type {
   CalendarEvent,
@@ -187,6 +196,25 @@ export interface Session {
 export interface Account {
   nickname: string;
   avatarUri: string | null;
+  /** 사업자 확인으로 확정한 내 매장. 서버(`GET /users/account`)가 준다 — 기기를 바꿔도 남는다 */
+  ownedFacilityIds: number[];
+}
+
+const EMPTY_ACCOUNT: Account = { nickname: '나', avatarUri: null, ownedFacilityIds: [] };
+
+/**
+ * 서버 회원정보 → Account. PATCH 응답처럼 `ownedFacilityIds`가 빠진 응답은 이전 값을 지킨다 —
+ * 프로필 사진을 바꿨다고 매장 목록이 사라지면 안 된다.
+ */
+function accountFrom(
+  a: { nickname: string; avatarUri: string | null; ownedFacilityIds?: number[] },
+  prev?: Account,
+): Account {
+  return {
+    nickname: a.nickname,
+    avatarUri: a.avatarUri,
+    ownedFacilityIds: a.ownedFacilityIds ?? prev?.ownedFacilityIds ?? [],
+  };
 }
 
 export type ReportType = 'ENTERED' | 'DENIED' | 'CONDITION_CHANGED';
@@ -410,6 +438,11 @@ interface AppStore {
   /** 그 아이가 좋아한 곳 TOP N (만족도 높은 순) — 서버 계산값 */
   topPlacesForPet: (petId: number, n?: number) => TopPlace[];
 
+  /** 집사 레벨·발바닥 티어·받은 배지(서버 계산). 아직 못 받았으면 null */
+  gamification: Gamification | null;
+  /** 레벨업 알림 on/off. 실패하면 false를 돌려주고 화면 값도 원래대로 되돌린다 */
+  setLevelUpNotification: (enabled: boolean) => Promise<boolean>;
+
   /** 시설 조회 — 서버 검색결과 캐시 우선, 없으면 목데이터 */
   facilityById: (id: number) => Facility | undefined;
   /** GET /facilities/{id} — 상세를 받아 캐시에 병합한다(검색을 안 거치고 들어온 시설용) */
@@ -448,6 +481,16 @@ interface AppStore {
   businessRegs: Record<number, BusinessReg>;
   registerBusiness: (reg: BusinessReg) => void;
   businessRegOf: (facilityId: number) => BusinessReg | null;
+  /**
+   * 내 매장 조건을 서버에 확정한다(`POST /business/facilities/{id}/claim`).
+   * 성공하면 로컬 override·내 매장 목록·시설 캐시를 같이 갱신한다. 실패는 ApiError로 던진다.
+   */
+  claimFacility: (
+    facilityId: number,
+    identity: BusinessIdentity,
+    input: BusinessClaimInput,
+    bizNoMasked: string,
+  ) => Promise<BusinessClaimResult>;
   /** 사업자 확정 조건을 반영한 시설 — 판별·표시는 모두 이걸 기준으로 한다 */
   effectiveFacility: (f: Facility) => Facility;
 
@@ -463,10 +506,16 @@ interface AppStore {
 
   /** 반려동물 캘린더 — 접종·약·검진·여행 일정 */
   calendarEvents: CalendarEvent[];
-  addCalendarEvent: (input: Omit<CalendarEvent, 'eventId'>) => void;
-  removeCalendarEvent: (eventId: number) => void;
-  updateCalendarEvent: (eventId: number, patch: Partial<Omit<CalendarEvent, 'eventId'>>) => void;
-  toggleEventReminder: (eventId: number) => void;
+  /**
+   * 일정 변경은 화면에 먼저 반영하고 서버에 보낸다. 서버가 거부하면 되돌리고 false를 준다 —
+   * 호출한 쪽이 사용자에게 알려야 한다(안 그러면 방금 만든 일정이 말없이 사라진다).
+   */
+  addCalendarEvent: (input: Omit<CalendarEvent, 'eventId'>) => Promise<boolean>;
+  removeCalendarEvent: (eventId: number) => Promise<boolean>;
+  updateCalendarEvent: (eventId: number, patch: Partial<Omit<CalendarEvent, 'eventId'>>) => Promise<boolean>;
+  toggleEventReminder: (eventId: number) => Promise<boolean>;
+  /** 캘린더가 다른 달로 넘어가면 그 달 일정을 서버에서 받아 합친다(YYYY-MM) */
+  loadCalendarMonth: (ym: string) => Promise<void>;
   /** 특정 날짜(YYYY-MM-DD)의 일정 (반복 반영) — 시간순 */
   eventsOn: (date: string) => CalendarEvent[];
   /** 약 복용 기록 토글/조회 (eventId+날짜 단위) */
@@ -525,6 +574,19 @@ const AppStoreContext = createContext<AppStore | null>(null);
  * 무언가 하려 하면 서버는 그런 petId를 모른다.
  */
 const SEED_MOCK = __DEV__;
+
+/** Date → YYYY-MM */
+const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+/** 이 일정이 그 달(YYYY-MM)의 어느 날에든 걸리는지 — 서버 한 달 응답과 로컬 상태를 맞출 때 쓴다 */
+function occursInMonth(e: CalendarEvent, ym: string): boolean {
+  const [y, m] = ym.split('-').map(Number);
+  const days = new Date(y, m, 0).getDate();
+  for (let d = 1; d <= days; d++) {
+    if (eventOccursOn(e, `${ym}-${String(d).padStart(2, '0')}`)) return true;
+  }
+  return false;
+}
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [pets, setPets] = useState<Pet[]>(SEED_MOCK ? INITIAL_PETS : []);
@@ -603,18 +665,21 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   /** 토큰 재발급 뒤 세션을 다시 저장할 때 제공자를 잃지 않으려고 미러로 든다 */
   const providerRef = useRef<LoginProvider | null>(null);
   const refreshTokenRef = useRef<string | null>(null);
-  const [account, setAccount] = useState<Account>({ nickname: '나', avatarUri: null });
+  const [account, setAccount] = useState<Account>(EMPTY_ACCOUNT);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>(SEED_MOCK ? INITIAL_CAL_EVENTS : []);
   /**
-   * 일정·복용 기록을 기기에 남긴다.
-   *
-   * 서버 API는 있지만 연동은 1.1이다. 그때까지 상태로만 두면 앱을 끄는 순간 사라지는데,
-   * 만든 사람은 저장되지 않았다는 걸 알 방법이 없다. 불러오기 전에는 쓰지 않는다 —
-   * 빈 배열이 저장된 값을 덮는다.
+   * 일정의 원본은 서버다(`/calendar-events`). 기기 저장은 **오프라인 캐시**로만 남긴다 —
+   * 지하철에서 앱을 열어도 지난번 일정이 보이고, 서버를 못 받으면 그 캐시가 그대로 화면이다.
+   * 캐시를 불러오기 전에는 쓰지 않는다. 빈 배열이 저장된 값을 덮는다.
    */
   const [calendarLoaded, setCalendarLoaded] = useState(false);
   // 약 복용 기록 — "eventId:YYYY-MM-DD" 집합
   const [medLog, setMedLog] = useState<Set<string>>(new Set());
+  // 콜백에서 최신 값을 읽기 위한 미러(되돌리기용 스냅샷)
+  const calendarEventsRef = useRef(calendarEvents);
+  calendarEventsRef.current = calendarEvents;
+  const medLogRef = useRef(medLog);
+  medLogRef.current = medLog;
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -634,6 +699,101 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (calendarLoaded) void saveMedLog([...medLog]);
   }, [medLog, calendarLoaded]);
+
+  /** 서버에서 받아 온 달(YYYY-MM). 같은 달을 두 번 받지 않는다 */
+  const calendarMonthsRef = useRef<Set<string>>(new Set());
+  /**
+   * 서버가 준 발생 목록을 지금 상태에 합친다. 이미 있는 일정은 서버 값으로 바꾸고, 그 달에
+   * 걸리는데 서버에 없는 일정은 없앤다 — 다른 기기에서 지운 일정이 여기 남으면 안 된다.
+   * 임시 ID(음수, 아직 서버에 안 올라간 것)는 건드리지 않는다.
+   */
+  const mergeCalendarMonth = useCallback((ym: string, snap: { events: CalendarEvent[]; taken: string[] }) => {
+    const seen = new Set(snap.events.map((e) => e.eventId));
+    setCalendarEvents((prev) => {
+      const kept = prev.filter((e) => {
+        if (e.eventId < 0 || seen.has(e.eventId)) return false;
+        // 이 달에 걸리지 않는 일정은 이 응답이 말해줄 수 없다 — 그대로 둔다
+        return !occursInMonth(e, ym);
+      });
+      const pending = prev.filter((e) => e.eventId < 0);
+      return [...kept, ...snap.events, ...pending];
+    });
+    setMedLog((prev) => {
+      const next = new Set([...prev].filter((k) => !k.slice(k.indexOf(':') + 1).startsWith(ym)));
+      for (const k of snap.taken) next.add(k);
+      return next;
+    });
+  }, []);
+
+  const loadCalendarMonth = useCallback(
+    async (ym: string) => {
+      if (!session.authed) return;
+      try {
+        const snap = await calendarApi.month(ym);
+        calendarMonthsRef.current.add(ym);
+        mergeCalendarMonth(ym, snap);
+      } catch {
+        // 못 받으면 캐시가 그대로 보인다. 화면을 막지 않는다
+      }
+    },
+    [session.authed, mergeCalendarMonth],
+  );
+
+  /**
+   * 로그인되면 지난달·이달·다음달을 받는다. 홈의 접종 D-day와 캘린더 첫 화면이 여기서 나온다.
+   *
+   * 그 전에 **1.0이 기기에만 남긴 일정을 서버로 한 번 올린다.** 1.0은 서버 연동이 없어
+   * 일정이 기기에만 있었다. 그냥 서버 목록을 받으면 위 병합이 "서버에 없는 일정"으로 보고
+   * 지워버린다 — 사용자가 몇 달치 접종 일정을 잃는다. 올리지 못한 일정은 임시 ID(음수)로
+   * 바꿔 기기에 남긴다. 사라지지는 않고, 서버에는 없는 상태로 남는다.
+   * 개발용 목 데이터는 올리지 않는다.
+   */
+  useEffect(() => {
+    if (!session.authed) {
+      calendarMonthsRef.current.clear();
+      return;
+    }
+    if (!calendarLoaded) return;
+    let alive = true;
+    void (async () => {
+      if (!SEED_MOCK && !(await loadCalendarMigrated())) {
+        const local = calendarEventsRef.current.filter((e) => e.eventId > 0);
+        const idMap = new Map<number, number>();
+        for (const e of local) {
+          try {
+            idMap.set(e.eventId, await calendarApi.create(e));
+          } catch {
+            idMap.set(e.eventId, -Math.abs(e.eventId) - Date.now());
+          }
+        }
+        if (!alive) return;
+        setCalendarEvents((prev) => prev.map((e) => (idMap.has(e.eventId) ? { ...e, eventId: idMap.get(e.eventId)! } : e)));
+        // 복용 기록도 새 ID로 옮기고, 올라간 일정의 체크는 서버에도 남긴다
+        const moved = new Set<string>();
+        for (const key of medLogRef.current) {
+          const [idStr, date] = key.split(':');
+          const nid = idMap.get(Number(idStr));
+          if (nid === undefined) {
+            moved.add(key);
+            continue;
+          }
+          moved.add(`${nid}:${date}`);
+          if (nid > 0) calendarApi.setMedTaken(nid, date, true).catch(() => {});
+        }
+        setMedLog(moved);
+        await saveCalendarMigrated();
+      }
+      if (!alive) return;
+      const now = new Date();
+      for (const delta of [-1, 0, 1]) {
+        void loadCalendarMonth(ymOf(new Date(now.getFullYear(), now.getMonth() + delta, 1)));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [session.authed, calendarLoaded, loadCalendarMonth]);
+
   const nextEventId = useRef(INITIAL_CAL_EVENTS.length + 1);
   const nextBenefitId = useRef(1);
   const nextPetId = useRef(INITIAL_PETS.length + 1);
@@ -1057,6 +1217,48 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     };
   }, [session.authed]);
 
+  /**
+   * 집사 레벨·발바닥 티어. `GET /me/gamification`.
+   *
+   * 예전에는 홈의 Lv/XP를 앱이 자체 계산했다(방문×12 + 판별×6 + 도장×15). 서버가 XP를
+   * 지급하기 시작한 뒤로 그 숫자는 **서버와 다른 값**이었다 — 같은 활동을 하고도 어디서
+   * 보느냐에 따라 레벨이 달랐다. 이제 서버 값 하나만 쓴다.
+   *
+   * 못 받아도 앱은 그대로 돌아간다. 레벨은 부가 정보라 카드만 빠진다.
+   */
+  const [gamification, setGamification] = useState<Gamification | null>(null);
+  useEffect(() => {
+    if (!session.authed) return;
+    let alive = true;
+    gamificationApi
+      .me()
+      .then((g) => {
+        if (alive) setGamification(g);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [session.authed]);
+
+  /**
+   * 레벨업 알림 on/off.
+   *
+   * 화면을 먼저 바꾸고 서버에 보낸다 — 토글은 즉시 반응해야 한다. 대신 **실패하면
+   * 되돌린다.** 껐다고 보이는데 알림이 계속 오는 것이 안 꺼지는 것보다 나쁘다.
+   */
+  const setLevelUpNotification = useCallback(async (enabled: boolean) => {
+    setGamification((g) => (g ? { ...g, levelUpNotificationEnabled: enabled } : g));
+    try {
+      const saved = await gamificationApi.setLevelUpNotification(enabled);
+      setGamification((g) => (g ? { ...g, levelUpNotificationEnabled: saved } : g));
+      return true;
+    } catch {
+      setGamification((g) => (g ? { ...g, levelUpNotificationEnabled: !enabled } : g));
+      return false;
+    }
+  }, []);
+
   // 내가 판별받은(=가려던) 시설 중, 남의 현장 거부가 1주 내 들어온 곳.
   // 위치(GPS)가 아니라 "판별 이력"으로 '가려던 곳'을 판단한다.
   const plannedDenialAlerts = useCallback((): { facility: Facility; report: Report }[] => {
@@ -1275,11 +1477,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         .catch(() => {}),
       accountApi
         .get()
-        .then((a) => setAccount({ nickname: a.nickname, avatarUri: a.avatarUri }))
+        .then((a) => setAccount(accountFrom(a)))
         .catch(() => {}),
       denialApi
         .alerts()
         .then(setServerAlerts)
+        .catch(() => {}),
+      gamificationApi
+        .me()
+        .then(setGamification)
         .catch(() => {}),
     ]);
   }, [session.authed]);
@@ -1395,6 +1601,37 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [businessRegs],
   );
 
+  /**
+   * 서버에 확정하고, 성공했을 때만 로컬에 반영한다.
+   *
+   * 예전에는 registerBusiness가 React state에만 썼다 — 앱을 껐다 켜면 등록이 사라졌고
+   * 손님 화면의 '확정'도 이 기기에서만 보였다. 이제 서버가 시설 자체를 CONFIRMED/OWNER로
+   * 올리므로, 확정 뒤 상세를 다시 받아 캐시를 서버 값으로 맞춘다.
+   */
+  const claimFacility = useCallback(
+    async (facilityId: number, identity: BusinessIdentity, input: BusinessClaimInput, bizNoMasked: string) => {
+      const res = await businessApi.claim(facilityId, identity, input);
+      registerBusiness({
+        facilityId,
+        bizNoMasked,
+        petAllowed: input.petAllowed === 'ALLOWED',
+        maxWeight: input.maxWeight,
+        requirements: input.requirements,
+        conditionRaw: input.conditionRaw,
+        confirmedAt: res.confirmedAt,
+      });
+      setAccount((prev) =>
+        prev.ownedFacilityIds.includes(facilityId)
+          ? prev
+          : { ...prev, ownedFacilityIds: [...prev.ownedFacilityIds, facilityId] },
+      );
+      // 상세를 못 받아도 확정은 이미 끝났다. 캐시는 다음 조회에서 맞춰진다
+      void loadFacility(facilityId).catch(() => {});
+      return res;
+    },
+    [registerBusiness, loadFacility],
+  );
+
   const effectiveFacility = useCallback(
     (f: Facility): Facility => {
       const reg = businessRegs[f.facilityId];
@@ -1476,26 +1713,85 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
-  const addCalendarEvent = useCallback((input: Omit<CalendarEvent, 'eventId'>) => {
-    setCalendarEvents((prev) => [...prev, { ...input, eventId: nextEventId.current++ }]);
-  }, []);
-
-  const removeCalendarEvent = useCallback((eventId: number) => {
-    setCalendarEvents((prev) => prev.filter((e) => e.eventId !== eventId));
-  }, []);
-
-  const updateCalendarEvent = useCallback(
-    (eventId: number, patch: Partial<Omit<CalendarEvent, 'eventId'>>) => {
-      setCalendarEvents((prev) => prev.map((e) => (e.eventId === eventId ? { ...e, ...patch } : e)));
+  /**
+   * 일정 변경 — 화면 먼저, 서버 다음, 실패하면 되돌린다.
+   *
+   * 로그인 전(개발용 목 데이터)에는 로컬에만 쓴다. 새 일정은 서버 ID를 받기 전까지
+   * **음수 임시 ID**로 두어, 그 사이 서버 목록을 받아도 덮이지 않게 한다.
+   */
+  const addCalendarEvent = useCallback(
+    async (input: Omit<CalendarEvent, 'eventId'>) => {
+      if (!session.authed) {
+        setCalendarEvents((prev) => [...prev, { ...input, eventId: nextEventId.current++ }]);
+        return true;
+      }
+      const tempId = -Date.now();
+      setCalendarEvents((prev) => [...prev, { ...input, eventId: tempId }]);
+      try {
+        const eventId = await calendarApi.create(input);
+        setCalendarEvents((prev) => prev.map((e) => (e.eventId === tempId ? { ...e, eventId } : e)));
+        return true;
+      } catch {
+        setCalendarEvents((prev) => prev.filter((e) => e.eventId !== tempId));
+        return false;
+      }
     },
-    [],
+    [session.authed],
   );
 
-  const toggleEventReminder = useCallback((eventId: number) => {
-    setCalendarEvents((prev) =>
-      prev.map((e) => (e.eventId === eventId ? { ...e, reminder: !e.reminder } : e)),
-    );
-  }, []);
+  const removeCalendarEvent = useCallback(
+    async (eventId: number) => {
+      const before = calendarEventsRef.current;
+      setCalendarEvents((prev) => prev.filter((e) => e.eventId !== eventId));
+      if (!session.authed || eventId < 0) return true;
+      try {
+        await calendarApi.remove(eventId);
+        return true;
+      } catch {
+        setCalendarEvents(before);
+        return false;
+      }
+    },
+    [session.authed],
+  );
+
+  const updateCalendarEvent = useCallback(
+    async (eventId: number, patch: Partial<Omit<CalendarEvent, 'eventId'>>) => {
+      const before = calendarEventsRef.current;
+      const target = before.find((e) => e.eventId === eventId);
+      if (!target) return false;
+      const merged: CalendarEvent = { ...target, ...patch };
+      setCalendarEvents((prev) => prev.map((e) => (e.eventId === eventId ? merged : e)));
+      if (!session.authed || eventId < 0) return true;
+      try {
+        await calendarApi.update(eventId, merged);
+        return true;
+      } catch {
+        setCalendarEvents(before);
+        return false;
+      }
+    },
+    [session.authed],
+  );
+
+  const toggleEventReminder = useCallback(
+    async (eventId: number) => {
+      const before = calendarEventsRef.current;
+      const target = before.find((e) => e.eventId === eventId);
+      if (!target) return false;
+      const next = !target.reminder;
+      setCalendarEvents((prev) => prev.map((e) => (e.eventId === eventId ? { ...e, reminder: next } : e)));
+      if (!session.authed || eventId < 0) return true;
+      try {
+        await calendarApi.setReminder(eventId, next);
+        return true;
+      } catch {
+        setCalendarEvents(before);
+        return false;
+      }
+    },
+    [session.authed],
+  );
 
   const eventsOn = useCallback(
     (date: string) =>
@@ -1505,14 +1801,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [calendarEvents],
   );
 
-  const toggleMedTaken = useCallback((eventId: number, date: string) => {
-    setMedLog((prev) => {
+  const toggleMedTaken = useCallback(
+    (eventId: number, date: string) => {
       const key = `${eventId}:${date}`;
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
-  }, []);
+      const before = medLogRef.current;
+      const taken = !before.has(key);
+      setMedLog((prev) => {
+        const next = new Set(prev);
+        taken ? next.add(key) : next.delete(key);
+        return next;
+      });
+      if (!session.authed || eventId < 0) return;
+      // 실패하면 되돌린다 — 체크가 남아 있는데 서버엔 없으면 다른 기기에서 "안 먹였다"로 보인다
+      calendarApi.setMedTaken(eventId, date, taken).catch(() => setMedLog(before));
+    },
+    [session.authed],
+  );
 
   const isMedTaken = useCallback(
     (eventId: number, date: string) => medLog.has(`${eventId}:${date}`),
@@ -1520,9 +1824,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   );
 
   // 매장을 하나라도 등록하면 사업자 프로필이 계정에 생긴다 (A-하이브리드: 가입은 소비자 하나)
+  // 이번 실행에서 확정한 것(businessRegs)뿐 아니라 **서버가 기억하는 매장**도 센다.
+  // 안 그러면 기기를 바꾸거나 앱을 다시 깔았을 때 사업자 프로필이 사라진 것처럼 보인다.
   const availableProfiles = useMemo<ProfileKind[]>(
-    () => (Object.keys(businessRegs).length > 0 ? ['consumer', 'owner'] : ['consumer']),
-    [businessRegs],
+    () =>
+      Object.keys(businessRegs).length > 0 || account.ownedFacilityIds.length > 0
+        ? ['consumer', 'owner']
+        : ['consumer'],
+    [businessRegs, account.ownedFacilityIds],
   );
 
   const login = useCallback((email: string) => {
@@ -1569,7 +1878,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
          */
         setAccessToken(refreshedRef.current?.accessToken ?? saved.accessToken);
         refreshTokenRef.current = refreshedRef.current?.refreshToken ?? saved.refreshToken;
-        setAccount({ nickname: me.nickname, avatarUri: me.avatarUri });
+        setAccount(accountFrom(me));
         providerRef.current = saved.provider ?? null;
         setSession({ authed: true, email: saved.email, provider: saved.provider ?? null, activeProfile: 'consumer' });
       } catch (e) {
@@ -1692,9 +2001,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setTopPlaces({});
     setPromotions({});
     setBenefits({});
-    setAccount({ nickname: '나', avatarUri: null });
+    setAccount(EMPTY_ACCOUNT);
     setStamps([]);
     void clearStamps();
+    setGamification(null);
   }, []);
 
   /**
@@ -1830,7 +2140,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       .get()
       .then((a) => {
         if (!alive) return;
-        setAccount({ nickname: a.nickname, avatarUri: a.avatarUri });
+        setAccount(accountFrom(a));
         // 서버가 userId를 주기 시작하면 그때부터 내 글 판정이 기기 기록 없이도 정확해진다.
         if (typeof a.userId === 'number') setMyUserId(a.userId);
       })
@@ -1855,7 +2165,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setAccount((prev) => ({ ...prev, ...patch }));
     try {
       const a = await accountApi.update(nickname, photoUri);
-      setAccount({ nickname: a.nickname, avatarUri: a.avatarUri });
+      setAccount((prev) => accountFrom(a, prev));
     } catch (e) {
       setAccount(before);
       throw e;
@@ -2122,6 +2432,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setSatisfaction,
       loadFacilitySatisfactions,
       topPlacesForPet,
+      gamification,
+      setLevelUpNotification,
       facilityById,
       registerFacilities,
       loadFacility,
@@ -2140,6 +2452,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       confidenceOf,
       businessRegs,
       registerBusiness,
+      claimFacility,
       businessRegOf,
       effectiveFacility,
       promotions,
@@ -2154,6 +2467,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       removeCalendarEvent,
       updateCalendarEvent,
       toggleEventReminder,
+      loadCalendarMonth,
       eventsOn,
       toggleMedTaken,
       isMedTaken,
@@ -2207,6 +2521,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setSatisfaction,
       loadFacilitySatisfactions,
       topPlacesForPet,
+      gamification,
+      setLevelUpNotification,
       facilityById,
       registerFacilities,
       loadFacility,
@@ -2224,6 +2540,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       confidenceOf,
       businessRegs,
       registerBusiness,
+      claimFacility,
       businessRegOf,
       effectiveFacility,
       promotions,
@@ -2238,6 +2555,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       removeCalendarEvent,
       updateCalendarEvent,
       toggleEventReminder,
+      loadCalendarMonth,
       eventsOn,
       toggleMedTaken,
       isMedTaken,

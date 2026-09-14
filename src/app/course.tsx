@@ -1,13 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
 import { ResultBadge } from '@/components/badge';
 import { Chip } from '@/components/chip';
+import { courseShareUrl } from '@/constants/links';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import {
   PRESET_COURSES,
@@ -275,6 +276,67 @@ export default function CourseScreen() {
       setCopyingId((cur) => (cur === course.courseId ? null : cur));
     }
   };
+
+  /**
+   * 코스 공유 — 서버에서 코드를 받아 OS 공유 시트로 넘긴다.
+   *
+   * 링크는 웹 주소다(유니버설 링크가 아직 없다). 앱이 있는 사람은 아래 「공유 코드로 담기」에
+   * 코드를 넣으면 되므로 코드도 글에 같이 적는다 — 링크만 주면 앱 사용자가 웹으로 튕긴다.
+   */
+  const [sharingId, setSharingId] = useState<number | null>(null);
+  const shareCourse = async (course: SavedCourse) => {
+    if (sharingId !== null) return;
+    setSharingId(course.courseId);
+    setSaveMessage(null);
+    try {
+      const code = await coursesApi.share(course.courseId);
+      await Share.share({
+        message: `반갑꼬리 여행 코스 '${course.name}' (${course.stopIds.length}곳)\n${courseShareUrl(code)}\n\n앱에서 담기 → 여행 코스 → 공유 코드: ${code}`,
+      });
+    } catch (e) {
+      // 시트를 그냥 닫은 것도 여기로 올 수 있다(웹) — 서버 오류만 알린다
+      if (e instanceof ApiError) setSaveMessage({ text: e.message || '공유 코드를 받지 못했어요', failed: true });
+    } finally {
+      setSharingId(null);
+    }
+  };
+
+  /**
+   * 공유 코드로 담기. 링크(`?share=`)로 들어왔을 때도 같은 길을 탄다.
+   * 이미 담은 코드를 또 넣으면 서버가 사본을 하나 더 만든다 — 그건 서버 정책이라 막지 않는다.
+   */
+  const [shareInput, setShareInput] = useState('');
+  const [importing, setImporting] = useState(false);
+  const importShared = async (raw: string) => {
+    const code = raw.trim();
+    if (!code || importing) return;
+    setImporting(true);
+    setSaveMessage(null);
+    try {
+      const created = await coursesApi.copyShared(code);
+      setSavedCourses((prev) => [created, ...prev.filter((c) => c.courseId !== created.courseId)]);
+      setShareInput('');
+      setSaveMessage({ text: `'${created.name}'을(를) 내 코스에 담았어요`, failed: false });
+    } catch (e) {
+      const notFound = e instanceof ApiError && e.status === 404;
+      setSaveMessage({
+        text: notFound ? '그 코드의 코스를 찾지 못했어요. 코드를 다시 확인해 주세요.' : e instanceof Error ? e.message : '코스를 담지 못했어요',
+        failed: true,
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // 공유 링크로 들어온 경우 — 한 번만 담는다. 파라미터가 그대로여도 다시 돌지 않는다
+  const { share: shareParam } = useLocalSearchParams<{ share?: string }>();
+  const importedParamRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!shareParam || importedParamRef.current === shareParam) return;
+    importedParamRef.current = shareParam;
+    void importShared(shareParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareParam]);
 
   /**
    * 내 코스를 공개/비공개로 바꾼다. 서버 `PUT /courses/{id}`는 부분 수정이 아니라 **전체 교체**라
@@ -840,6 +902,16 @@ export default function CourseScreen() {
                           />
                         </Pressable>
                       )}
+                      {sharingId === c.courseId ? (
+                        <ActivityIndicator color={p.muted} size="small" />
+                      ) : (
+                        <Pressable
+                          onPress={() => void shareCourse(c)}
+                          hitSlop={8}
+                          accessibilityLabel="코스 공유">
+                          <Ionicons name="share-outline" size={16} color={p.muted} />
+                        </Pressable>
+                      )}
                       <Pressable
                         onPress={() => removeCourse(c.courseId)}
                         hitSlop={8}
@@ -850,6 +922,32 @@ export default function CourseScreen() {
                   ))}
                 </View>
               )}
+
+              {/* 공유 코드로 담기 — 링크가 웹으로 열리므로 앱 사용자는 여기로 담는다 */}
+              <View style={[styles.shareRow, { borderColor: p.line, backgroundColor: p.surface }]}>
+                <Ionicons name="link-outline" size={16} color={p.muted} />
+                <TextInput
+                  value={shareInput}
+                  onChangeText={setShareInput}
+                  placeholder="공유받은 코스 코드"
+                  placeholderTextColor={p.muted}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={() => void importShared(shareInput)}
+                  style={[styles.shareInput, { color: p.ink }]}
+                />
+                {importing ? (
+                  <ActivityIndicator color={p.accent} size="small" />
+                ) : (
+                  <Pressable
+                    onPress={() => void importShared(shareInput)}
+                    disabled={!shareInput.trim()}
+                    hitSlop={8}>
+                    <Text style={[styles.shareBtn, { color: shareInput.trim() ? p.accent : p.muted }]}>담기</Text>
+                  </Pressable>
+                )}
+              </View>
 
               {saveMessage && (
                 <View
@@ -1796,6 +1894,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 4,
   },
+  shareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+  },
+  shareInput: { flex: 1, fontSize: 14, padding: 0 },
+  shareBtn: { fontSize: 13.5, fontWeight: '800' },
   pickState: { alignItems: 'center', gap: 8, paddingVertical: Spacing.lg },
   pickEmpty: { fontSize: 13, textAlign: 'center', paddingVertical: Spacing.lg },
   pickItem: {
