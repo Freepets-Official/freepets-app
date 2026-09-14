@@ -23,6 +23,7 @@ import { FACILITIES } from '@/data/mock';
 import { CATEGORY_LABEL, satisfactionMood, type Pet } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { uniqueRegionCount } from '@/data/stamps';
+import { levelProgress, tierName } from '@/data/level';
 import { useAppStore } from '@/store/app-store';
 
 function formatDate(iso: string): string {
@@ -347,32 +348,25 @@ function StackCard({
 }
 
 /** 여권 카드 내용(테두리 카드 안에 들어가는 본문) — 원형 프로필 + 좋아한 곳 TOP 3 */
-/**
- * 반려동물 레벨(게임 요소) — 방문/판별 활동으로 XP를 쌓는다.
- * ⚠️ 임시 공식(placeholder). 정식 레벨/보상 체계 정해지면 교체.
- */
-function petProgress(xpRaw: number) {
-  const STEP = 40;
-  const level = 1 + Math.floor(xpRaw / STEP);
-  const into = xpRaw % STEP;
-  const title = level >= 6 ? '여행 마스터' : level >= 4 ? '여행 탐험가' : level >= 2 ? '여행 새싹' : '첫 발자국';
-  return { level, into, step: STEP, ratio: into / STEP, title };
-}
 
 function PetCardBody({ pet }: { pet: Pet }) {
   const p = usePalette();
   const router = useRouter();
-  const { topPlacesForPet, satisfactions, checks, stamps } = useAppStore();
+  const { topPlacesForPet, gamification } = useAppStore();
   const top = topPlacesForPet(pet.petId, 3);
 
   const medal = ['🥇', '🥈', '🥉'];
 
-  // 활동 기반 XP(임시): 만족도 남긴 곳 ×12 + 판별 함께한 횟수 ×6 + 여권 도장 ×15
-  // 도장이 가장 큰 이유는 실제로 다녀와야 찍히기 때문이다 — 손이 제일 많이 간 활동이다
-  const visits = satisfactions.filter((s) => s.petId === pet.petId).length;
-  const judged = checks.filter((c) => c.petIds.includes(pet.petId)).length;
-  const stamped = stamps.filter((s) => s.petIds.includes(pet.petId)).length;
-  const { level, into, step, ratio, title } = petProgress(visits * 12 + judged * 6 + stamped * 15);
+  /**
+   * 레벨·XP는 **서버 값**이다(`GET /me/gamification`).
+   *
+   * 예전에는 여기서 만족도×12 + 판별×6 + 도장×15로 직접 계산했다. 서버가 XP를 지급하기
+   * 시작한 뒤로는 그 숫자가 서버와 달라서, 같은 활동을 하고도 화면마다 레벨이 달랐다.
+   *
+   * XP는 계정 단위로 쌓이므로 아이가 여럿이어도 같은 레벨이 보인다. 그래서 아이 이름이
+   * 아니라 **「집사 레벨」**이라고 적는다 — 이 아이의 레벨로 읽히면 안 된다.
+   */
+  const progress = gamification ? levelProgress(gamification) : null;
 
   return (
     <>
@@ -392,30 +386,40 @@ function PetCardBody({ pet }: { pet: Pet }) {
             <PetAvatar pet={pet} size={52} />
           </LinearGradient>
           {/* 레벨 칩 — 금속·글래스 하이라이트 */}
-          <LinearGradient
-            colors={['#FFFFFF', '#E8EBF1']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.levelBadge}>
-            <Text style={[styles.levelText, { color: p.accentDark }]}>Lv.{level}</Text>
-          </LinearGradient>
+          {progress && (
+            <LinearGradient
+              colors={['#FFFFFF', '#E8EBF1']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.levelBadge}>
+              <Text style={[styles.levelText, { color: p.accentDark }]}>Lv.{progress.level}</Text>
+            </LinearGradient>
+          )}
         </View>
         <View style={styles.bannerInfo}>
           <Text style={styles.gameName} numberOfLines={1}>
             {pet.name}
           </Text>
-          <View style={styles.rankChip}>
-            <Text style={styles.rankEmoji}>🏆</Text>
-            <Text style={styles.rankText}>{title}</Text>
-          </View>
-          <View style={styles.xpRow}>
-            <View style={styles.xpTrack}>
-              <View style={[styles.xpFill, { width: `${Math.max(6, ratio * 100)}%` }]} />
-            </View>
-            <Text style={styles.xpText}>
-              {into}/{step} XP
-            </Text>
-          </View>
+          {gamification && progress && (
+            <>
+              <View style={styles.rankChip}>
+                <Text style={styles.rankEmoji}>🏆</Text>
+                <Text style={styles.rankText}>집사 레벨 · {tierName(gamification)}</Text>
+              </View>
+              <View style={styles.xpRow}>
+                <View style={styles.xpTrack}>
+                  <View
+                    style={[styles.xpFill, { width: `${Math.max(6, progress.ratio * 100)}%` }]}
+                  />
+                </View>
+                <Text style={styles.xpText}>
+                  {progress.maxed
+                    ? '최고 레벨'
+                    : `${progress.into.toLocaleString()}/${progress.step.toLocaleString()} XP`}
+                </Text>
+              </View>
+            </>
+          )}
         </View>
       </LinearGradient>
 
