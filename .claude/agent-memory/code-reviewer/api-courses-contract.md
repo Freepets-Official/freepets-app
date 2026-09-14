@@ -23,4 +23,10 @@ Lombok/Jackson의 boolean 게터 네이밍(`isPublic()` → `public`) 때문이�
 `PUT`은 전체 교체이고 바디는 `name`(필수)·`description`·`stopIds`(필수, 0~10)·`isPublic`이 전부다.
 `distance-options`와 `optimize-order`는 **2026-09-08 기준 무인증으로 열려 있다**(백엔드 PR #65).
 
-관련: [[docs-02-is-stale]]
+**서버 주소는 `.env`의 `EXPO_PUBLIC_API_URL`(2026-09-14 기준 `https://3.35.195.228.nip.io`)이 진실이다** — 이 파일 위의
+54.116.37.26은 옛 주소. 같은 날 `.env`의 DEV_TOKEN으로 호출하면 `TOKEN4001`(유효하지 않은 토큰)이라
+**라이브 프로빙은 안 된다** — 코드 형식 같은 건 실기기로 확인해야 한다.
+`POST /courses/{id}/share`·`POST /courses/shared/{code}/copy`는 Swagger에는 있는데 `api-specs/course.md`에는 절이 없다
+(gamification.md에서만 참조). 무인증 copy는 401 `COMMON401`.
+
+관련: [[docs-02-is-stale]] · [[deeplink-before-session-restore]]

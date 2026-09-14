@@ -1,29 +1,30 @@
 import * as StoreReview from 'expo-store-review';
-import { Linking, Platform } from 'react-native';
+import { Linking } from 'react-native';
 
-import { APP_STORE_REVIEW_URL } from '@/constants/app-store';
+import { storeReviewUrl } from '@/constants/app-store';
 
 /**
- * 앱 평가하기.
+ * 설정의 「앱 평가하기」 — **스토어의 리뷰 쓰기 페이지로 보낸다.**
  *
- * 되도록 **인앱 리뷰 창**(SKStoreReviewController)을 띄운다 — 앱을 떠나지 않고 별점을 남길 수
- * 있다. 다만 애플이 이 창을 1년에 3번까지만 보여주고, 그마저도 띄울지 말지를 OS가 정한다.
- * 그래서 사용자가 버튼을 눌렀는데 아무 일도 없을 수 있다. 못 띄우는 상황이 확인되면
- * 스토어의 리뷰 쓰기 페이지로 보낸다. 웹은 인앱 창이 없으니 바로 스토어로.
- *
- * ⚠️ 출시 전에는 스토어 페이지가 404라 심사자가 누르면 깨진 링크를 본다 — 설정 화면의
- * 플래그로 가려 두고 출시 확인 뒤에 켠다.
+ * 인앱 리뷰 창(`requestReview`)을 버튼에서 부르면 안 된다. 애플 문서가 명시한다: "this method
+ * may not present an alert, don't call requestReview() in response to a button tap". OS가
+ * 1년에 3번까지만, 그것도 띄울지를 자기가 정하므로 사용자 눈엔 죽은 버튼이 된다.
+ * 예전 구현은 `isAvailableAsync() && hasAction()`으로 "못 띄우는 상황"을 가린다고 했지만
+ * `hasAction()`은 스토어 URL 유무일 뿐이라 그런 판별이 되지 않았다.
  */
-export async function requestAppReview(): Promise<void> {
-  if (Platform.OS !== 'web') {
-    try {
-      if ((await StoreReview.isAvailableAsync()) && (await StoreReview.hasAction())) {
-        await StoreReview.requestReview();
-        return;
-      }
-    } catch {
-      // 인앱 창을 못 띄우는 기기·OS — 아래 폴백으로
-    }
+export async function openStoreReview(): Promise<void> {
+  await Linking.openURL(storeReviewUrl());
+}
+
+/**
+ * 인앱 리뷰 창. **버튼이 아니라** 좋은 순간 뒤에 자동으로 부른다 — 예: 여권 도장을 찍고
+ * 완료 화면을 본 직후. OS가 띄울지 말지를 정하므로 아무 일도 안 일어날 수 있고, 그래도 된다.
+ * 아직 부르는 곳은 없다. 1.1에서 자리를 정한다.
+ */
+export async function promptInAppReview(): Promise<void> {
+  try {
+    if (await StoreReview.isAvailableAsync()) await StoreReview.requestReview();
+  } catch {
+    // 못 띄우는 기기·OS — 조용히 넘어간다
   }
-  await Linking.openURL(APP_STORE_REVIEW_URL);
 }

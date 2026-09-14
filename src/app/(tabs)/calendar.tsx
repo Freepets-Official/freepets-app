@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter, useScrollToTop } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
@@ -16,6 +16,7 @@ import {
   spanPosition,
 } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
+import { notify } from '@/lib/notify';
 import { useAppStore } from '@/store/app-store';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -37,6 +38,7 @@ export default function CalendarScreen() {
     toggleMedTaken,
     isMedTaken,
     loadCalendarMonth,
+    calendarErrorRef,
   } = useAppStore();
 
   const today = ymd(new Date());
@@ -46,7 +48,7 @@ export default function CalendarScreen() {
   const y = cursor.getFullYear();
   const m = cursor.getMonth();
 
-  // 달을 넘기면 그 달 일정을 서버에서 받는다(로그인 전이나 이미 받은 달은 스토어가 건너뛴다)
+  // 달을 넘기면 그 달 일정을 서버에서 다시 받는다(로그인 전에는 스토어가 건너뛴다)
   useEffect(() => {
     void loadCalendarMonth(`${y}-${String(m + 1).padStart(2, '0')}`);
   }, [y, m, loadCalendarMonth]);
@@ -227,7 +229,7 @@ export default function CalendarScreen() {
             onToggleReminder={() => toggleEventReminder(e.eventId)}
             onDelete={() => {
               void removeCalendarEvent(e.eventId).then((ok) => {
-                if (!ok) Alert.alert('삭제 실패', '일정을 서버에서 지우지 못했어요. 잠시 후 다시 시도해 주세요.');
+                if (!ok) notify('삭제 실패', calendarErrorRef.current ?? '일정을 서버에서 지우지 못했어요. 잠시 후 다시 시도해 주세요.');
               });
             }}
           />

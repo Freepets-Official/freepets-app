@@ -145,7 +145,7 @@ export default function RestaurantScreen() {
                 <TextInput
                   value={picker.query}
                   onChangeText={picker.setQuery}
-                  placeholder="식당 이름으로 찾기 (이름을 넣으면 100km까지)"
+                  placeholder="식당 이름으로 찾기 (이름을 넣으면 전국)"
                   placeholderTextColor={p.muted}
                   style={[styles.searchInput, { color: p.ink }]}
                 />
@@ -158,8 +158,8 @@ export default function RestaurantScreen() {
               ) : !picker.loading && candidates.length === 0 ? (
                 <Text style={[styles.empty, { color: p.muted }]}>
                   {picker.query.trim()
-                    ? '100km 안에서는 못 찾았어요. 관광공사에 등록된 이름인지, 식당 근처에서 다시 시도해 주세요.'
-                    : '주변 30km에 등록할 음식점이 없어요. 이름을 입력하면 100km까지 찾아요.'}
+                    ? '그 이름의 식당을 못 찾았어요. 관광공사에 등록된 이름으로 찾아보세요.'
+                    : '주변 30km에 등록할 음식점이 없어요. 이름을 입력하면 전국에서 찾아요.'}
                 </Text>
               ) : (
                 candidates.map((f) => (
@@ -177,7 +177,7 @@ export default function RestaurantScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.pickName, { color: p.ink }]}>{f.name}</Text>
                       <Text style={[styles.pickMeta, { color: p.muted }]} numberOfLines={1}>
-                        {CATEGORY_LABEL[f.category]} · {formatDistance(f.distanceM)} · {f.address}
+                        {CATEGORY_LABEL[f.category]}{f.distanceM !== null ? ` · ${formatDistance(f.distanceM)}` : ''} · {f.address}
                       </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={p.accent} />

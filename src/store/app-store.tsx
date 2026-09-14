@@ -37,6 +37,8 @@ import { DEV_TOKEN } from '@/lib/config';
 import {
   loadCalendarEvents,
   loadCalendarMigrated,
+  loadMigratedMap,
+  saveMigratedMap,
   loadMedLog,
   saveCalendarEvents,
   saveCalendarMigrated,
@@ -525,6 +527,8 @@ interface AppStore {
   toggleEventReminder: (eventId: number) => Promise<boolean>;
   /** 캘린더가 다른 달로 넘어가면 그 달 일정을 서버에서 받아 합친다(YYYY-MM) */
   loadCalendarMonth: (ym: string) => Promise<void>;
+  /** 마지막 캘린더 요청이 실패한 이유(서버 메시지). 화면이 알림에 실어 보여준다 */
+  calendarErrorRef: React.MutableRefObject<string | null>;
   /** 특정 날짜(YYYY-MM-DD)의 일정 (반복 반영) — 시간순 */
   eventsOn: (date: string) => CalendarEvent[];
   /** 약 복용 기록 토글/조회 (eventId+날짜 단위) */
@@ -548,7 +552,7 @@ interface AppStore {
   /** 로그인 성공. `userId`는 서버가 주기 시작하면 함께 들어온다(지금은 재발급 응답에만 있다). */
   authenticate: (
     email: string,
-    tokens: { accessToken: string; refreshToken: string; userId?: number },
+    tokens: { accessToken: string; refreshToken: string; userId?: number | string },
     provider?: LoginProvider,
   ) => void;
   /** 현재 액세스 토큰(인증 헤더용). 미로그인이면 null */
@@ -722,26 +726,47 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if (calendarLoaded) void saveMedLog([...medLog]);
   }, [medLog, calendarLoaded]);
 
-  /** 서버에서 받아 온 달(YYYY-MM). 같은 달을 두 번 받지 않는다 */
-  const calendarMonthsRef = useRef<Set<string>>(new Set());
+  /** 마지막 캘린더 요청의 실패 이유. 화면이 "저장 실패" 대신 서버 문구를 보여주게 */
+  const calendarErrorRef = useRef<string | null>(null);
+  const noteCalendarError = (e: unknown) => {
+    calendarErrorRef.current = e instanceof ApiError && e.message ? e.message : null;
+  };
+  /** 지금 서버로 올리는 중인 1.0 로컬 일정. 병합이 "서버에 없다"고 지우면 안 된다 */
+  const migratingRef = useRef<Set<number>>(new Set());
   /**
    * 서버가 준 발생 목록을 지금 상태에 합친다. 이미 있는 일정은 서버 값으로 바꾸고, 그 달에
    * 걸리는데 서버에 없는 일정은 없앤다 — 다른 기기에서 지운 일정이 여기 남으면 안 된다.
-   * 임시 ID(음수, 아직 서버에 안 올라간 것)는 건드리지 않는다.
+   * 임시 ID(음수, 아직 서버에 안 올라간 것)와 올리는 중인 것은 건드리지 않는다.
+   *
+   * ⚠️ 월 조회의 `date`는 **발생일**이지 시작일이 아니다. 창 안에서 처음 보이는 날을 시작일로
+   * 삼으면 10월에 처음 본 매주 일정의 시작이 10월로 밀린다. 이미 알던 일정은 **더 이른 날**을
+   * 지킨다. 그래도 처음 보는 달이 시작보다 뒤면 틀린다 — 백엔드에 시작일 필드를 요청해 둔 상태.
    */
   const mergeCalendarMonth = useCallback((ym: string, snap: { events: CalendarEvent[]; taken: string[] }) => {
-    const seen = new Set(snap.events.map((e) => e.eventId));
+    const seen = new Map(snap.events.map((e) => [e.eventId, e] as const));
     setCalendarEvents((prev) => {
+      const known = new Map(prev.map((e) => [e.eventId, e] as const));
       const kept = prev.filter((e) => {
-        if (e.eventId < 0 || seen.has(e.eventId)) return false;
+        if (e.eventId < 0 || migratingRef.current.has(e.eventId) || seen.has(e.eventId)) return false;
         // 이 달에 걸리지 않는 일정은 이 응답이 말해줄 수 없다 — 그대로 둔다
         return !occursInMonth(e, ym);
       });
-      const pending = prev.filter((e) => e.eventId < 0);
-      return [...kept, ...snap.events, ...pending];
+      const fromServer = snap.events.map((e) => {
+        const old = known.get(e.eventId);
+        return old && old.date < e.date ? { ...e, date: old.date } : e;
+      });
+      const pending = prev.filter((e) => e.eventId < 0 || migratingRef.current.has(e.eventId));
+      return [...kept, ...fromServer, ...pending];
     });
     setMedLog((prev) => {
-      const next = new Set([...prev].filter((k) => !k.slice(k.indexOf(':') + 1).startsWith(ym)));
+      const next = new Set(
+        [...prev].filter((k) => {
+          const id = Number(k.slice(0, k.indexOf(':')));
+          // 서버에 없는 일정(임시·올리는 중)의 체크는 서버 응답이 말해줄 수 없다
+          if (id < 0 || migratingRef.current.has(id)) return true;
+          return !k.slice(k.indexOf(':') + 1).startsWith(ym);
+        }),
+      );
       for (const k of snap.taken) next.add(k);
       return next;
     });
@@ -751,9 +776,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     async (ym: string) => {
       if (!session.authed) return;
       try {
-        const snap = await calendarApi.month(ym);
-        calendarMonthsRef.current.add(ym);
-        mergeCalendarMonth(ym, snap);
+        mergeCalendarMonth(ym, await calendarApi.month(ym));
       } catch {
         // 못 받으면 캐시가 그대로 보인다. 화면을 막지 않는다
       }
@@ -764,46 +787,52 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   /**
    * 로그인되면 지난달·이달·다음달을 받는다. 홈의 접종 D-day와 캘린더 첫 화면이 여기서 나온다.
    *
-   * 그 전에 **1.0이 기기에만 남긴 일정을 서버로 한 번 올린다.** 1.0은 서버 연동이 없어
-   * 일정이 기기에만 있었다. 그냥 서버 목록을 받으면 위 병합이 "서버에 없는 일정"으로 보고
-   * 지워버린다 — 사용자가 몇 달치 접종 일정을 잃는다. 올리지 못한 일정은 임시 ID(음수)로
-   * 바꿔 기기에 남긴다. 사라지지는 않고, 서버에는 없는 상태로 남는다.
-   * 개발용 목 데이터는 올리지 않는다.
+   * 그 전에 **1.0이 기기에만 남긴 일정을 서버로 올린다.** 1.0은 서버 연동이 없어 일정이
+   * 기기에만 있었다. 그냥 서버 목록을 받으면 위 병합이 "서버에 없는 일정"으로 보고
+   * 지워버린다 — 사용자가 몇 달치 접종 일정을 잃는다.
+   *
+   * 하나 올릴 때마다 옛 ID → 서버 ID를 기기에 남긴다. 지하철에서 첫 로그인을 해 절반이
+   * 실패하거나 도중에 앱이 꺼져도, 다음 실행은 성공한 것을 다시 올리지 않고 실패한 것만
+   * 다시 시도한다. 전부 성공한 뒤에야 "끝났다" 표시를 남긴다. 개발용 목 데이터는 올리지 않는다.
    */
   useEffect(() => {
-    if (!session.authed) {
-      calendarMonthsRef.current.clear();
-      return;
-    }
-    if (!calendarLoaded) return;
+    if (!session.authed || !calendarLoaded) return;
     let alive = true;
     void (async () => {
       if (!SEED_MOCK && !(await loadCalendarMigrated())) {
         const local = calendarEventsRef.current.filter((e) => e.eventId > 0);
-        const idMap = new Map<number, number>();
+        const map = await loadMigratedMap();
+        migratingRef.current = new Set(local.map((e) => e.eventId));
+        let failed = false;
         for (const e of local) {
+          if (map[e.eventId] !== undefined) continue; // 지난 실행에서 이미 올렸다
           try {
-            idMap.set(e.eventId, await calendarApi.create(e));
+            map[e.eventId] = await calendarApi.create(e);
+            await saveMigratedMap(map);
           } catch {
-            idMap.set(e.eventId, -Math.abs(e.eventId) - Date.now());
+            failed = true;
           }
+          if (!alive) return;
         }
-        if (!alive) return;
-        setCalendarEvents((prev) => prev.map((e) => (idMap.has(e.eventId) ? { ...e, eventId: idMap.get(e.eventId)! } : e)));
-        // 복용 기록도 새 ID로 옮기고, 올라간 일정의 체크는 서버에도 남긴다
+        // 올라간 것은 서버 ID로 바꾼다. 실패한 것은 옛 ID 그대로 두고 다음 실행에 다시 올린다
         const moved = new Set<string>();
         for (const key of medLogRef.current) {
           const [idStr, date] = key.split(':');
-          const nid = idMap.get(Number(idStr));
+          const nid = map[idStr];
           if (nid === undefined) {
             moved.add(key);
             continue;
           }
           moved.add(`${nid}:${date}`);
-          if (nid > 0) calendarApi.setMedTaken(nid, date, true).catch(() => {});
+          calendarApi.setMedTaken(nid, date, true).catch(() => {});
         }
+        setCalendarEvents((prev) => prev.map((e) => (map[e.eventId] !== undefined ? { ...e, eventId: map[e.eventId] } : e)));
         setMedLog(moved);
-        await saveCalendarMigrated();
+        migratingRef.current = new Set(local.filter((e) => map[e.eventId] === undefined).map((e) => e.eventId));
+        if (!failed) {
+          await saveCalendarMigrated();
+          migratingRef.current = new Set();
+        }
       }
       if (!alive) return;
       const now = new Date();
@@ -817,6 +846,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, [session.authed, session.key, calendarLoaded, loadCalendarMonth]);
 
   const nextEventId = useRef(INITIAL_CAL_EVENTS.length + 1);
+  const tempSeqRef = useRef(0);
   const nextBenefitId = useRef(1);
   const nextPetId = useRef(INITIAL_PETS.length + 1);
   // 로컬 전용 판별은 음수 id를 쓴다 — 서버 checkId와 겹치면 이력 병합이 어긋난다.
@@ -1081,7 +1111,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const myReviewFor = useCallback(
     (facilityId: number) =>
-      reviews.find((r) => r.facilityId === facilityId && myUserId != null && r.userId === myUserId),
+      reviews.find((r) => r.facilityId === facilityId && myUserId != null && Number(r.userId) === myUserId),
     [reviews],
   );
 
@@ -1125,7 +1155,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   const isMyReview = useCallback(
     (r: { reviewId: number; userId: number }) =>
-      (myUserId != null && r.userId === myUserId) || myReviewIds.has(r.reviewId),
+      (myUserId != null && Number(r.userId) === myUserId) || myReviewIds.has(r.reviewId),
     [myUserId, myReviewIds],
   );
 
@@ -1780,31 +1810,52 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         setCalendarEvents((prev) => [...prev, { ...input, eventId: nextEventId.current++ }]);
         return true;
       }
-      const tempId = -Date.now();
+      // 같은 밀리초에 둘이 생겨도(자동 기록 + 직접 추가) 겹치지 않게 순번을 섞는다
+      const tempId = -(Date.now() * 1000 + (tempSeqRef.current++ % 1000));
       setCalendarEvents((prev) => [...prev, { ...input, eventId: tempId }]);
       try {
         const eventId = await calendarApi.create(input);
+        /**
+         * 서버 ID를 받기 전에 사용자가 이 일정을 지우거나 고쳤을 수 있다(자동 기록은 백그라운드로
+         * 나가서 창이 넓다). 그대로 두면 서버에만 남는 좀비가 되거나 다음 조회에 로컬 수정이 덮인다.
+         */
+        const now = calendarEventsRef.current.find((e) => e.eventId === tempId);
+        if (!now) {
+          void calendarApi.remove(eventId).catch(() => {});
+          return true;
+        }
+        const { eventId: _t, ...latest } = now;
+        if (JSON.stringify(latest) !== JSON.stringify(input)) void calendarApi.update(eventId, latest).catch(() => {});
         setCalendarEvents((prev) => prev.map((e) => (e.eventId === tempId ? { ...e, eventId } : e)));
         return true;
-      } catch {
-        setCalendarEvents((prev) => prev.filter((e) => e.eventId !== tempId));
+      } catch (e) {
+        noteCalendarError(e);
+        setCalendarEvents((prev) => prev.filter((ev) => ev.eventId !== tempId));
         return false;
       }
     },
     [session.authed],
   );
 
+  /**
+   * 롤백은 **그 항목만** 되돌린다. 배열을 통째로 되돌리면 그 사이 끝난 다른 변경(새 일정의
+   * 서버 ID 치환, 월 병합)까지 지워져 같은 일정이 두 개 보인다.
+   */
   const removeCalendarEvent = useCallback(
     async (eventId: number) => {
       const rev = sessionRev.current;
-      const before = calendarEventsRef.current;
+      const target = calendarEventsRef.current.find((e) => e.eventId === eventId);
       setCalendarEvents((prev) => prev.filter((e) => e.eventId !== eventId));
-      if (!session.authed || eventId < 0) return true;
+      if (!session.authed || eventId < 0 || !target) return true;
       try {
         await calendarApi.remove(eventId);
         return true;
-      } catch {
-        if (rev === sessionRev.current) setCalendarEvents(before);
+      } catch (e) {
+        // 다른 기기에서 이미 지운 일정이면 목적은 달성됐다 — 되살리지 않는다
+        if (e instanceof ApiError && e.code === 'CALENDAR4001') return true;
+        noteCalendarError(e);
+        if (rev === sessionRev.current)
+          setCalendarEvents((prev) => (prev.some((x) => x.eventId === eventId) ? prev : [...prev, target]));
         return false;
       }
     },
@@ -1814,8 +1865,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const updateCalendarEvent = useCallback(
     async (eventId: number, patch: Partial<Omit<CalendarEvent, 'eventId'>>) => {
       const rev = sessionRev.current;
-      const before = calendarEventsRef.current;
-      const target = before.find((e) => e.eventId === eventId);
+      const target = calendarEventsRef.current.find((e) => e.eventId === eventId);
       if (!target) return false;
       const merged: CalendarEvent = { ...target, ...patch };
       setCalendarEvents((prev) => prev.map((e) => (e.eventId === eventId ? merged : e)));
@@ -1823,8 +1873,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       try {
         await calendarApi.update(eventId, merged);
         return true;
-      } catch {
-        if (rev === sessionRev.current) setCalendarEvents(before);
+      } catch (e) {
+        noteCalendarError(e);
+        if (rev === sessionRev.current) setCalendarEvents((prev) => prev.map((x) => (x.eventId === eventId ? target : x)));
         return false;
       }
     },
@@ -1834,8 +1885,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const toggleEventReminder = useCallback(
     async (eventId: number) => {
       const rev = sessionRev.current;
-      const before = calendarEventsRef.current;
-      const target = before.find((e) => e.eventId === eventId);
+      const target = calendarEventsRef.current.find((e) => e.eventId === eventId);
       if (!target) return false;
       const next = !target.reminder;
       setCalendarEvents((prev) => prev.map((e) => (e.eventId === eventId ? { ...e, reminder: next } : e)));
@@ -1843,8 +1893,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       try {
         await calendarApi.setReminder(eventId, next);
         return true;
-      } catch {
-        if (rev === sessionRev.current) setCalendarEvents(before);
+      } catch (e) {
+        noteCalendarError(e);
+        if (rev === sessionRev.current) setCalendarEvents((prev) => prev.map((x) => (x.eventId === eventId ? target : x)));
         return false;
       }
     },
@@ -1863,8 +1914,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     (eventId: number, date: string) => {
       const key = `${eventId}:${date}`;
       const rev = sessionRev.current;
-      const before = medLogRef.current;
-      const taken = !before.has(key);
+      const taken = !medLogRef.current.has(key);
       setMedLog((prev) => {
         const next = new Set(prev);
         taken ? next.add(key) : next.delete(key);
@@ -1873,7 +1923,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (!session.authed || eventId < 0) return;
       // 실패하면 되돌린다 — 체크가 남아 있는데 서버엔 없으면 다른 기기에서 "안 먹였다"로 보인다
       calendarApi.setMedTaken(eventId, date, taken).catch(() => {
-        if (rev === sessionRev.current) setMedLog(before);
+        if (rev !== sessionRev.current) return;
+        // 그 키 하나만 되돌린다 — 그 사이 체크한 다른 날까지 지우면 안 된다
+        setMedLog((prev) => {
+          const next = new Set(prev);
+          taken ? next.delete(key) : next.add(key);
+          return next;
+        });
       });
     },
     [session.authed],
@@ -1927,12 +1983,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         return;
       }
       restoredEmailRef.current = saved.email;
+      // 복원 중 재발급 콜백이 세션을 다시 저장한다 — 그때 제공자가 비어 있으면 null로 덮인다
+      providerRef.current = saved.provider ?? null;
       setAuthToken(saved.accessToken);
       setRefreshToken(saved.refreshToken);
       try {
         const me = await accountApi.get();
         if (stale()) return;
-        if (typeof me.userId === 'number') setMyUserId(me.userId);
+        if (Number.isFinite(Number(me.userId))) setMyUserId(Number(me.userId));
         /**
          * 조회가 401을 거쳐 **재발급으로 성공**했을 수 있다. 그때는 api 레이어가 이미
          * 새 토큰을 들고 있는데, 여기서 `saved.accessToken`을 다시 넣으면 스토어만
@@ -1974,7 +2032,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const authenticate = useCallback(
     (
       email: string,
-      tokens: { accessToken: string; refreshToken: string; userId?: number },
+      tokens: { accessToken: string; refreshToken: string; userId?: number | string },
       provider: LoginProvider = 'email',
     ) => {
       providerRef.current = provider;
@@ -1992,7 +2050,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setAccessToken(tokens.accessToken);
       setAuthToken(tokens.accessToken); // 보호 API 호출에 쓰이도록 api 레이어에도 넣는다
       setRefreshToken(tokens.refreshToken);
-      if (typeof tokens.userId === 'number') setMyUserId(tokens.userId);
+      if (Number.isFinite(Number(tokens.userId))) setMyUserId(Number(tokens.userId));
       refreshTokenRef.current = tokens.refreshToken;
       setSession({
         authed: true,
@@ -2118,7 +2176,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setTokensRefreshedHandler(({ accessToken, refreshToken, userId }) => {
       refreshedRef.current = { accessToken, refreshToken };
-      if (typeof userId === 'number') setMyUserId(userId);
+      if (Number.isFinite(Number(userId))) setMyUserId(Number(userId));
       setAccessToken(accessToken);
       refreshTokenRef.current = refreshToken;
       /**
@@ -2247,7 +2305,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         if (!alive) return;
         setAccount(accountFrom(a));
         // 서버가 userId를 주기 시작하면 그때부터 내 글 판정이 기기 기록 없이도 정확해진다.
-        if (typeof a.userId === 'number') setMyUserId(a.userId);
+        if (Number.isFinite(Number(a.userId))) setMyUserId(Number(a.userId));
       })
       .catch(() => {});
     return () => {
@@ -2569,6 +2627,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       updateCalendarEvent,
       toggleEventReminder,
       loadCalendarMonth,
+      calendarErrorRef,
       eventsOn,
       toggleMedTaken,
       isMedTaken,
@@ -2657,6 +2716,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       updateCalendarEvent,
       toggleEventReminder,
       loadCalendarMonth,
+      calendarErrorRef,
       eventsOn,
       toggleMedTaken,
       isMedTaken,

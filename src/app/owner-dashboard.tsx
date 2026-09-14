@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState, type ComponentProps } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -42,9 +42,16 @@ export default function OwnerDashboard() {
     for (const k of Object.keys(businessRegs)) ids.add(Number(k));
     return [...ids];
   }, [account.ownedFacilityIds, businessRegs]);
-  // 캐시에 없는 매장(앱을 새로 켠 뒤)은 상세를 받아온다. 받기 전까지는 목록에서 빠져 있다
+  // 캐시에 없는 매장(앱을 새로 켠 뒤)은 상세를 받아온다. 받기 전까지는 목록에서 빠져 있다.
+  // facilityById는 캐시가 바뀔 때마다 새 참조라 이펙트가 다시 도는데, 그때 아직 안 온 매장을
+  // 또 요청하지 않게 요청한 ID를 기억한다
+  const requestedRef = useRef<Set<number>>(new Set());
   useEffect(() => {
-    for (const id of ownedIds) if (!facilityById(id)) void loadFacility(id);
+    for (const id of ownedIds) {
+      if (facilityById(id) || requestedRef.current.has(id)) continue;
+      requestedRef.current.add(id);
+      void loadFacility(id);
+    }
   }, [ownedIds, facilityById, loadFacility]);
   const owned = ownedIds
     .map((id) => facilityById(id))
