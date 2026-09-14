@@ -8,6 +8,7 @@ import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
 import { Screen } from '@/components/screen';
 import { SUPPORT_EMAIL, SUPPORT_MAIL_SUBJECT } from '@/constants/contact';
+import { requestAppReview } from '@/lib/app-review';
 import { CardShadow, Radius, Spacing, type ThemeMode } from '@/constants/theme';
 import { FONT_SIZE_LABEL, type FontSizeMode } from '@/data/types';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
@@ -33,6 +34,11 @@ const THEME_MODE_LABEL: Record<ThemeMode, string> = { light: '라이트', dark: 
  * 서버 공지 API가 붙는 다음 업데이트에 되살린다 — 화면과 라우트는 그대로 둔다.
  */
 const SHOW_NOTICES = false;
+/**
+ * 「앱 평가하기」는 **출시가 확인된 뒤** 켠다. 그 전에는 스토어 페이지가 404라 심사자가
+ * 누르면 깨진 링크를 본다. 1.0 승인·출시가 보이면 true로 바꿔 1.1에 싣는다.
+ */
+const SHOW_APP_RATING = false;
 
 /**
  * 사업자(사장님) 기능을 1.0에서 숨긴다.
@@ -316,6 +322,15 @@ export default function SettingsScreen() {
             icon="notifications-circle-outline"
             label="공지사항"
             onPress={() => router.push('/notices')}
+            chevron
+          />
+        )}
+        {SHOW_APP_RATING && (
+          <Row
+            icon="star-outline"
+            label="앱 평가하기"
+            sub="별점 하나가 다음 집사에게 닿아요"
+            onPress={() => void requestAppReview()}
             chevron
           />
         )}
