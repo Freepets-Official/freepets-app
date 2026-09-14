@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, createContext, type ReactNode, useContext } from 'react';
 import { Platform } from 'react-native';
 
 import { clearPushToken, loadPushToken, savePushToken } from '@/lib/push-token-store';
@@ -584,6 +584,21 @@ const AppStoreContext = createContext<AppStore | null>(null);
  */
 const SEED_MOCK = __DEV__;
 
+/**
+ * 콜백에서 최신 상태를 읽기 위한 미러 ref.
+ *
+ * 렌더 중에 `ref.current = value`를 쓰면 되긴 하지만 `react-hooks/refs`가 막는다(렌더는
+ * 순수해야 한다). 커밋 직후(`useLayoutEffect`)에 맞추면 이벤트 핸들러가 읽을 때는 이미
+ * 최신이다 — 핸들러는 항상 커밋 뒤에 돈다.
+ */
+function useMirrorRef<T>(value: T) {
+  const ref = useRef(value);
+  useLayoutEffect(() => {
+    ref.current = value;
+  });
+  return ref;
+}
+
 /** Date → YYYY-MM */
 const ymOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
@@ -685,10 +700,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 약 복용 기록 — "eventId:YYYY-MM-DD" 집합
   const [medLog, setMedLog] = useState<Set<string>>(new Set());
   // 콜백에서 최신 값을 읽기 위한 미러(되돌리기용 스냅샷)
-  const calendarEventsRef = useRef(calendarEvents);
-  calendarEventsRef.current = calendarEvents;
-  const medLogRef = useRef(medLog);
-  medLogRef.current = medLog;
+  const calendarEventsRef = useMirrorRef(calendarEvents);
+  const medLogRef = useMirrorRef(medLog);
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -812,8 +825,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const nextReportId = useRef(INITIAL_REPORTS.length + 1);
 
   // 최신 pets를 콜백에서 읽기 위한 미러(수정 시 기존 값 + patch 병합용)
-  const petsRef = useRef<Pet[]>(pets);
-  petsRef.current = pets;
+  const petsRef = useMirrorRef(pets);
 
   // 서버 검색·홈 TOP3 등으로 알게 된 시설을 상세 조회용으로 캐시한다.
   // (아래 registerFacilities/facilityById가 쓰고, loadTopPlaces도 최소 정보로 채운다)
@@ -1398,8 +1410,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // 슬라이더는 드래그 중 값이 연속으로 바뀐다 → 로컬은 즉시 반영하고, 서버 upsert는
   // 실패 시 되돌릴 직전 값을 콜백에서 읽기 위한 미러
-  const satisfactionsRef = useRef<PetSatisfaction[]>(satisfactions);
-  satisfactionsRef.current = satisfactions;
+  const satisfactionsRef = useMirrorRef(satisfactions);
 
   // 마지막 변경 뒤 600ms 디바운스로 한 번만 보낸다(요청 폭주 방지).
   const satTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -2114,10 +2125,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     pushChainRef.current = next.catch(() => {});
     return next;
   }, []);
-  const accessTokenRef = useRef(accessToken);
-  accessTokenRef.current = accessToken;
-  const notifPushRef = useRef(settings.notifPush);
-  notifPushRef.current = settings.notifPush;
+  const accessTokenRef = useMirrorRef(accessToken);
+  const notifPushRef = useMirrorRef(settings.notifPush);
 
   const finishLogout = useCallback(() => {
     bumpSessionEpoch();
@@ -2160,14 +2169,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // 등록이 아직 진행 중이면 큐가 그 등록을 먼저 끝내고 이 해제를 보낸다.
     // 이 계정의 토큰을 지금 잡아둔다 — finishLogout이 지운 뒤에 나가도 같은 토큰으로 간다.
     const withToken = accessTokenRef.current ?? undefined;
-    const pushed = pushTokenRef.current ?? pushPendingRef.current;
-    pushTokenRef.current = null;
-    pushPendingRef.current = null;
     const unregister = enqueuePush(async () => {
-      const token = pushed ?? (await loadPushToken());
+      /**
+       * 토큰은 **큐가 실행되는 시점**에 읽는다. 로그아웃을 부른 시점에 읽으면, 아직 시작도
+       * 안 한 등록(큐 대기 중)은 참조가 비어 있어 놓친다 — 그 등록이 3초 안에 끝나면 토큰이
+       * 서버에 그대로 남는다. 앞 작업이 끝난 뒤 읽으면 그 등록의 토큰이 여기 들어 있다.
+       */
+      const token = pushTokenRef.current ?? pushPendingRef.current ?? (await loadPushToken());
+      pushTokenRef.current = null;
+      pushPendingRef.current = null;
       if (!token) return;
       await pushApi.unregister(token, withToken);
-      void clearPushToken();
+      await clearPushToken();
     }).catch(() => {});
     void Promise.race([
       unregister,
@@ -2184,13 +2197,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // 최신 account를 콜백에서 읽기 위한 미러(PATCH에 닉네임을 항상 실어야 함)
-  const accountRef = useRef<Account>(account);
-  accountRef.current = account;
+  const accountRef = useMirrorRef(account);
 
   // 재발급 콜백이 지금 세션의 이메일을 읽어야 한다. 상태를 의존성에 걸면 세션이 바뀔 때마다
   // 핸들러가 다시 등록되므로 미러로 읽는다.
-  const sessionRef = useRef<Session>(session);
-  sessionRef.current = session;
+  const sessionRef = useMirrorRef(session);
 
   /** 재발급으로 갱신된 토큰. 복원 코드가 옛 토큰으로 덮지 않도록 참고한다. */
   const refreshedRef = useRef<{ accessToken: string; refreshToken: string } | null>(null);
