@@ -52,7 +52,7 @@ const SHOW_BUSINESS = false;
 export default function SettingsScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { settings, updateSettings, businessRegs, session, account, availableProfiles, switchProfile, logout } =
+  const { settings, updateSettings, businessRegs, session, account, availableProfiles, switchProfile, logout, gamification, setLevelUpNotification } =
     useAppStore();
   const regCount = Object.keys(businessRegs).length;
   const hasOwnerProfile = SHOW_BUSINESS && availableProfiles.includes('owner');
@@ -227,6 +227,25 @@ export default function SettingsScreen() {
           value={settings.notifPush}
           onChange={(v) => updateSettings({ notifPush: v })}
         />
+        {/*
+          레벨업 알림은 기기 설정이 아니라 **계정 설정**이다(서버가 보낼지 말지를 정한다).
+          그래서 다른 토글과 달리 updateSettings가 아니라 서버로 간다. 아직 레벨 정보를
+          못 받았으면 줄 자체를 감춘다 — 켜고 꺼도 아무 데도 안 가는 스위치가 되기 때문이다.
+        */}
+        {gamification && (
+          <ToggleRow
+            icon="trophy-outline"
+            label="레벨업 알림"
+            sub="경험치가 쌓여 레벨이 오르면 알려드려요"
+            value={gamification.levelUpNotificationEnabled}
+            onChange={(v) => {
+              void setLevelUpNotification(v).then((ok) => {
+                if (!ok) Alert.alert('알림 설정', '설정을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+              });
+            }}
+            last
+          />
+        )}
         {/*
           종류별 알림 토글(제보 반영·주변 새 시설·혜택)은 1.0에서 감춘다.
           서버가 알림을 종류로 나눠 보내지 않아서, 켜고 꺼도 실제로 오는 알림이 바뀌지 않는다.

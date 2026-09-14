@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
+import { LevelCard, EarnedBadges } from '@/components/level-card';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import {
   CONQUEROR_BADGES,
@@ -40,6 +41,9 @@ export default function StampsScreen() {
       <Stack.Screen options={{ title: '여권 도장첩', headerBackButtonDisplayMode: 'minimal'}} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.wrap}>
+          {/* 집사 레벨 — 도장만이 아니라 판별·리뷰·제보까지 합친 계정 전체의 진행도 */}
+          <LevelCard />
+
           {/* 요약 — 지금까지 무엇을 모았는지 한 줄로 */}
           <View style={[styles.summary, { backgroundColor: p.surface, borderColor: p.line }]}>
             <View style={styles.summaryCell}>
@@ -98,6 +102,10 @@ export default function StampsScreen() {
               {badges.next.badge.label}까지 {badges.next.remaining}개 지역 남았어요
             </Text>
           )}
+
+          {/* 서버가 주는 배지 — 지역 뱃지와 축이 다르다. 이쪽은 활동 경험치로 열린다 */}
+          <Text style={[styles.sectionTitle, { color: p.ink }]}>받은 배지</Text>
+          <EarnedBadges />
 
           {/* 지역별 진도 */}
           <Text style={[styles.sectionTitle, { color: p.ink }]}>지역별 진도</Text>

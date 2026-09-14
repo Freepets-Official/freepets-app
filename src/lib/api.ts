@@ -24,12 +24,16 @@ import type {
   CalendarEvent,
   CalEventType,
   CalRepeat,
+  Confidence,
+  ConfidenceSource,
   Requirement,
   Review,
   ReviewPetInfo,
   ReviewTag,
 } from '@/data/types';
 import { REVIEW_TAG_LABEL } from '@/data/types';
+import type { Gamification, TierAnimal, TierColor } from '@/data/level';
+import { MAX_LEVEL, TIER_ANIMAL_LABEL, TIER_COLOR_LABEL } from '@/data/level';
 
 import { API_URL, DEV_TOKEN } from './config';
 
@@ -525,7 +529,15 @@ export const petsApi = {
  * `userId`는 **아직 서버가 주지 않는다.** 백엔드가 넣기로 했고, 오면 그대로 쓰인다.
  * 선택 필드로 받아두면 서버만 배포해도 이미 나간 앱이 값을 집는다 — 앱을 다시 낼 필요가 없다.
  */
-type ServerAccount = { nickname: string; avatarUri: string | null; userId?: number };
+type ServerAccount = {
+  nickname: string;
+  avatarUri: string | null;
+  userId?: number;
+  /** 계정에 붙은 프로필. 매장을 하나라도 확정하면 'owner'가 생긴다 */
+  profiles?: string[];
+  /** 이 계정이 사업자 확인으로 확정한 시설 — 대시보드의 「내 매장」 목록 */
+  ownedFacilityIds?: number[];
+};
 
 export const accountApi = {
   /** 내 회원정보 조회. */
@@ -1729,4 +1741,134 @@ export const calendarApi = {
     request<unknown>(taken ? 'PUT' : 'DELETE', `/api/v1/calendar-events/${eventId}/med-log/${date}`, {
       auth: true,
     }),
+};
+
+// ─────────────────────────── 사업자(진위확인·내 매장 조건 확정) ───────────────────────────
+// POST /business/verify                       — 국세청 사업자등록정보 진위확인
+// POST /business/facilities/{id}/claim        — 내 매장의 출입 조건을 사업자 확인으로 확정
+//
+// claim은 세션이 아니라 **요청마다 사업자 정보를 다시 받는다.** 그래서 화면은 1단계에서
+// 확인한 번호·대표자명·개업일을 3단계까지 들고 있어야 한다. 번호 원본은 기기에 남기지 않는다.
+export type BusinessIdentity = {
+  /** 숫자 10자리 */
+  businessNumber: string;
+  representativeName: string;
+  /** YYYYMMDD 8자리 */
+  openingDate: string;
+};
+
+export type BusinessVerifyResult = {
+  valid: boolean;
+  /** 서버 상태 코드(계속사업자·휴업·폐업 등). 화면은 statusLabel을 쓴다 */
+  status: string;
+  statusLabel: string;
+};
+
+export type BusinessClaimInput = {
+  petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING';
+  maxWeight: number | null;
+  /** true면 "N kg 이하", false면 "N kg 미만" */
+  maxWeightInclusive: boolean;
+  requirements: Requirement[];
+  conditionRaw: string;
+};
+
+export type BusinessClaimResult = {
+  facilityId: number;
+  confidence: Confidence;
+  confidenceSource: ConfidenceSource;
+  confirmedAt: string;
+};
+
+export const businessApi = {
+  /** 진위확인. 유효하지 않아도 200으로 오고 `valid:false` + 상태 라벨(휴업·폐업 등)이 실린다. */
+  verify: async (id: BusinessIdentity): Promise<BusinessVerifyResult> => {
+    const r = await request<Partial<BusinessVerifyResult>>('POST', '/api/v1/business/verify', {
+      body: id,
+      auth: true,
+    });
+    return {
+      valid: r.valid === true,
+      status: r.status ?? '',
+      statusLabel: r.statusLabel ?? (r.valid ? '확인됨' : '확인되지 않음'),
+    };
+  },
+  /**
+   * 내 매장 조건 확정. 서버가 시설의 신뢰도를 `CONFIRMED / OWNER`로 올리고 확정 시각을 돌려준다.
+   * maxWeight는 제한이 없으면 아예 보내지 않는다 — 0을 보내면 "0kg까지"가 된다.
+   */
+  claim: async (facilityId: number, id: BusinessIdentity, input: BusinessClaimInput): Promise<BusinessClaimResult> => {
+    const body: Record<string, unknown> = {
+      ...id,
+      petAllowed: input.petAllowed,
+      maxWeightInclusive: input.maxWeightInclusive,
+      requirements: input.requirements,
+      conditionRaw: input.conditionRaw,
+    };
+    if (input.maxWeight !== null && input.maxWeight > 0) body.maxWeight = input.maxWeight;
+    const r = await request<Partial<BusinessClaimResult>>(
+      'POST',
+      `/api/v1/business/facilities/${facilityId}/claim`,
+      { body, auth: true },
+    );
+    return {
+      facilityId: r.facilityId ?? facilityId,
+      confidence: r.confidence ?? 'CONFIRMED',
+      confidenceSource: r.confidenceSource ?? 'OWNER',
+      confirmedAt: r.confirmedAt ?? new Date().toISOString(),
+    };
+  },
+};
+
+// ─────────────────────────── 게이미피케이션(집사 레벨·발바닥 티어) ───────────────────────────
+// GET   /me/gamification               — 레벨·누적 XP·발바닥 티어·받은 배지
+// PATCH /me/gamification/notification  — 레벨업 알림 on/off
+//
+// XP는 **계정 단위**다(판별·리뷰·제보·만족도·코스 공개/복사). 반려동물별로 나뉘지 않는다.
+// 레벨 곡선(`100 × L × (L−1) / 2`, 최대 70)과 티어 구성은 서버가 확정했다 — `data/level.ts` 참고.
+type ServerGamification = {
+  level?: number;
+  totalXp?: number;
+  xpToNextLevel?: number;
+  tierAnimal?: string;
+  tierColor?: string;
+  tierLabel?: string;
+  tierBadgeImageUrl?: string | null;
+  levelUpNotificationEnabled?: boolean;
+  badges?: { code?: string; label?: string; description?: string; earnedAt?: string | null }[];
+};
+
+export const gamificationApi = {
+  /** 내 레벨·티어·배지. 값이 빠져 있어도 화면이 깨지지 않게 여기서 기본값을 채운다. */
+  me: async (): Promise<Gamification> => {
+    const r = await request<ServerGamification>('GET', '/api/v1/me/gamification', { auth: true });
+    const animal = (r.tierAnimal ?? 'DOG') as TierAnimal;
+    const color = (r.tierColor ?? 'RED') as TierColor;
+    return {
+      level: Math.min(Math.max(Math.trunc(r.level ?? 1), 1), MAX_LEVEL),
+      totalXp: Math.max(r.totalXp ?? 0, 0),
+      xpToNextLevel: Math.max(r.xpToNextLevel ?? 0, 0),
+      tierAnimal: TIER_ANIMAL_LABEL[animal] ? animal : 'DOG',
+      tierColor: TIER_COLOR_LABEL[color] ? color : 'RED',
+      tierLabel: r.tierLabel ?? '',
+      // 빈 문자열이 오면 <Image>가 조용히 깨진다. 없는 것과 같게 만든다
+      tierBadgeImageUrl: r.tierBadgeImageUrl ? r.tierBadgeImageUrl : null,
+      levelUpNotificationEnabled: r.levelUpNotificationEnabled ?? true,
+      badges: (r.badges ?? []).map((b) => ({
+        code: b.code ?? '',
+        label: b.label ?? '배지',
+        description: b.description ?? '',
+        earnedAt: b.earnedAt ?? null,
+      })),
+    };
+  },
+  /** 레벨업 알림 on/off. 서버가 확정한 값을 돌려준다. */
+  setLevelUpNotification: async (enabled: boolean): Promise<boolean> => {
+    const r = await request<{ levelUpNotificationEnabled?: boolean }>(
+      'PATCH',
+      '/api/v1/me/gamification/notification',
+      { body: { levelUpNotificationEnabled: enabled }, auth: true },
+    );
+    return r.levelUpNotificationEnabled ?? enabled;
+  },
 };
