@@ -1863,6 +1863,15 @@ export const gamificationApi = {
   /** 내 레벨·티어·배지. 값이 빠져 있어도 화면이 깨지지 않게 여기서 기본값을 채운다. */
   me: async (): Promise<Gamification> => {
     const r = await request<ServerGamification>('GET', '/api/v1/me/gamification', { auth: true });
+    /**
+     * 경계에서 모양을 본다. 숫자 자리에 숫자가 아닌 값이 오면 `Math.trunc`가 NaN을 만들어
+     * 레벨이 "Lv.NaN"으로 그려지고, `badges`가 배열이 아니면 `.map`에서 터진다.
+     * 빠진 필드는 아래 기본값으로 받되, **틀린 모양**은 실패로 돌린다.
+     */
+    const num = (v: unknown) => v === undefined || v === null || (typeof v === 'number' && Number.isFinite(v));
+    if (!num(r.level) || !num(r.totalXp) || !num(r.xpToNextLevel) || (r.badges !== undefined && !Array.isArray(r.badges))) {
+      throw new ApiError('레벨 정보의 형식이 올바르지 않아요.', 'GAMIFICATION_SHAPE');
+    }
     const animal = (r.tierAnimal ?? 'DOG') as TierAnimal;
     const color = (r.tierColor ?? 'RED') as TierColor;
     return {

@@ -29,7 +29,7 @@ import { useAppStore } from '@/store/app-store';
  */
 export default function StampsScreen() {
   const p = usePalette();
-  const { stamps, stampRegions, reloadStampRegions, stampSaveFailed } = useAppStore();
+  const { stamps, stampRegions, reloadStampRegions, stampSaveFailed, gamification } = useAppStore();
 
   const progress = useMemo(() => groupBySido(stamps, stampRegions), [stamps, stampRegions]);
   const badges = useMemo(() => badgeState(stamps), [stamps]);
@@ -103,9 +103,14 @@ export default function StampsScreen() {
             </Text>
           )}
 
-          {/* 서버가 주는 배지 — 지역 뱃지와 축이 다르다. 이쪽은 활동 경험치로 열린다 */}
-          <Text style={[styles.sectionTitle, { color: p.ink }]}>받은 배지</Text>
-          <EarnedBadges />
+          {/* 서버가 주는 배지 — 지역 뱃지와 축이 다르다. 이쪽은 활동 경험치로 열린다.
+              아직 못 받았으면(조회 중·실패) 제목까지 감춘다 — 제목만 남은 빈 칸은 고장처럼 보인다 */}
+          {gamification && (
+            <>
+              <Text style={[styles.sectionTitle, { color: p.ink }]}>받은 배지</Text>
+              <EarnedBadges />
+            </>
+          )}
 
           {/* 지역별 진도 */}
           <Text style={[styles.sectionTitle, { color: p.ink }]}>지역별 진도</Text>
