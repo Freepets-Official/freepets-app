@@ -8,6 +8,7 @@ import { Platform, Pressable } from 'react-native';
 import { AppSplash } from '@/components/app-splash';
 import { BiometricGate } from '@/components/biometric-gate';
 import { CallConfirmSheet } from '@/components/call-confirm-sheet';
+import { GamificationToast } from '@/components/gamification-toast';
 import { PawTouches } from '@/components/paw-touches';
 import { AppThemeProvider, usePalette, useColorScheme } from '@/hooks/use-theme';
 import { FontScaleProvider } from '@/components/text';
@@ -304,6 +305,8 @@ function ThemedRoot() {
       {/* 전화 후 "확인하셨나요"는 앱 전체에서 한 곳에서만 묻는다 — 전화 버튼이 여러 화면에 있어도
           신뢰도 갱신 규칙이 갈리지 않게 하려는 것이다 */}
       <CallConfirmSheet />
+      {/* 레벨업·새 배지 — 어느 화면에 있든 위에서 잠깐 */}
+      <GamificationToast />
       {/* 다크에선 밝은 글씨의 상태바 */}
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       {!splashDone && <AppSplash onDone={() => setSplashDone(true)} />}

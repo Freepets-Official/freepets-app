@@ -46,6 +46,7 @@ import { useAppStore } from '@/store/app-store';
  * 낱개 시설이 "이 문"을 풀었다면, 코스는 "이 하루"를 푼다.
  */
 /** 코스 빌더 검색 반경. 하루 동선이라 한 도시를 덮을 만큼이면 된다. */
+/** 키워드 없이 둘러볼 때만 반경을 건다. 키워드가 있으면 반경을 안 보낸다 — 명세대로 생략하면 전국이다 */
 const PICK_RADIUS_M = 30_000;
 /** 위치를 못 받았을 때의 기준점(서울시청). 키워드로 전국을 찾을 수 있게 열어둔다. */
 const PICK_FALLBACK_CENTER: Coords = { latitude: 37.5665, longitude: 126.978 };
@@ -510,7 +511,7 @@ export default function CourseScreen() {
           latitude: pickCenter.latitude,
           longitude: pickCenter.longitude,
           keyword: pickQuery.trim() || undefined,
-          radiusM: PICK_RADIUS_M,
+          ...(pickQuery.trim() ? {} : { radiusM: PICK_RADIUS_M }),
           size: 30,
         });
         if (!active) return;

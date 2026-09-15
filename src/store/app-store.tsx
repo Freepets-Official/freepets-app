@@ -50,6 +50,7 @@ import type { Coords } from '@/lib/location';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, pawGradeOf, vaccinationDday } from '@/data/types';
 import type { Gamification } from '@/data/level';
+import { tierName } from '@/data/level';
 import { matchRegion, type Stamp } from '@/data/stamps';
 import type {
   CalendarEvent,
@@ -453,6 +454,9 @@ interface AppStore {
   gamification: Gamification | null;
   /** 레벨업 알림 on/off. 실패하면 false를 돌려주고 화면 값도 원래대로 되돌린다 */
   setLevelUpNotification: (enabled: boolean) => Promise<boolean>;
+  /** 방금 감지한 레벨업·새 배지. 토스트가 잠깐 보여주고 지운다 */
+  gamificationNews: { kind: 'level' | 'badge'; text: string } | null;
+  dismissGamificationNews: () => void;
 
   /** 시설 조회 — 서버 검색결과 캐시 우선, 없으면 목데이터 */
   facilityById: (id: number) => Facility | undefined;
@@ -1297,13 +1301,35 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   const notifPatchSeqRef = useRef(0);
   const notifConfirmedRef = useRef<boolean | null>(null);
+  /**
+   * 레벨업·새 배지를 앱 안에서 알린다.
+   *
+   * 서버는 배지 푸시를 안 보내고 레벨업 푸시는 꺼둘 수 있다. 조회 결과를 직전 값과 비교해
+   * 새로 생긴 것만 잠깐 띄운다. 첫 조회(직전 값 없음)는 알리지 않는다 — 앱을 켤 때마다
+   * "축하합니다"가 뜨면 아무 의미가 없다.
+   */
+  const [gamificationNews, setGamificationNews] = useState<{ kind: 'level' | 'badge'; text: string } | null>(null);
+  const dismissGamificationNews = useCallback(() => setGamificationNews(null), []);
+  const gamificationRef = useMirrorRef(gamification);
   const applyGamification = useCallback((g: Gamification) => {
+    const prev = gamificationRef.current;
+    if (prev) {
+      const newBadges = g.badges.filter((b) => !prev.badges.some((x) => x.code === b.code));
+      if (g.level > prev.level) {
+        setGamificationNews({ kind: 'level', text: `Lv.${g.level} 달성! ${tierName(g)} 발바닥을 받았어요` });
+      } else if (newBadges.length > 0) {
+        setGamificationNews({
+          kind: 'badge',
+          text: newBadges.length === 1 ? `새 배지 · ${newBadges[0].label}` : `새 배지 ${newBadges.length}개 · ${newBadges[0].label} 외`,
+        });
+      }
+    }
     const patching = notifPatchSeqRef.current > 0;
     if (!patching) notifConfirmedRef.current = g.levelUpNotificationEnabled;
-    setGamification((prev) =>
-      patching && prev ? { ...g, levelUpNotificationEnabled: prev.levelUpNotificationEnabled } : g,
+    setGamification((p) =>
+      patching && p ? { ...g, levelUpNotificationEnabled: p.levelUpNotificationEnabled } : g,
     );
-  }, []);
+  }, [gamificationRef]);
   useEffect(() => {
     if (!session.authed) return;
     let alive = true;
@@ -2593,6 +2619,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       topPlacesForPet,
       gamification,
       setLevelUpNotification,
+      gamificationNews,
+      dismissGamificationNews,
       facilityById,
       registerFacilities,
       loadFacility,
@@ -2683,6 +2711,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       topPlacesForPet,
       gamification,
       setLevelUpNotification,
+      gamificationNews,
+      dismissGamificationNews,
       facilityById,
       registerFacilities,
       loadFacility,

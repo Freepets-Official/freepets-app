@@ -9,6 +9,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { hasStamp } from '@/data/stamps';
 import { ON_SITE_RADIUS_M, distanceMeters, getCurrentLocation } from '@/lib/location';
 import { usePalette } from '@/hooks/use-theme';
+import { promptInAppReview } from '@/lib/app-review';
 import { useAppStore } from '@/store/app-store';
 
 /**
@@ -110,6 +111,9 @@ export function StampAction({
           ? `${made.sido} ${made.sigungu} 도장을 찍었어요! 현장에서 확인됐어요`
           : `${made.sido} ${made.sigungu} 도장을 찍었어요!`,
       );
+      // 도장을 찍은 직후가 앱에서 가장 기분 좋은 순간이다 — 애플이 권하는 "의미 있는 행동 뒤"
+      // 자동 호출. 띄울지는 OS가 정하고, 안 떠도 그만이다. 성공 문구가 먼저 보이게 잠깐 늦춘다
+      setTimeout(() => void promptInAppReview(), 1500);
     } catch {
       setMessage('도장을 찍지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
