@@ -48,7 +48,8 @@
         "expo-image-picker",
         {
           "photosPermission": "여권 도장 인증샷과 반려동물 사진을 등록하기 위해 사진 접근이 필요해요.",
-          "cameraPermission": "다녀온 곳에서 인증샷을 찍어 여권 도장을 남기기 위해 카메라를 사용해요."
+          "cameraPermission": "다녀온 곳에서 인증샷을 찍어 여권 도장을 남기기 위해 카메라를 사용해요.",
+          "microphonePermission": false
         }
       ],
       [
