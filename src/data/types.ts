@@ -630,6 +630,10 @@ export function eventOccursOn(e: CalendarEvent, target: string): boolean {
   const s = new Date(`${e.date}T00:00:00`);
   if (e.repeat === 'DAILY') return true;
   if (e.repeat === 'WEEKLY') return d.getDay() === s.getDay();
-  if (e.repeat === 'MONTHLY') return d.getDate() === s.getDate();
+  if (e.repeat === 'MONTHLY') {
+    // 31일 시작 일정은 30일까지인 달엔 말일에 걸린다 — 서버(calendar.md)와 같은 규칙
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    return d.getDate() === Math.min(s.getDate(), lastDay);
+  }
   return false;
 }
