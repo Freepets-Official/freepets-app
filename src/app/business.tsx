@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
 import { BusinessVerify } from '@/components/business-verify';
+import { CertificatePicker } from '@/components/certificate-picker';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { formatDistance } from '@/data/mock';
@@ -26,11 +27,13 @@ const REQUIREMENTS: Requirement[] = ['LEASH', 'CAGE', 'MUZZLE', 'VACCINATION', '
 export default function BusinessScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { claimFacility, businessRegOf, selectProfile, facilityById } = useAppStore();
+  const { claimFacility, selectProfile, facilityById } = useAppStore();
 
   /** 1단계에서 국세청이 확인한 사업자 정보. 3단계 확정 요청에 다시 실린다 */
   const [identity, setIdentity] = useState<BusinessIdentity | null>(null);
   const [bizMasked, setBizMasked] = useState('');
+  /** 사업자등록증 사진 — 운영자 승인의 근거. 없으면 신청 자체가 안 된다 */
+  const [certUri, setCertUri] = useState<string | null>(null);
 
   const [facilityId, setFacilityId] = useState<number | null>(null);
   // 인증이 끝나고 아직 매장을 안 골랐을 때만 검색을 돌린다 — 그 전엔 위치 권한을 묻지 않는다
@@ -73,6 +76,7 @@ export default function BusinessScreen() {
     if (w !== null && (Number.isNaN(w) || w <= 0)) {
       return setFormError('최대 허용 체중을 숫자로 입력해 주세요');
     }
+    if (!certUri) return setFormError('사업자등록증 사진을 올려 주세요. 운영자가 확인한 뒤 확정돼요');
     setFormError(null);
     setSubmitting(true);
     try {
@@ -86,7 +90,7 @@ export default function BusinessScreen() {
           requirements: petAllowed ? requirements : [],
           conditionRaw: petAllowed ? conditionRaw.trim() : '반려동물 동반이 불가능합니다.',
         },
-        bizMasked,
+        certUri,
       );
       setDone(true);
     } catch (e) {
@@ -102,44 +106,41 @@ export default function BusinessScreen() {
   };
 
   if (done && facility) {
-    const already = businessRegOf(facility.facilityId);
     return (
       <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
-        <Stack.Screen options={{ title: '사업자 등록', headerBackButtonDisplayMode: 'minimal'}} />
+        <Stack.Screen options={{ title: '사업자 등록', headerBackButtonDisplayMode: 'minimal' }} />
         <View style={styles.doneWrap}>
-          <View style={[styles.doneIcon, { backgroundColor: p.successSoft }]}>
-            <Ionicons name="shield-checkmark" size={34} color={p.success} />
+          <View style={[styles.doneIcon, { backgroundColor: p.accentSoft }]}>
+            <Ionicons name="hourglass" size={34} color={p.accent} />
           </View>
-          <Text style={[styles.doneTitle, { color: p.ink }]}>조건을 확정했어요</Text>
+          <Text style={[styles.doneTitle, { color: p.ink }]}>신청을 받았어요</Text>
           <Text style={[styles.doneBody, { color: p.muted }]}>
-            {facility.name}의 출입 조건이 사업자 확인으로 등록됐어요.{'\n'}
-            이제 손님에게 <Text style={{ fontWeight: '800', color: p.success }}>확정</Text> 정보로 보여집니다.
+            {facility.name}의 출입 조건 등록을 신청했어요.{'\n'}
+            운영자가 사업자등록증을 확인하면 <Text style={{ fontWeight: '800', color: p.ink }}>확정</Text> 정보로 바뀌어요.
+            그 전까지 손님 화면은 지금 그대로예요.
           </Text>
 
-          <View style={[styles.doneCard, CardShadow, { backgroundColor: p.card, borderColor: p.success }]}>
+          <View style={[styles.doneCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
             <View style={styles.doneCardHead}>
-              <ConfidenceBadge confidence="CONFIRMED" />
-              <Text style={[styles.doneCardSource, { color: p.muted }]}>
-                사업자 확인 · {already?.bizNoMasked}
-              </Text>
+              <ConfidenceBadge confidence="ESTIMATED" />
+              <Text style={[styles.doneCardSource, { color: p.muted }]}>검토 중 · {bizMasked}</Text>
             </View>
             <Text style={[styles.doneCondition, { color: p.ink }]}>
-              {already?.conditionRaw}
+              {petAllowed ? conditionRaw.trim() : '반려동물 동반이 불가능합니다.'}
             </Text>
           </View>
 
           <Text style={[styles.doneBody, { color: p.muted, marginTop: 2 }]}>
-            사업자 프로필이 생겼어요. 이제 대시보드에서 소개·혜택·통계를 관리할 수 있어요.
+            진행 상황은 사업자 대시보드의 「신청 현황」에서 볼 수 있어요.
           </Text>
 
           <Pressable
             onPress={() => {
-              // 등록 즉시 사업자 프로필로 전환해 대시보드로 진입 (docs/10 흐름)
               selectProfile('owner');
               router.replace('/owner-dashboard');
             }}
             style={({ pressed }) => [styles.doneBtn, { backgroundColor: pressed ? p.accentDark : p.accent }]}>
-            <Text style={[styles.doneBtnText, { color: p.onAccent }]}>내 매장 대시보드 열기</Text>
+            <Text style={[styles.doneBtnText, { color: p.onAccent }]}>신청 현황 보기</Text>
           </Pressable>
           <Pressable
             onPress={() =>
@@ -366,6 +367,14 @@ export default function BusinessScreen() {
                 </>
               )}
 
+              <View style={styles.field}>
+                <Text style={[styles.fieldLabel, { color: p.ink }]}>사업자등록증 사진</Text>
+                <CertificatePicker uri={certUri} onChange={setCertUri} />
+                <Text style={[styles.hint, { color: p.muted }]}>
+                  운영자가 등록증과 매장이 같은지 확인한 뒤 확정돼요. 사진은 심사에만 쓰고 공개되지 않아요.
+                </Text>
+              </View>
+
               {formError && <Text style={[styles.err, { color: p.danger }]}>{formError}</Text>}
 
               <Pressable
@@ -381,7 +390,7 @@ export default function BusinessScreen() {
                   <Ionicons name="shield-checkmark" size={16} color={p.onAccent} />
                 )}
                 <Text style={[styles.actionBtnText, { color: p.onAccent }]}>
-                  {submitting ? '서버에 확정하는 중…' : '조건 확정하기'}
+                  {submitting ? '신청을 보내는 중…' : '등록 신청하기'}
                 </Text>
               </Pressable>
             </Animated.View>

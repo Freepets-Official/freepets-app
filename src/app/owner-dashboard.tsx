@@ -23,6 +23,7 @@ export default function OwnerDashboard() {
   const {
     businessRegs,
     account,
+    myClaims,
     facilityById,
     loadFacility,
     reviewsOf,
@@ -82,11 +83,43 @@ export default function OwnerDashboard() {
             </Pressable>
           </View>
 
+          {/* 신청 현황 — 승인 전 매장은 아래 목록에 없다. 여기서 "검토 중"을 봐야 사라진 줄 모른다 */}
+          {myClaims.filter((c) => c.status !== 'APPROVED').length > 0 && (
+            <View style={[styles.claims, { backgroundColor: p.surface, borderColor: p.line }]}>
+              <Text style={[styles.claimsTitle, { color: p.ink }]}>신청 현황</Text>
+              {myClaims
+                .filter((c) => c.status !== 'APPROVED')
+                .map((c) => {
+                  const meta =
+                    c.status === 'PENDING'
+                      ? { label: '검토 중', color: p.accent, icon: 'hourglass-outline' as const }
+                      : c.status === 'REJECTED'
+                        ? { label: '반려', color: p.danger, icon: 'close-circle-outline' as const }
+                        : { label: '승인 해제', color: p.muted, icon: 'remove-circle-outline' as const };
+                  return (
+                    <View key={c.claimId} style={styles.claimRow}>
+                      <Ionicons name={meta.icon} size={16} color={meta.color} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.claimName, { color: p.ink }]} numberOfLines={1}>{c.facilityName}</Text>
+                        <Text style={[styles.claimMeta, { color: p.muted }]} numberOfLines={1}>
+                          {c.appliedAt ? `${c.appliedAt.slice(0, 10)} 신청` : ''}
+                          {c.status === 'REJECTED' ? ' · 등록증과 매장 정보를 확인해 다시 신청해 주세요' : ''}
+                        </Text>
+                      </View>
+                      <Text style={[styles.claimStatus, { color: meta.color }]}>{meta.label}</Text>
+                    </View>
+                  );
+                })}
+            </View>
+          )}
+
           {owned.length === 0 ? (
             <View style={[styles.empty, { backgroundColor: p.surface, borderColor: p.line }]}>
               <Ionicons name="storefront-outline" size={30} color={p.muted} />
               <Text style={[styles.emptyText, { color: p.muted }]}>
-                아직 등록한 매장이 없어요.{'\n'}사업자등록번호를 인증하고 내 매장을 등록해보세요.
+                {myClaims.some((c) => c.status === 'PENDING')
+                  ? '운영자가 사업자등록증을 확인하면 여기에 매장이 나와요.'
+                  : `아직 등록한 매장이 없어요.${'\n'}사업자등록증을 준비해 내 매장을 등록해보세요.`}
               </Text>
               <Pressable
                 onPress={() => router.push('/business')}
@@ -273,6 +306,12 @@ function MenuRow({
 }
 
 const styles = StyleSheet.create({
+  claims: { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: 10 },
+  claimsTitle: { fontSize: 14, fontWeight: '800' },
+  claimRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  claimName: { fontSize: 14, fontWeight: '700' },
+  claimMeta: { fontSize: 11.5, marginTop: 1 },
+  claimStatus: { fontSize: 12, fontWeight: '800' },
   safe: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg, paddingBottom: Spacing.xxl },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.lg },

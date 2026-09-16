@@ -13,3 +13,24 @@ export function notify(title: string, message?: string): void {
   }
   Alert.alert(title, message);
 }
+
+/**
+ * 한 줄 입력 — 코스 이름 바꾸기 같은 가벼운 편집. iOS는 `Alert.prompt`, 웹은 `window.prompt`.
+ * Android는 RN에 prompt가 없어 null을 돌려준다(공모전 범위 밖).
+ */
+export function promptText(title: string, message: string, initial = ''): Promise<string | null> {
+  if (Platform.OS === 'web') return Promise.resolve(window.prompt(`${title}\n\n${message}`, initial));
+  if (Platform.OS !== 'ios') return Promise.resolve(null);
+  return new Promise((resolve) => {
+    Alert.prompt(
+      title,
+      message,
+      [
+        { text: '취소', style: 'cancel', onPress: () => resolve(null) },
+        { text: '저장', onPress: (v?: string) => resolve(v ?? null) },
+      ],
+      'plain-text',
+      initial,
+    );
+  });
+}

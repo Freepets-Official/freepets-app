@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
 import { BusinessVerify } from '@/components/business-verify';
+import { CertificatePicker } from '@/components/certificate-picker';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { formatDistance } from '@/data/mock';
@@ -43,6 +44,7 @@ export default function RestaurantScreen() {
    */
   const [identity, setIdentity] = useState<BusinessIdentity | null>(null);
   const [bizMasked, setBizMasked] = useState('');
+  const [certUri, setCertUri] = useState<string | null>(null);
   const [facilityId, setFacilityId] = useState<number | null>(null);
   const [decision, setDecision] = useState<Partial<DecisionAnswers>>({});
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
@@ -63,6 +65,10 @@ export default function RestaurantScreen() {
 
   const complete = async () => {
     if (!facility || !identity || submitting) return;
+    if (!certUri) {
+      setSubmitError('사업자등록증 사진을 올려 주세요. 운영자가 확인한 뒤 확정돼요.');
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -78,7 +84,7 @@ export default function RestaurantScreen() {
           conditionRaw:
             '반려동물 동반 영업장 · 개·고양이 동반 가능(예방접종 필수) · 목줄 착용 · 조리공간 출입 불가. 예방접종은 반갑꼬리 출입증으로 확인할 수 있어요.',
         },
-        bizMasked,
+        certUri,
       );
       setStep('done');
     } catch (e) {
@@ -352,10 +358,16 @@ export default function RestaurantScreen() {
                     ※ 요건·신고 방법은 지자체별로 다를 수 있어요. 최종 기준과 신고는 관할 구청에서 확인하세요.
                   </Text>
 
+                  <Text style={[styles.blockLabel, { color: p.ink }]}>사업자등록증 사진</Text>
+                  <CertificatePicker uri={certUri} onChange={setCertUri} />
+                  <Text style={[styles.hint, { color: p.muted }]}>
+                    운영자가 등록증과 식당이 같은지 확인한 뒤 확정돼요. 사진은 심사에만 쓰고 공개되지 않아요.
+                  </Text>
+
                   {submitError && <Text style={[styles.hint, { color: p.danger }]}>{submitError}</Text>}
                   <PrimaryBtn
                     p={p}
-                    label={submitting ? '서버에 등록하는 중…' : '신고를 마쳤어요 · 우리 식당 등록'}
+                    label={submitting ? '신청을 보내는 중…' : '신고를 마쳤어요 · 등록 신청'}
                     onPress={() => void complete()}
                     disabled={submitting}
                   />
@@ -370,7 +382,7 @@ export default function RestaurantScreen() {
               <View style={[styles.doneIcon, { backgroundColor: p.successSoft }]}>
                 <Ionicons name="restaurant" size={32} color={p.success} />
               </View>
-              <Text style={[styles.doneTitle, { color: p.ink }]}>동반 음식점이 됐어요</Text>
+              <Text style={[styles.doneTitle, { color: p.ink }]}>등록 신청을 받았어요</Text>
               <Text style={[styles.doneBody, { color: p.muted }]}>
                 {facility.name}이(가) 반갑꼬리에 <Text style={{ fontWeight: '800', color: p.success }}>반려동물 동반 가능</Text>{' '}
                 음식점으로 등록됐어요. 손님은 앱에서 <Text style={{ fontWeight: '800', color: p.ink }}>확정 정보</Text>로 보게 되고,
