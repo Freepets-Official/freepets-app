@@ -1,0 +1,143 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
+import { Pressable, StyleSheet, View } from 'react-native';
+
+import { Text } from '@/components/text';
+import { Radius, Spacing } from '@/constants/theme';
+import { BADGE_DOMAINS, BADGE_TIERS, parseBadgeCode } from '@/data/badges';
+import { XP_RULES } from '@/data/level';
+import { usePalette } from '@/hooks/use-theme';
+import { useAppStore } from '@/store/app-store';
+
+/**
+ * 배지 벽 — 도메인마다 6단계를 한 줄로, 받은 것은 색을 켜고 못 받은 것은 흐리게.
+ *
+ * 다음 목표가 보여야 다음 행동을 한다. 서버가 누적 횟수를 주지 않아 "몇 번 더"는 못 적고,
+ * 다음 단계의 기준 횟수만 적는다. 서버가 모르는 접두사를 새로 보내면 "그 외" 줄에 모은다.
+ */
+export function BadgeWall() {
+  const p = usePalette();
+  const { gamification } = useAppStore();
+  if (!gamification) return null;
+
+  const earned = new Map<string, string>(); // code → earnedAt
+  for (const b of gamification.badges) earned.set(b.code, b.earnedAt ?? '');
+  const known = new Set(BADGE_DOMAINS.map((d) => d.prefix));
+  const extras = gamification.badges.filter((b) => {
+    const parsed = parseBadgeCode(b.code);
+    return !parsed || !known.has(parsed.prefix);
+  });
+
+  return (
+    <View style={styles.wall}>
+      {BADGE_DOMAINS.map((d) => {
+        const got = BADGE_TIERS.filter((t) => earned.has(`${d.prefix}_${t.tier}`));
+        const next = BADGE_TIERS.find((t) => !earned.has(`${d.prefix}_${t.tier}`));
+        return (
+          <View key={d.prefix} style={[styles.row, { backgroundColor: p.card, borderColor: p.line }]}>
+            <View style={styles.rowHead}>
+              <Ionicons name={d.icon as never} size={15} color={got.length ? p.accent : p.muted} />
+              <Text style={[styles.rowTitle, { color: p.ink }]}>{d.label}</Text>
+              <Text style={[styles.rowCount, { color: p.muted }]}>
+                {got.length}/{BADGE_TIERS.length}
+              </Text>
+            </View>
+            <View style={styles.tiers}>
+              {BADGE_TIERS.map((t) => {
+                const on = earned.has(`${d.prefix}_${t.tier}`);
+                return (
+                  <View key={t.tier} style={styles.tier}>
+                    <View
+                      style={[
+                        styles.gem,
+                        on
+                          ? { backgroundColor: t.color, borderColor: t.color }
+                          : { backgroundColor: p.surface, borderColor: p.line },
+                      ]}>
+                      <Ionicons name={on ? 'ribbon' : 'lock-closed-outline'} size={13} color={on ? '#FFFFFF' : p.muted} />
+                    </View>
+                    <Text style={[styles.tierLabel, { color: on ? p.ink : p.muted }]}>{t.label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+            <Text style={[styles.hint, { color: p.muted }]} numberOfLines={1}>
+              {next ? `다음 · ${next.label} — ${next.threshold}${d.unit} · ${d.how}` : '전부 모았어요!'}
+            </Text>
+          </View>
+        );
+      })}
+      {extras.length > 0 && (
+        <View style={[styles.row, { backgroundColor: p.card, borderColor: p.line }]}>
+          <View style={styles.rowHead}>
+            <Ionicons name="sparkles" size={15} color={p.accent} />
+            <Text style={[styles.rowTitle, { color: p.ink }]}>그 외</Text>
+          </View>
+          {extras.map((b) => (
+            <Text key={b.code} style={[styles.hint, { color: p.ink }]}>
+              {b.label}
+              {b.description ? ` · ${b.description}` : ''}
+            </Text>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/**
+ * 경험치 얻는 법 — "레벨이 왜 오르는지" 퀘스트처럼.
+ *
+ * 서버는 XP를 조용히 지급하고 응답에 표시도 없다. 규칙표를 보여주지 않으면 사용자는 레벨이
+ * 어떻게 오르는지 모른다. 하루 상한까지 적어야 "왜 오늘은 안 오르지"가 설명된다.
+ * 오늘 몇 번 했는지는 서버가 안 알려줘 적지 않는다.
+ */
+export function QuestList() {
+  const p = usePalette();
+  const router = useRouter();
+  return (
+    <View style={styles.quests}>
+      {XP_RULES.map((q) => (
+        <Pressable
+          key={q.title}
+          onPress={() => router.push(q.route as never)}
+          style={({ pressed }) => [
+            styles.quest,
+            { backgroundColor: pressed ? p.surface : p.card, borderColor: p.line },
+          ]}>
+          <View style={[styles.questXp, { backgroundColor: p.accentSoft }]}>
+            <Text style={[styles.questXpText, { color: p.accent }]}>+{q.xp}</Text>
+          </View>
+          <View style={styles.questBody}>
+            <Text style={[styles.questTitle, { color: p.ink }]}>{q.title}</Text>
+            <Text style={[styles.questSub, { color: p.muted }]} numberOfLines={1}>
+              {q.cap ? `하루 ${q.cap}회까지` : '횟수 제한 없음'}
+              {q.note ? ` · ${q.note}` : ''}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={15} color={p.muted} />
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wall: { gap: 8 },
+  row: { borderWidth: 1, borderRadius: Radius.md, padding: 12, gap: 8 },
+  rowHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  rowTitle: { fontSize: 14, fontWeight: '800' },
+  rowCount: { fontSize: 11.5, marginLeft: 'auto', fontVariant: ['tabular-nums'] },
+  tiers: { flexDirection: 'row', justifyContent: 'space-between' },
+  tier: { alignItems: 'center', gap: 3, width: 44 },
+  gem: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  tierLabel: { fontSize: 10.5, fontWeight: '700' },
+  hint: { fontSize: 11.5, lineHeight: 16 },
+  quests: { gap: 8 },
+  quest: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 10 },
+  questXp: { borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 3, minWidth: 44, alignItems: 'center' },
+  questXpText: { fontSize: 12.5, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  questBody: { flex: 1 },
+  questTitle: { fontSize: 13.5, fontWeight: '700' },
+  questSub: { fontSize: 11.5, marginTop: 1 },
+});

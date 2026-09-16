@@ -18,20 +18,27 @@ const TAGS = Object.keys(REVIEW_TAG_LABEL) as ReviewTag[];
 export default function ReviewWriteScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { pets, checks, addReview, facilityById } = useAppStore();
+  const { id, reviewId: reviewIdParam } = useLocalSearchParams<{ id: string; reviewId?: string }>();
+  const { pets, checks, addReview, updateReview, facilityById, reviewDataOf } = useAppStore();
 
   const facilityId = Number(id);
   const facility = facilityById(facilityId);
+  /**
+   * 수정 모드 — `reviewId`가 오면 시설 리뷰 목록에서 그 글을 찾아 폼을 채운다.
+   * 별점 하나 고치려고 지우고 다시 쓰는 일이 없게. 수정은 PUT으로 가고 경험치는 다시 안 준다.
+   */
+  const editing = reviewIdParam
+    ? reviewDataOf(facilityId)?.reviews.find((r) => String(r.reviewId) === reviewIdParam)
+    : undefined;
   const lastCheck = checks.find((c) => c.facilityId === facilityId);
   // 판별했던 아이들을 기본 선택 — 없으면 첫 아이
   const defaultPetIds = lastCheck?.petIds ?? (pets[0] ? [pets[0].petId] : []);
 
-  const [space, setSpace] = useState(0);
-  const [staff, setStaff] = useState(0);
-  const [amenity, setAmenity] = useState(0);
-  const [tags, setTags] = useState<ReviewTag[]>([]);
-  const [content, setContent] = useState('');
+  const [space, setSpace] = useState(editing?.ratingSpace ?? 0);
+  const [staff, setStaff] = useState(editing?.ratingStaff ?? 0);
+  const [amenity, setAmenity] = useState(editing?.ratingAmenity ?? 0);
+  const [tags, setTags] = useState<ReviewTag[]>(editing?.tags ?? []);
+  const [content, setContent] = useState(editing?.content ?? '');
   const [petIds, setPetIds] = useState<number[]>(defaultPetIds);
   /**
    * 반려동물 품종·몸무게 공개는 **기본 꺼짐**이다.
@@ -40,7 +47,7 @@ export default function ReviewWriteScreen() {
    * 켜져 있었다. 스위치를 건드리지 않고 제출하면 본 적 없는 정보가 공개되므로,
    * 문서와 동작이 어긋날 뿐 아니라 옵트인이라고 부를 수도 없다.
    */
-  const [showPetInfo, setShowPetInfo] = useState(false);
+  const [showPetInfo, setShowPetInfo] = useState(editing ? editing.pets.length > 0 : false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -72,7 +79,7 @@ export default function ReviewWriteScreen() {
     setError(null);
     setSubmitting(true);
     try {
-      await addReview({
+      const input = {
         facilityId,
         petIds,
         showPetInfo,
@@ -81,7 +88,9 @@ export default function ReviewWriteScreen() {
         ratingAmenity: amenity,
         content: content.trim() || null,
         tags,
-      });
+      };
+      if (editing) await updateReview(editing.reviewId, input);
+      else await addReview(input);
       haptic.success();
       router.back();
     } catch (e) {
@@ -94,7 +103,7 @@ export default function ReviewWriteScreen() {
 
   return (
     <Screen hasNavHeader>
-      <Stack.Screen options={{ title: '리뷰 쓰기', headerBackButtonDisplayMode: 'minimal'}} />
+      <Stack.Screen options={{ title: editing ? '리뷰 수정' : '리뷰 쓰기', headerBackButtonDisplayMode: 'minimal' }} />
 
       <View style={styles.head}>
         <Text style={[styles.eyebrow, { color: p.accent }]}>방문 리뷰</Text>
