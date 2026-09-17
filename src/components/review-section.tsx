@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, View } from 'react-native';
 
@@ -15,6 +16,7 @@ import {
   type Review,
 } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
+import { confirmDialog } from '@/lib/notify';
 import {
   REVIEW_REPORT_REASON_LABEL,
   useAppStore,
@@ -46,7 +48,8 @@ export function ReviewSection({
   onWrite: () => void;
 }) {
   const p = usePalette();
-  const { reportedReviewIds, reportReview, isMyReview, removeReview } = useAppStore();
+  const router = useRouter();
+  const { reportedReviewIds, reportReview, isMyReview, removeReview, markHelpful } = useAppStore();
   const [actionError, setActionError] = useState<string | null>(null);
   const [reportTarget, setReportTarget] = useState<Review | null>(null);
   const [detailTarget, setDetailTarget] = useState<Review | null>(null);
@@ -218,31 +221,63 @@ export function ReviewSection({
             <View style={styles.reviewFoot}>
               <Text style={[styles.visited, { color: p.muted }]}>{r.visitedAt} 방문</Text>
               {isMyReview(r) ? (
-                // 내 리뷰 — 신고 대신 삭제
-                <Pressable
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    setActionError(null);
-                    void removeReview(r.reviewId, facilityId).catch((err) =>
-                      setActionError(err instanceof Error ? err.message : '리뷰를 삭제하지 못했어요'),
-                    );
-                  }}
-                  hitSlop={8}>
-                  <Text style={[styles.reportLink, { color: p.danger }]}>삭제</Text>
-                </Pressable>
+                // 내 리뷰 — 신고 대신 수정·삭제. 삭제는 되돌릴 수 없어 한 번 묻는다
+                <View style={styles.myActions}>
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      router.push({ pathname: '/review/[id]', params: { id: String(facilityId), reviewId: String(r.reviewId) } });
+                    }}
+                    hitSlop={8}>
+                    <Text style={[styles.reportLink, { color: p.accent }]}>수정</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      void confirmDialog('리뷰를 삭제할까요?', '삭제한 리뷰는 되돌릴 수 없어요. 별점만 고치려면 「수정」을 눌러 주세요.').then((ok) => {
+                        if (!ok) return;
+                        setActionError(null);
+                        void removeReview(r.reviewId, facilityId).catch((err) =>
+                          setActionError(err instanceof Error ? err.message : '리뷰를 삭제하지 못했어요'),
+                        );
+                      });
+                    }}
+                    hitSlop={8}>
+                    <Text style={[styles.reportLink, { color: p.danger }]}>삭제</Text>
+                  </Pressable>
+                </View>
               ) : reported ? (
                 <Text style={[styles.reportedMark, { color: p.warn }]}>
                   신고 접수 · 등급 산정 제외
                 </Text>
               ) : (
-                <Pressable
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    setReportTarget(r);
-                  }}
-                  hitSlop={8}>
-                  <Text style={[styles.reportLink, { color: p.muted }]}>신고</Text>
-                </Pressable>
+                <View style={styles.myActions}>
+                  {/* 도움됐어요 — 작성자의 '구원자' 배지가 이걸로 쌓인다. 취소 API가 없어 누른 뒤엔 잠근다 */}
+                  <Pressable
+                    disabled={r.helpfulByMe === true}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setActionError(null);
+                      void markHelpful(r.reviewId, facilityId).catch((err) =>
+                        setActionError(err instanceof Error ? err.message : '도움됐어요를 남기지 못했어요'),
+                      );
+                    }}
+                    hitSlop={8}
+                    style={styles.helpful}>
+                    <Ionicons name={r.helpfulByMe ? 'heart' : 'heart-outline'} size={13} color={r.helpfulByMe ? p.accent : p.muted} />
+                    <Text style={[styles.helpfulText, { color: r.helpfulByMe ? p.accent : p.muted }]}>
+                      도움됐어요{typeof r.helpfulCount === 'number' && r.helpfulCount > 0 ? ` ${r.helpfulCount}` : ''}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setReportTarget(r);
+                    }}
+                    hitSlop={8}>
+                    <Text style={[styles.reportLink, { color: p.muted }]}>신고</Text>
+                  </Pressable>
+                </View>
               )}
             </View>
           </Pressable>
@@ -407,6 +442,9 @@ const styles = StyleSheet.create({
   },
   visited: { fontSize: 11 },
   reportLink: { fontSize: 11, fontWeight: '700', textDecorationLine: 'underline' },
+  myActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  helpful: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  helpfulText: { fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] },
   actionError: { fontSize: 12.5, lineHeight: 18, fontWeight: '600', paddingHorizontal: 2 },
   reportedMark: { fontSize: 11, fontWeight: '700' },
   backdrop: {

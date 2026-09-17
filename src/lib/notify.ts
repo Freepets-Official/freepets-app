@@ -13,3 +13,22 @@ export function notify(title: string, message?: string): void {
   }
   Alert.alert(title, message);
 }
+
+/**
+ * 되돌릴 수 없는 일 앞의 확인 — 삭제 보험. 취소가 기본이고, 확인 버튼만 빨갛다.
+ * 웹은 `window.confirm`(Alert 버튼이 웹에선 안 뜬다).
+ */
+export function confirmDialog(title: string, message: string, confirmLabel = '삭제'): Promise<boolean> {
+  if (Platform.OS === 'web') return Promise.resolve(window.confirm(`${title}\n\n${message}`));
+  return new Promise((resolve) => {
+    Alert.alert(
+      title,
+      message,
+      [
+        { text: '취소', style: 'cancel', onPress: () => resolve(false) },
+        { text: confirmLabel, style: 'destructive', onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    );
+  });
+}

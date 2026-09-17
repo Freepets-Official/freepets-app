@@ -123,3 +123,16 @@ export function levelProgress(g: Gamification) {
     maxed,
   };
 }
+
+/**
+ * 경험치 규칙 — 서버(`api-specs/gamification.md`)가 정한 값의 사본. 화면의 「경험치 얻는 법」이 쓴다.
+ * 서버가 바꾸면 여기도 바꿔야 한다. 앱이 계산에 쓰지는 않는다(지급은 서버가 한다).
+ */
+export const XP_RULES: { title: string; xp: number; cap: number | null; note?: string; route: string }[] = [
+  { title: 'AI 판별 요청하기', xp: 5, cap: 10, route: '/(tabs)/explore' },
+  { title: '다녀온 시설에 리뷰 쓰기', xp: 20, cap: null, note: '시설당 1개', route: '/(tabs)/explore' },
+  { title: '현장 거부 제보하기', xp: 15, cap: 5, route: '/(tabs)/explore' },
+  { title: '아이 만족도 남기기', xp: 10, cap: 5, note: '시설·아이당 처음 1회', route: '/(tabs)/explore' },
+  { title: '내 코스 공개하기', xp: 20, cap: 5, note: '+ 스톱 수 × 5, 코스당 1회', route: '/course' },
+  { title: '내 공유 코스가 담기면', xp: 15, cap: 10, note: '담은 사람이 아니라 나에게', route: '/course' },
+];

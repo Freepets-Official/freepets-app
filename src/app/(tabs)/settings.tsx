@@ -34,7 +34,8 @@ const THEME_MODE_LABEL: Record<ThemeMode, string> = { light: '라이트', dark: 
  * 있지도 않은 과거 업데이트 이력이 되고 「정기 서버 점검」은 하지도 않는 점검이다.
  * 서버 공지 API가 붙는 다음 업데이트에 되살린다 — 화면과 라우트는 그대로 둔다.
  */
-const SHOW_NOTICES = false;
+/** 공지 API(`GET /notices`)가 붙었다. 서버 배포 전이라도 화면이 실패를 스스로 말하므로 켜 둔다 */
+const SHOW_NOTICES = true;
 /**
  * 「앱 평가하기」는 **출시가 확인된 뒤** 켠다. 그 전에는 스토어 페이지가 404라 심사자가
  * 누르면 깨진 링크를 본다. 1.0 승인·출시가 보이면 true로 바꿔 1.1에 싣는다.

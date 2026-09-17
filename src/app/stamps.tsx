@@ -6,7 +6,8 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
-import { LevelCard, EarnedBadges } from '@/components/level-card';
+import { LevelCard } from '@/components/level-card';
+import { BadgeWall, QuestList } from '@/components/badge-wall';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import {
   CONQUEROR_BADGES,
@@ -43,6 +44,12 @@ export default function StampsScreen() {
         <View style={styles.wrap}>
           {/* 집사 레벨 — 도장만이 아니라 판별·리뷰·제보까지 합친 계정 전체의 진행도 */}
           <LevelCard />
+          {gamification && (
+            <>
+              <Text style={[styles.sectionTitle, { color: p.ink }]}>경험치 얻는 법</Text>
+              <QuestList />
+            </>
+          )}
 
           {/* 요약 — 지금까지 무엇을 모았는지 한 줄로 */}
           <View style={[styles.summary, { backgroundColor: p.surface, borderColor: p.line }]}>
@@ -107,8 +114,8 @@ export default function StampsScreen() {
               아직 못 받았으면(조회 중·실패) 제목까지 감춘다 — 제목만 남은 빈 칸은 고장처럼 보인다 */}
           {gamification && (
             <>
-              <Text style={[styles.sectionTitle, { color: p.ink }]}>받은 배지</Text>
-              <EarnedBadges />
+              <Text style={[styles.sectionTitle, { color: p.ink }]}>행동 배지 · {gamification.badges.length}/42</Text>
+              <BadgeWall />
             </>
           )}
 
