@@ -252,13 +252,12 @@ export function ReviewSection({
                 </Text>
               ) : (
                 <View style={styles.myActions}>
-                  {/* 도움됐어요 — 작성자의 '구원자' 배지가 이걸로 쌓인다. 취소 API가 없어 누른 뒤엔 잠근다 */}
+                  {/* 도움됐어요 — 작성자의 '구원자' 배지가 이걸로 쌓인다. 다시 누르면 취소 */}
                   <Pressable
-                    disabled={r.helpfulByMe === true}
                     onPress={(e) => {
                       e.stopPropagation();
                       setActionError(null);
-                      void markHelpful(r.reviewId, facilityId).catch((err) =>
+                      void markHelpful(r.reviewId, facilityId, r.helpfulByMe !== true).catch((err) =>
                         setActionError(err instanceof Error ? err.message : '도움됐어요를 남기지 못했어요'),
                       );
                     }}

@@ -30,12 +30,17 @@ import type {
   Review,
   ReviewPetInfo,
   ReviewTag,
+  FacilityBenefit,
+  OwnerAmenity,
+  OwnerProfileView,
 } from '@/data/types';
-import { REVIEW_TAG_LABEL } from '@/data/types';
+import { OWNER_AMENITY_LABEL, REVIEW_TAG_LABEL } from '@/data/types';
 import type { Gamification, TierAnimal, TierColor } from '@/data/level';
 import { MAX_LEVEL, TIER_ANIMAL_LABEL, TIER_COLOR_LABEL } from '@/data/level';
 
 import { API_URL, DEV_TOKEN } from './config';
+
+export type { OwnerAmenity } from '@/data/types';
 
 /**
  * 백엔드 API 클라이언트.
@@ -690,6 +695,7 @@ type ServerFacility = {
   distanceM: number;
   petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING';
   maxWeight: number | null;
+  maxWeightInclusive?: boolean | null;
   requirements: string[];
   petScore: number | null;
   rating: string | null;
@@ -731,6 +737,7 @@ function toFacility(s: ServerFacility): Facility {
     petAllowed: s.petAllowed === 'ALLOWED' ? true : s.petAllowed === 'DENIED' ? false : null,
     petConditionRaw: null, // 검색 응답엔 원문이 없다(상세 API 나오면 채움)
     maxWeight: s.maxWeight,
+    maxWeightInclusive: s.maxWeightInclusive ?? null,
     requirements: (s.requirements ?? []).filter((r): r is Requirement => (KNOWN_REQS as string[]).includes(r)),
     sido: '',
     sigungu: '',
@@ -759,9 +766,29 @@ type ServerFacilityDetail = {
   /** 서버가 실제로 내려준다(2026-09-12 명세). 사업자 확정·거부 제보 하향이 여기 실린다 */
   confidence?: string | null;
   confidenceSource?: string | null;
+  maxWeightInclusive?: boolean | null;
   imageUrl: string | null;
   thumbnailUrl: string | null;
+  /** 사장님 소개·혜택 — 아직 서버가 안 준다(백엔드 요청 중). 오면 그대로 손님 화면에 그린다 */
+  ownerProfile?: { introduction?: string | null; amenityTags?: string[] | null } | null;
+  benefits?: { benefitId: number; title: string; description?: string | null }[] | null;
 };
+
+/** 서버가 모르는 태그 값을 보내도 라벨 조회에서 터지지 않게 아는 값만 남긴다 */
+export function toOwnerAmenities(tags: (string | null | undefined)[] | null | undefined): OwnerAmenity[] {
+  return (tags ?? []).filter((t): t is OwnerAmenity => typeof t === 'string' && t in OWNER_AMENITY_LABEL);
+}
+
+function toOwnerProfileView(p: ServerFacilityDetail['ownerProfile']): OwnerProfileView | null | undefined {
+  if (p === undefined) return undefined; // 필드 자체가 없으면 '모른다' — 캐시에 있던 값을 지우지 않는다
+  if (p === null) return null;
+  return { introduction: p.introduction ?? null, amenityTags: toOwnerAmenities(p.amenityTags) };
+}
+
+function toFacilityBenefits(b: ServerFacilityDetail['benefits']): FacilityBenefit[] | undefined {
+  if (b == null) return undefined;
+  return b.map((x) => ({ benefitId: x.benefitId, title: x.title, description: x.description ?? null }));
+}
 
 /**
  * 상세 API가 채울 수 있는 필드만. 나머지(maxWeight 등)는 검색 값을 유지해야 하므로 타입으로 못 박는다.
@@ -781,7 +808,13 @@ export type FacilityDetail = Pick<
   | 'confidence'
   | 'confidenceSource'
   | 'confirmedAt'
-> & { distanceM: number | null; address: string | null };
+> & {
+  distanceM: number | null;
+  address: string | null;
+  maxWeightInclusive?: boolean | null;
+  ownerProfile?: OwnerProfileView | null;
+  benefits?: FacilityBenefit[];
+};
 
 const CONFIDENCES = new Set<string>(['CONFIRMED', 'LIKELY', 'ESTIMATED', 'UNVERIFIED']);
 const CONFIDENCE_SOURCES = new Set<string>(['OWNER', 'CROWD', 'PARSED', 'USER_CALL', 'DENIAL_REPORT', 'NONE', 'SERVER']);
@@ -812,6 +845,9 @@ function toFacilityDetail(s: ServerFacilityDetail): FacilityDetail {
     confidence: confidence ?? (confirmed ? 'CONFIRMED' : 'ESTIMATED'),
     confidenceSource: source ?? (confirmed ? 'SERVER' : 'PARSED'),
     confirmedAt: s.confirmedAt,
+    maxWeightInclusive: s.maxWeightInclusive ?? null,
+    ownerProfile: toOwnerProfileView(s.ownerProfile),
+    benefits: toFacilityBenefits(s.benefits),
   };
 }
 
@@ -1663,6 +1699,9 @@ export const reviewsApi = {
    */
   helpful: (reviewId: number) =>
     request<{ reviewId: number; helpfulCount: number }>('POST', `/api/v1/reviews/${reviewId}/helpful`, { auth: true }),
+  /** 「도움됐어요」 취소. 표시한 적 없어도 멱등. */
+  unhelpful: (reviewId: number) =>
+    request<{ reviewId: number; helpfulCount: number }>('DELETE', `/api/v1/reviews/${reviewId}/helpful`, { auth: true }),
   /** 삭제(본인만, 소프트). */
   remove: (reviewId: number) =>
     request<{ reviewId: number }>('DELETE', `/api/v1/reviews/${reviewId}`, { auth: true }),
@@ -1754,6 +1793,8 @@ type ServerOccurrence = {
   reminderEnabled?: boolean;
   notes?: string | null;
   taken?: boolean;
+  /** 반복 일정의 시작일(백엔드 PR #115). 옛 서버엔 없다 */
+  startDate?: string | null;
 };
 
 export type CalendarSnapshot = {
@@ -1769,7 +1810,8 @@ function occurrenceToEvent(o: ServerOccurrence): CalendarEvent {
     petId: typeof o.petId === 'number' ? o.petId : null,
     type: CAL_TYPE_FROM_SERVER[o.eventType ?? ''] ?? 'OTHER',
     title: o.title ?? '',
-    date: o.date ?? '',
+    // 시작일이 오면 그게 기준일이다. 없으면(옛 서버) 발생일로 두고 fold가 가장 이른 날을 고른다
+    date: o.startDate || o.date || '',
     endDate: o.endDate || null,
     time: o.time ? o.time.slice(0, 5) : null,
     repeat: ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(repeat) ? repeat : 'NONE',
@@ -1888,6 +1930,9 @@ export type MyClaim = {
   facilityAddress: string | null;
   status: ClaimStatus;
   appliedAt: string;
+  /** 반려·해제 사유. 대기·승인이면 null */
+  reviewReason: string | null;
+  requestedMaxWeightInclusive: boolean | null;
 };
 
 export const businessApi = {
@@ -1947,6 +1992,8 @@ export const businessApi = {
         facilityAddress: c.facilityAddress ?? null,
         status: (c.status as ClaimStatus) ?? 'PENDING',
         appliedAt: c.appliedAt ?? '',
+        reviewReason: c.reviewReason ?? null,
+        requestedMaxWeightInclusive: c.requestedMaxWeightInclusive ?? null,
       }));
   },
 };
@@ -1967,6 +2014,8 @@ type ServerGamification = {
   tierBadgeImageUrl?: string | null;
   levelUpNotificationEnabled?: boolean;
   badges?: { code?: string; label?: string; description?: string; earnedAt?: string | null }[];
+  /** 도메인별 누적 횟수·단계(백엔드 PR #116). 옛 서버엔 없다 */
+  progress?: { family?: string; label?: string; count?: number; tiers?: { tier?: string; threshold?: number; earnedAt?: string | null }[] }[];
 };
 
 export const gamificationApi = {
@@ -2000,6 +2049,16 @@ export const gamificationApi = {
         description: b.description ?? '',
         earnedAt: b.earnedAt ?? null,
       })),
+      progress: (Array.isArray(r.progress) ? r.progress : [])
+        .filter((g) => typeof g?.family === 'string')
+        .map((g) => ({
+          family: g.family as string,
+          label: g.label ?? '',
+          count: typeof g.count === 'number' && Number.isFinite(g.count) ? g.count : 0,
+          tiers: (g.tiers ?? [])
+            .filter((t) => typeof t?.tier === 'string')
+            .map((t) => ({ tier: t.tier as string, threshold: t.threshold ?? 0, earnedAt: t.earnedAt ?? null })),
+        })),
     };
   },
   /** 레벨업 알림 on/off. 서버가 확정한 값을 돌려준다. */
@@ -2026,4 +2085,111 @@ export const noticesApi = {
       .filter((n): n is Notice => typeof n?.id === 'number' && typeof n?.title === 'string')
       .map((n) => ({ id: n.id, title: n.title, body: n.body ?? '', createdAt: n.createdAt ?? '', pinned: n.pinned === true }));
   },
+};
+
+// ─────────────────────────── 사업자 대시보드(owner) ───────────────────────────
+// GET  /owner/facilities                                   — 내 매장 카드(조건·지표·거부 요약·소개 초기값) 1콜
+// GET  /owner/facilities/{id}/denial-alerts                — 확정 이후 거부 제보 전체
+// PUT  /owner/facilities/{id}/conditions                   — 출입 조건 수정(재심사 없음)
+// PUT  /owner/facilities/{id}/profile                      — 소개·편의시설
+// GET  /owner/facilities/{id}/review-stats                 — 항목 평균·등급 추이·관심도
+// GET/POST /owner/facilities/{id}/benefits · DELETE/PATCH …/{benefitId}[/enabled]
+//
+// 승인(APPROVED)된 소유자만 통과한다. 비소유자·대기·없는 시설 전부 BUSINESS4008(403)로 같다.
+
+export type OwnerEntryCondition = {
+  petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING';
+  maxWeight: number | null;
+  maxWeightInclusive: boolean | null;
+  requirements: Requirement[];
+  conditionRaw: string | null;
+  confirmedAt: string | null;
+  confidence: Confidence;
+  confidenceSource: ConfidenceSource;
+};
+
+export type OwnerFacility = {
+  facilityId: number;
+  name: string;
+  category: Category;
+  address: string | null;
+  entryCondition: OwnerEntryCondition;
+  stats: { weeklyPetCheckCount: number; reviewCount: number };
+  denialAlerts: { count: number; latest: { reason: string; reportedAt: string } | null };
+  profile: { introduction: string | null; amenityTags: OwnerAmenity[] };
+};
+
+export type OwnerDenialAlert = { reportId: number; reason: string; content: string; reportedAt: string };
+export type OwnerReviewStats = {
+  itemAverages: { reviewCount: number; averageSpace: number; averageStaff: number; averageAmenity: number };
+  gradeTrend: { date: string; pawGradeLevel: number | null; petScore: number | null }[];
+  interestCount: number;
+};
+export type OwnerBenefit = { benefitId: number; title: string; description: string | null; isEnabled: boolean };
+
+const KNOWN_REQ = new Set<string>(['LEASH', 'CAGE', 'MUZZLE', 'VACCINATION', 'SMALL_ONLY', 'OUTDOOR_ONLY', 'STROLLER', 'MANNER_BELT']);
+function toCondition(c: Partial<OwnerEntryCondition> | null | undefined): OwnerEntryCondition {
+  return {
+    petAllowed: (c?.petAllowed as OwnerEntryCondition['petAllowed']) ?? 'PENDING',
+    maxWeight: typeof c?.maxWeight === 'number' ? c.maxWeight : null,
+    maxWeightInclusive: c?.maxWeightInclusive ?? null,
+    requirements: ((c?.requirements ?? []) as string[]).filter((r): r is Requirement => KNOWN_REQ.has(r)),
+    conditionRaw: c?.conditionRaw ?? null,
+    confirmedAt: c?.confirmedAt ?? null,
+    confidence: (c?.confidence as Confidence) ?? 'UNVERIFIED',
+    confidenceSource: (c?.confidenceSource as ConfidenceSource) ?? 'NONE',
+  };
+}
+
+export const ownerApi = {
+  facilities: async (): Promise<OwnerFacility[]> => {
+    const r = await request<{ facilities?: Record<string, unknown>[] }>('GET', '/api/v1/owner/facilities', { auth: true });
+    return (r.facilities ?? [])
+      .filter((f) => typeof f.facilityId === 'number')
+      .map((f) => {
+        const stats = (f.stats ?? {}) as Partial<OwnerFacility['stats']>;
+        const alerts = (f.denialAlerts ?? {}) as Partial<OwnerFacility['denialAlerts']>;
+        const profile = (f.profile ?? {}) as Partial<OwnerFacility['profile']>;
+        return {
+          facilityId: f.facilityId as number,
+          name: (f.name as string) ?? '',
+          category: CATEGORY_FROM_SERVER[f.category as string] ?? 'TOUR',
+          address: (f.address as string | null) ?? null,
+          entryCondition: toCondition(f.entryCondition as Partial<OwnerEntryCondition>),
+          stats: { weeklyPetCheckCount: stats.weeklyPetCheckCount ?? 0, reviewCount: stats.reviewCount ?? 0 },
+          denialAlerts: { count: alerts.count ?? 0, latest: alerts.latest ?? null },
+          profile: { introduction: profile.introduction ?? null, amenityTags: toOwnerAmenities(profile.amenityTags) },
+        };
+      });
+  },
+  denialAlerts: async (facilityId: number): Promise<OwnerDenialAlert[]> => {
+    const r = await request<{ alerts?: OwnerDenialAlert[] }>('GET', `/api/v1/owner/facilities/${facilityId}/denial-alerts`, { auth: true });
+    return r.alerts ?? [];
+  },
+  /** 재심사 없이 즉시 반영. 판별에 쓰이는 값이 실제로 바뀐 경우에만 confirmedAt이 갱신된다. */
+  updateConditions: async (
+    facilityId: number,
+    body: { petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING'; maxWeight: number | null; maxWeightInclusive: boolean | null; requirements: Requirement[]; conditionRaw: string | null },
+  ): Promise<OwnerEntryCondition> =>
+    toCondition(await request<Partial<OwnerEntryCondition>>('PUT', `/api/v1/owner/facilities/${facilityId}/conditions`, { body, auth: true })),
+  updateProfile: (facilityId: number, body: { introduction: string | null; amenityTags: OwnerAmenity[] }) =>
+    request<{ introduction: string | null; amenityTags: OwnerAmenity[] }>('PUT', `/api/v1/owner/facilities/${facilityId}/profile`, { body, auth: true }),
+  reviewStats: async (facilityId: number): Promise<OwnerReviewStats> => {
+    const r = await request<Partial<OwnerReviewStats>>('GET', `/api/v1/owner/facilities/${facilityId}/review-stats`, { auth: true });
+    return {
+      itemAverages: { reviewCount: 0, averageSpace: 0, averageStaff: 0, averageAmenity: 0, ...(r.itemAverages ?? {}) },
+      gradeTrend: r.gradeTrend ?? [],
+      interestCount: r.interestCount ?? 0,
+    };
+  },
+  benefits: async (facilityId: number): Promise<OwnerBenefit[]> => {
+    const r = await request<{ benefits?: OwnerBenefit[] }>('GET', `/api/v1/owner/facilities/${facilityId}/benefits`, { auth: true });
+    return r.benefits ?? [];
+  },
+  addBenefit: (facilityId: number, title: string, description: string | null) =>
+    request<OwnerBenefit>('POST', `/api/v1/owner/facilities/${facilityId}/benefits`, { body: { title, description }, auth: true }),
+  removeBenefit: (facilityId: number, benefitId: number) =>
+    request<{ benefitId: number }>('DELETE', `/api/v1/owner/facilities/${facilityId}/benefits/${benefitId}`, { auth: true }),
+  setBenefitEnabled: (facilityId: number, benefitId: number, isEnabled: boolean) =>
+    request<OwnerBenefit>('PATCH', `/api/v1/owner/facilities/${facilityId}/benefits/${benefitId}/enabled`, { body: { isEnabled }, auth: true }),
 };

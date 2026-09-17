@@ -101,7 +101,6 @@ export default function FacilityDetailScreen() {
     canReview,
     confidenceOf,
     effectiveFacility,
-    promotionOf,
     settings,
     calendarEvents,
     addCalendarEvent,
@@ -393,7 +392,7 @@ export default function FacilityDetailScreen() {
         </Pressable>
       </View>
 
-      <OwnerPromotionSection facilityId={facility.facilityId} />
+      <OwnerPromotionSection facility={facility} />
 
       {/* 판별 · 우리 아이 · 친화도 토글 — 스크롤을 줄인다 */}
       <View style={[styles.segment, { backgroundColor: p.surface, borderColor: p.line }]}>
@@ -543,11 +542,11 @@ export default function FacilityDetailScreen() {
                     ) : null,
                   )}
 
-                  {promotionOf(facility.facilityId)?.intro ? (
+                  {facility.ownerProfile?.introduction ? (
                     <View style={[styles.ownerNote, { backgroundColor: p.card, borderColor: p.line }]}>
                       <Text style={[styles.ownerNoteLabel, { color: p.accent }]}>사장님 소개</Text>
                       <Text style={[styles.ownerNoteText, { color: p.ink }]}>
-                        {promotionOf(facility.facilityId)?.intro}
+                        {facility.ownerProfile.introduction}
                       </Text>
                     </View>
                   ) : null}

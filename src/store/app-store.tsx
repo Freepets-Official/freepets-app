@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, createContext, type ReactNode, useContext } from 'react';
 import { Platform } from 'react-native';
 
+import { clearOwnerFacilitiesCache } from '@/hooks/use-owner-facilities';
 import { clearPushToken, loadPushToken, savePushToken } from '@/lib/push-token-store';
 import { clearSession, loadSession, saveSession, type LoginProvider } from '@/lib/token-store';
 import { clearStamps, loadStamps, saveStamps } from '@/lib/stamp-store';
@@ -285,49 +286,6 @@ export interface BusinessReg {
   confirmedAt: string;
 }
 
-/**
- * 반려동물 편의시설 태그 (docs/10 facility_promotions.amenities).
- * 사업자가 소개에서 고르고, 방문자 시설 상세 "사장님이 전하는 우리 매장"에 노출된다.
- */
-export type Amenity =
-  | 'WATER_BOWL'
-  | 'POOP_BAG'
-  | 'PET_MENU'
-  | 'OUTDOOR_SEAT'
-  | 'OFF_LEASH_ZONE'
-  | 'PARKING'
-  | 'PET_SUPPLIES'
-  | 'BLANKET';
-
-export const AMENITY_LABEL: Record<Amenity, string> = {
-  WATER_BOWL: '급수대',
-  POOP_BAG: '배변봉투',
-  PET_MENU: '펫 메뉴',
-  OUTDOOR_SEAT: '야외 테라스',
-  OFF_LEASH_ZONE: '목줄 프리 공간',
-  PARKING: '주차 가능',
-  PET_SUPPLIES: '반려용품 비치',
-  BLANKET: '방석·담요',
-};
-
-/** 사업자 매장 소개·홍보 — 소유 인증된 시설에 1:1 (docs/10 facility_promotions) */
-export interface Promotion {
-  facilityId: number;
-  intro: string;
-  amenities: Amenity[];
-  /** 데모: 사진은 개수만 관리(실제 업로드는 백엔드). 0이면 사진 없음 */
-  photoCount: number;
-}
-
-/** 방문 혜택 안내 — MVP는 안내 텍스트만, 쿠폰 발급은 2차 (docs/10 facility_benefits) */
-export interface Benefit {
-  benefitId: number;
-  facilityId: number;
-  title: string;
-  detail: string;
-  active: boolean;
-}
-
 export type ReviewReportReason = 'FALSE_INFO' | 'SPAM' | 'ABUSE' | 'PRIVACY' | 'IRRELEVANT';
 
 export const REVIEW_REPORT_REASON_LABEL: Record<ReviewReportReason, string> = {
@@ -390,8 +348,8 @@ interface AppStore {
   addReview: (input: NewReview) => Promise<void>;
   /** 내 리뷰 수정(`PUT /reviews/{id}`). 경험치는 다시 안 준다 */
   updateReview: (reviewId: number, input: NewReview) => Promise<void>;
-  /** 남의 리뷰에 「도움됐어요」. 취소는 없다. 실패는 던진다 */
-  markHelpful: (reviewId: number, facilityId: number) => Promise<void>;
+  /** 남의 리뷰에 「도움됐어요」 토글. 실패는 던진다 */
+  markHelpful: (reviewId: number, facilityId: number, on: boolean) => Promise<void>;
   removeReview: (reviewId: number, facilityId: number) => Promise<void>;
   /** 해당 시설에 판별 이력이 있어야 리뷰 작성 자격이 생긴다 */
   canReview: (facilityId: number) => boolean;
@@ -516,16 +474,6 @@ interface AppStore {
   reloadMyClaims: () => Promise<void>;
   /** 사업자 확정 조건을 반영한 시설 — 판별·표시는 모두 이걸 기준으로 한다 */
   effectiveFacility: (f: Facility) => Facility;
-
-  /** 매장 소개·홍보 (사업자 대시보드 ②) */
-  promotions: Record<number, Promotion>;
-  promotionOf: (facilityId: number) => Promotion | null;
-  setPromotion: (promotion: Promotion) => void;
-  /** 방문 혜택 안내 (사업자 대시보드 ③) */
-  benefitsOf: (facilityId: number) => Benefit[];
-  addBenefit: (facilityId: number, title: string, detail: string) => void;
-  toggleBenefit: (facilityId: number, benefitId: number) => void;
-  removeBenefit: (facilityId: number, benefitId: number) => void;
 
   /** 반려동물 캘린더 — 접종·약·검진·여행 일정 */
   calendarEvents: CalendarEvent[];
@@ -695,8 +643,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     () => new Set(INITIAL_REPORTS.filter((r) => r.realtime).map((r) => r.facilityId)),
   );
   const [businessRegs, setBusinessRegs] = useState<Record<number, BusinessReg>>({});
-  const [promotions, setPromotions] = useState<Record<number, Promotion>>({});
-  const [benefits, setBenefits] = useState<Record<number, Benefit[]>>({});
   const [session, setSession] = useState<Session>({ authed: false, email: null, provider: null, key: 0, activeProfile: null });
   // 백엔드 인증 토큰. 기기에도 남긴다(네이티브 SecureStore / 웹 localStorage) —
   // 남기지 않으면 새로고침·앱 재실행마다 로그인해야 한다.
@@ -867,7 +813,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const nextEventId = useRef(INITIAL_CAL_EVENTS.length + 1);
   const tempSeqRef = useRef(0);
-  const nextBenefitId = useRef(1);
   const nextPetId = useRef(INITIAL_PETS.length + 1);
   // 로컬 전용 판별은 음수 id를 쓴다 — 서버 checkId와 겹치면 이력 병합이 어긋난다.
   // INITIAL_CHECKS가 이미 -1..-n을 쓰고 있으므로 그 다음부터 발급해야 한다.
@@ -1186,8 +1131,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 「도움됐어요」. 성공 응답의 카운트를 그 리뷰에만 반영한다 — 목록을 다시 받으면
    * 스크롤·펼침 상태가 흔들린다.
    */
-  const markHelpful = useCallback(async (reviewId: number, facilityId: number) => {
-    const r = await reviewsApi.helpful(reviewId);
+  const markHelpful = useCallback(async (reviewId: number, facilityId: number, on: boolean) => {
+    const r = on ? await reviewsApi.helpful(reviewId) : await reviewsApi.unhelpful(reviewId);
     setReviewData((prev) => {
       const data = prev[facilityId];
       if (!data) return prev;
@@ -1196,7 +1141,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         [facilityId]: {
           ...data,
           reviews: data.reviews.map((x) =>
-            x.reviewId === reviewId ? { ...x, helpfulCount: r.helpfulCount ?? (x.helpfulCount ?? 0) + 1, helpfulByMe: true } : x,
+            x.reviewId === reviewId
+              ? { ...x, helpfulCount: r.helpfulCount ?? Math.max(0, (x.helpfulCount ?? 0) + (on ? 1 : -1)), helpfulByMe: on }
+              : x,
           ),
         },
       };
@@ -1852,46 +1799,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [businessRegs, userConfirmedIds, downgradedIds],
   );
 
-  const promotionOf = useCallback(
-    (facilityId: number) => promotions[facilityId] ?? null,
-    [promotions],
-  );
-
-  const setPromotion = useCallback((promotion: Promotion) => {
-    setPromotions((prev) => ({ ...prev, [promotion.facilityId]: promotion }));
-  }, []);
-
-  const benefitsOf = useCallback(
-    (facilityId: number) => benefits[facilityId] ?? [],
-    [benefits],
-  );
-
-  const addBenefit = useCallback((facilityId: number, title: string, detail: string) => {
-    setBenefits((prev) => ({
-      ...prev,
-      [facilityId]: [
-        ...(prev[facilityId] ?? []),
-        { benefitId: nextBenefitId.current++, facilityId, title, detail, active: true },
-      ],
-    }));
-  }, []);
-
-  const toggleBenefit = useCallback((facilityId: number, benefitId: number) => {
-    setBenefits((prev) => ({
-      ...prev,
-      [facilityId]: (prev[facilityId] ?? []).map((b) =>
-        b.benefitId === benefitId ? { ...b, active: !b.active } : b,
-      ),
-    }));
-  }, []);
-
-  const removeBenefit = useCallback((facilityId: number, benefitId: number) => {
-    setBenefits((prev) => ({
-      ...prev,
-      [facilityId]: (prev[facilityId] ?? []).filter((b) => b.benefitId !== benefitId),
-    }));
-  }, []);
-
   /**
    * 일정 변경 — 화면 먼저, 서버 다음, 실패하면 되돌린다.
    *
@@ -2223,8 +2130,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // A의 거부 제보로 하향된 시설이 남으면, B가 서버에서 새 정보를 받아도 로컬 하향이 이긴다
     setDowngradedIds(new Set());
     setTopPlaces({});
-    setPromotions({});
-    setBenefits({});
     setAccount(EMPTY_ACCOUNT);
     setStamps([]);
     void clearStamps();
@@ -2312,6 +2217,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const finishLogout = useCallback(() => {
     setGuest(false);
+    clearOwnerFacilitiesCache();
     bumpSessionEpoch();
     refreshedRef.current = null;
     restoredEmailRef.current = null;
@@ -2717,13 +2623,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reloadMyClaims,
       businessRegOf,
       effectiveFacility,
-      promotions,
-      promotionOf,
-      setPromotion,
-      benefitsOf,
-      addBenefit,
-      toggleBenefit,
-      removeBenefit,
       calendarEvents,
       addCalendarEvent,
       removeCalendarEvent,
@@ -2814,13 +2713,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reloadMyClaims,
       businessRegOf,
       effectiveFacility,
-      promotions,
-      promotionOf,
-      setPromotion,
-      benefitsOf,
-      addBenefit,
-      toggleBenefit,
-      removeBenefit,
       calendarEvents,
       addCalendarEvent,
       removeCalendarEvent,
