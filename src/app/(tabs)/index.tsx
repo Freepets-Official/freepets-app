@@ -24,6 +24,7 @@ import { CATEGORY_LABEL, satisfactionMood, type Pet } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { uniqueRegionCount } from '@/data/stamps';
 import { levelProgress, tierName } from '@/data/level';
+import { GuestScreen } from '@/components/guest-prompt';
 import { useAppStore } from '@/store/app-store';
 
 function formatDate(iso: string): string {
@@ -76,6 +77,7 @@ export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
   const {
+    session,
     pets,
     checks,
     plannedDenialAlerts,
@@ -110,6 +112,16 @@ export default function HomeScreen() {
 
   // 흩어져 있던 푸시성 알림(현장 거부·접종 기한)은 우측 상단 종 버튼 → 알림 페이지로 모았다.
   const alertCount = alerts.length + vax.length;
+
+  if (!session.authed) {
+    return (
+      <GuestScreen
+        eyebrow="반갑꼬리"
+        title="홈"
+        body="내 아이 기준 판별 이력, 다음 접종, 좋아한 곳이 여기에 모여요. 탐색 탭은 로그인 없이도 볼 수 있어요."
+      />
+    );
+  }
 
   return (
     <Screen

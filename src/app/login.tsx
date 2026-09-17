@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,7 +16,8 @@ import { useAppStore } from '@/store/app-store';
 
 export default function LoginScreen() {
   const p = usePalette();
-  const { authenticate } = useAppStore();
+  const router = useRouter();
+  const { authenticate, enterGuest } = useAppStore();
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [loading, setLoading] = useState(false);
@@ -138,6 +139,17 @@ export default function LoginScreen() {
                 회원가입
               </Link>
             </View>
+            {/* 계정 없이도 시설은 둘러볼 수 있어야 한다(애플 5.1.1(v)). 판별·리뷰·캘린더는 로그인 뒤 */}
+            <Pressable
+              onPress={() => {
+                enterGuest();
+                router.replace('/(tabs)/explore');
+              }}
+              style={styles.guest}
+              hitSlop={8}>
+              <Text style={[styles.guestText, { color: p.muted }]}>로그인 없이 둘러보기</Text>
+              <Ionicons name="chevron-forward" size={14} color={p.muted} />
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -188,4 +200,6 @@ const styles = StyleSheet.create({
   bottom: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
   bottomText: { fontSize: 13.5 },
   bottomLink: { fontSize: 13.5, fontWeight: '800' },
+  guest: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, marginTop: 14 },
+  guestText: { fontSize: 13.5, fontWeight: '700', textDecorationLine: 'underline' },
 });

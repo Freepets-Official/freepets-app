@@ -15,6 +15,7 @@ import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { ApiError, accountApi } from '@/lib/api';
 import type { LoginProvider } from '@/lib/token-store';
 import { notify } from '@/lib/notify';
+import { GuestPrompt } from '@/components/guest-prompt';
 import { useAppStore } from '@/store/app-store';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -108,6 +109,27 @@ export default function SettingsScreen() {
     }
     updateSettings({ appLock: true });
   };
+
+  if (!session.authed) {
+    // 둘러보기 중 — 계정·알림·보안은 없고, 로그인 안내와 누구나 볼 수 있는 문서·문의만
+    return (
+      <Screen eyebrow="반갑꼬리" title="설정" subtitle="로그인하면 계정·알림·화면 설정을 쓸 수 있어요.">
+        <GuestPrompt title="로그인이 필요해요" body="아이 등록, 판별, 리뷰, 캘린더, 여행 코스는 계정에 묶여 있어요." />
+        <Group title="정보 · 지원">
+          <Row icon="document-text-outline" label="이용약관" onPress={() => router.push('/policy')} chevron />
+          <Row icon="shield-checkmark-outline" label="개인정보 · 위치 권한" onPress={() => router.push({ pathname: '/policy', params: { tab: 'privacy' } })} chevron />
+          <Row
+            icon="chatbubble-ellipses-outline"
+            label="문의하기"
+            sub="메일로 문의 보내기"
+            onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(SUPPORT_MAIL_SUBJECT)}`)}
+            chevron
+            last
+          />
+        </Group>
+      </Screen>
+    );
+  }
 
   return (
     <Screen

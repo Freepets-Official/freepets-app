@@ -37,6 +37,7 @@ import { PawBurst } from '@/components/paw-burst';
 import { StampIn } from '@/components/stamp-in';
 import { haptic } from '@/lib/haptics';
 import { usePalette } from '@/hooks/use-theme';
+import { GuestPrompt } from '@/components/guest-prompt';
 import { useAppStore } from '@/store/app-store';
 import { useCallFacility } from '@/hooks/use-call-facility';
 import { primaryPhoneNumber } from '@/lib/phone';
@@ -89,6 +90,7 @@ export default function FacilityDetailScreen() {
   const callFacility = useCallFacility();
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const {
+    session,
     pets,
     runCheck,
     reviewDataOf,
@@ -419,7 +421,14 @@ export default function FacilityDetailScreen() {
         })}
       </View>
 
-      {tab === 'check' && (
+      {tab === 'check' && !session.authed && (
+        <GuestPrompt
+          compact
+          title="판별은 로그인 후에"
+          body="내 아이의 종류·몸무게 기준으로 이 시설의 출입 조건을 판별하고, 동반 출입증과 여권 도장을 남길 수 있어요."
+        />
+      )}
+      {tab === 'check' && session.authed && (
         <>
           {pets.length === 0 ? (
             <Text style={[styles.meta, { color: p.muted }]}>
@@ -736,7 +745,12 @@ export default function FacilityDetailScreen() {
         </>
       )}
 
-      {tab === 'satis' && <SatisfactionSection facilityId={facility.facilityId} />}
+      {tab === 'satis' &&
+        (session.authed ? (
+          <SatisfactionSection facilityId={facility.facilityId} />
+        ) : (
+          <GuestPrompt compact title="만족도는 로그인 후에" body="다녀온 뒤 아이별 만족도를 남기면 좋아한 곳 TOP 3와 취향 코스 추천에 쓰여요." />
+        ))}
 
       {tab === 'review' && (
         <ReviewSection
@@ -744,7 +758,7 @@ export default function FacilityDetailScreen() {
           data={reviewData}
           error={reviewError}
           onRetry={() => loadReviews(facility.facilityId)}
-          canWrite={canReview(facility.facilityId)}
+          canWrite={session.authed && canReview(facility.facilityId)}
           onWrite={() => {
             if (!canReview(facility.facilityId)) return;
             router.push({ pathname: '/review/[id]', params: { id: String(facility.facilityId) } });

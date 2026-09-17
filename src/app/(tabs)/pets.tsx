@@ -22,6 +22,7 @@ import {
   type PetKind,
 } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
+import { GuestScreen } from '@/components/guest-prompt';
 import { useAppStore } from '@/store/app-store';
 
 const BREED_SIZES = Object.keys(BREED_SIZE_LABEL) as BreedSize[];
@@ -29,7 +30,7 @@ const PET_KINDS = Object.keys(PET_KIND_LABEL) as PetKind[];
 
 export default function PetsScreen() {
   const p = usePalette();
-  const { pets, addPet, removePet, updatePet, addCalendarEvent } = useAppStore();
+  const { pets, addPet, removePet, updatePet, addCalendarEvent, session } = useAppStore();
   const [addedVax, setAddedVax] = useState<Set<number>>(new Set());
   // 편집 중인 아이 id (null이면 새 등록)
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -327,6 +328,10 @@ export default function PetsScreen() {
       </View>
     </View>
   );
+
+  if (!session.authed) {
+    return <GuestScreen eyebrow="내 반려동물" title="함께 가는 아이들" body="아이를 등록하면 그 아이 기준으로 시설 출입 조건을 판별해 드려요." />;
+  }
 
   return (
     <Screen
