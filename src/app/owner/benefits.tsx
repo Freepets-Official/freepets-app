@@ -22,6 +22,8 @@ export default function BenefitsScreen() {
 
   const [list, setList] = useState<OwnerBenefit[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // 실패하면 화면 안에서 다시 받는다 — 나갔다 들어와야만 재요청되면 안 된다
+  const [attempt, setAttempt] = useState(0);
   const [title, setTitle] = useState('');
   const [detail, setDetail] = useState('');
   const [busy, setBusy] = useState(false);
@@ -38,7 +40,12 @@ export default function BenefitsScreen() {
     return () => {
       alive = false;
     };
-  }, [facilityId]);
+  }, [facilityId, attempt]);
+  const retry = () => {
+    setFailed(false);
+    setList(null);
+    setAttempt((a) => a + 1);
+  };
 
   const fail = (e: unknown, fallback: string) => setError(e instanceof ApiError && e.message ? e.message : fallback);
 
@@ -119,7 +126,9 @@ export default function BenefitsScreen() {
 
           <View style={styles.list}>
             {failed ? (
-              <Text style={[styles.emptyList, { color: p.muted }]}>혜택을 불러오지 못했어요.</Text>
+              <Pressable onPress={retry}>
+                <Text style={[styles.emptyList, { color: p.muted }]}>혜택을 불러오지 못했어요. 눌러서 다시 시도</Text>
+              </Pressable>
             ) : list === null ? (
               <ActivityIndicator color={p.accent} style={{ paddingVertical: 24 }} />
             ) : list.length === 0 ? (

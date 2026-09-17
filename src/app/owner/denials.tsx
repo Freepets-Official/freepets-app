@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
@@ -22,6 +22,8 @@ export default function OwnerDenialsScreen() {
   const facilityId = Number(idParam);
   const [alerts, setAlerts] = useState<OwnerDenialAlert[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // 실패하면 화면 안에서 다시 받는다 — 나갔다 들어와야만 재요청되면 안 된다
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -32,7 +34,12 @@ export default function OwnerDenialsScreen() {
     return () => {
       alive = false;
     };
-  }, [facilityId]);
+  }, [facilityId, attempt]);
+  const retry = () => {
+    setFailed(false);
+    setAlerts(null);
+    setAttempt((a) => a + 1);
+  };
 
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
@@ -43,7 +50,9 @@ export default function OwnerDenialsScreen() {
             조건을 확정한 뒤 손님이 &ldquo;문 앞에서 거부당했다&rdquo;고 남긴 제보예요. 제보가 남아 있는 동안은 손님 화면의 신뢰도가 내려가 있어요 — 조건이 바뀌었다면 「출입 조건 관리」에서 고쳐 주세요.
           </Text>
           {failed ? (
-            <Text style={[styles.empty, { color: p.muted }]}>제보를 불러오지 못했어요.</Text>
+            <Pressable onPress={retry}>
+              <Text style={[styles.empty, { color: p.muted }]}>제보를 불러오지 못했어요. 눌러서 다시 시도</Text>
+            </Pressable>
           ) : alerts === null ? (
             <ActivityIndicator color={p.accent} style={{ paddingVertical: 32 }} />
           ) : alerts.length === 0 ? (

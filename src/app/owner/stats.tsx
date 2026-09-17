@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { OwnerLoadState } from '@/components/owner-load-state';
@@ -21,6 +21,8 @@ export default function StatsScreen() {
   const facility = facilities?.find((f) => f.facilityId === facilityId) ?? null;
   const [stats, setStats] = useState<OwnerReviewStats | null>(null);
   const [failed, setFailed] = useState(false);
+  // 실패하면 화면 안에서 다시 받는다 — 나갔다 들어와야만 재요청되면 안 된다
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -31,7 +33,12 @@ export default function StatsScreen() {
     return () => {
       alive = false;
     };
-  }, [facilityId]);
+  }, [facilityId, attempt]);
+  const retry = () => {
+    setFailed(false);
+    setStats(null);
+    setAttempt((a) => a + 1);
+  };
 
   if (!facility) {
     return (
@@ -66,7 +73,9 @@ export default function StatsScreen() {
           </View>
 
           {failed ? (
-            <Text style={[styles.noReview, { color: p.muted }]}>통계를 불러오지 못했어요.</Text>
+            <Pressable onPress={retry}>
+              <Text style={[styles.noReview, { color: p.muted }]}>통계를 불러오지 못했어요. 눌러서 다시 시도</Text>
+            </Pressable>
           ) : !stats ? (
             <ActivityIndicator color={p.accent} style={{ paddingVertical: 32 }} />
           ) : (
