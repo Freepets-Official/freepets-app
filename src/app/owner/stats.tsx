@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { OwnerLoadState } from '@/components/owner-load-state';
 import { Text } from '@/components/text';
 import { CountUp } from '@/components/count-up';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -16,7 +17,7 @@ export default function StatsScreen() {
   const p = usePalette();
   const { facilityId: idParam } = useLocalSearchParams<{ facilityId?: string }>();
   const facilityId = Number(idParam);
-  const { facilities } = useOwnerFacilities();
+  const { facilities, failed: facilitiesFailed, refresh } = useOwnerFacilities();
   const facility = facilities?.find((f) => f.facilityId === facilityId) ?? null;
   const [stats, setStats] = useState<OwnerReviewStats | null>(null);
   const [failed, setFailed] = useState(false);
@@ -36,7 +37,7 @@ export default function StatsScreen() {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
         <Stack.Screen options={{ title: '리뷰·통계', headerBackButtonDisplayMode: 'minimal' }} />
-        {facilities === null ? <ActivityIndicator color={p.accent} style={{ padding: 40 }} /> : <Text style={[styles.empty, { color: p.muted }]}>등록된 매장이 없어요.</Text>}
+        <OwnerLoadState facilities={facilities} failed={facilitiesFailed} refresh={refresh} />
       </SafeAreaView>
     );
   }

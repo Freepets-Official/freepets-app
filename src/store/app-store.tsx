@@ -2109,6 +2109,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // 예약된 만족도 전송을 취소한다. 두면 600ms 뒤 이전 계정의 기록이 새 토큰으로 나간다.
     for (const t of satTimers.current.values()) clearTimeout(t);
     satTimers.current.clear();
+    // 사업자 매장 캐시는 모듈에 있어 계정 교체(다른 계정 로그인·만료)에도 비워야 한다 — 다음 계정이 남의 매장을 본다
+    clearOwnerFacilitiesCache();
     setMyUserId(null);
     setPets([]);
     setChecks([]);
@@ -2217,7 +2219,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const finishLogout = useCallback(() => {
     setGuest(false);
-    clearOwnerFacilitiesCache();
     bumpSessionEpoch();
     refreshedRef.current = null;
     restoredEmailRef.current = null;

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { OwnerLoadState } from '@/components/owner-load-state';
 import { Text } from '@/components/text';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
@@ -23,14 +24,14 @@ export default function OwnerConditionsScreen() {
   const p = usePalette();
   const { facilityId: idParam } = useLocalSearchParams<{ facilityId?: string }>();
   const facilityId = Number(idParam);
-  const { facilities, refresh } = useOwnerFacilities();
+  const { facilities, failed, refresh } = useOwnerFacilities();
   const facility = facilities?.find((f) => f.facilityId === facilityId) ?? null;
 
   if (!facility) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
         <Stack.Screen options={{ title: '출입 조건 관리', headerBackButtonDisplayMode: 'minimal' }} />
-        {facilities === null ? <ActivityIndicator color={p.accent} style={{ padding: 40 }} /> : <Text style={[styles.empty, { color: p.muted }]}>등록된 매장이 없어요.</Text>}
+        <OwnerLoadState facilities={facilities} failed={failed} refresh={refresh} />
       </SafeAreaView>
     );
   }

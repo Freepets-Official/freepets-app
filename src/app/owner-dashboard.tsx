@@ -36,7 +36,8 @@ export default function OwnerDashboard() {
   const owned = facilities ?? [];
   // 매장이 여러 곳이면 관리 대상 매장을 고를 수 있다
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const activeId = selectedId ?? owned[0]?.facilityId ?? null;
+  // 목록이 갱신돼 고른 매장이 빠졌으면(승인 해제 등) 첫 매장으로 — 남은 게 하나면 카드를 눌러 바꿀 수도 없다
+  const activeId = selectedId != null && owned.some((f) => f.facilityId === selectedId) ? selectedId : (owned[0]?.facilityId ?? null);
   const multi = owned.length > 1;
   const activeName = owned.find((f) => f.facilityId === activeId)?.name;
   const go = (path: '/owner/promotion' | '/owner/benefits' | '/owner/stats' | '/owner/conditions' | '/owner/denials') =>

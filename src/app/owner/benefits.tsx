@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { OwnerLoadState } from '@/components/owner-load-state';
 import { Text } from '@/components/text';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useOwnerFacilities } from '@/hooks/use-owner-facilities';
@@ -16,7 +17,7 @@ export default function BenefitsScreen() {
   const p = usePalette();
   const { facilityId: idParam } = useLocalSearchParams<{ facilityId?: string }>();
   const facilityId = Number(idParam);
-  const { facilities } = useOwnerFacilities();
+  const { facilities, failed: facilitiesFailed, refresh } = useOwnerFacilities();
   const facility = facilities?.find((f) => f.facilityId === facilityId) ?? null;
 
   const [list, setList] = useState<OwnerBenefit[] | null>(null);
@@ -24,6 +25,8 @@ export default function BenefitsScreen() {
   const [title, setTitle] = useState('');
   const [detail, setDetail] = useState('');
   const [busy, setBusy] = useState(false);
+  // 요청 중인 혜택 — 그 스위치를 잠근다. 연타하면 앞 요청의 늦은 응답이 최신 화면을 덮는다
+  const [toggling, setToggling] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,6 +58,8 @@ export default function BenefitsScreen() {
     }
   };
   const toggle = async (b: OwnerBenefit) => {
+    if (toggling.has(b.benefitId)) return;
+    setToggling((prev) => new Set(prev).add(b.benefitId));
     // 화면 먼저, 실패하면 되돌린다
     setList((prev) => (prev ?? []).map((x) => (x.benefitId === b.benefitId ? { ...x, isEnabled: !b.isEnabled } : x)));
     try {
@@ -63,6 +68,12 @@ export default function BenefitsScreen() {
     } catch (e) {
       setList((prev) => (prev ?? []).map((x) => (x.benefitId === b.benefitId ? b : x)));
       fail(e, '노출 설정을 바꾸지 못했어요');
+    } finally {
+      setToggling((prev) => {
+        const next = new Set(prev);
+        next.delete(b.benefitId);
+        return next;
+      });
     }
   };
   const remove = async (b: OwnerBenefit) => {
@@ -79,7 +90,7 @@ export default function BenefitsScreen() {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
         <Stack.Screen options={{ title: '방문 혜택 안내', headerBackButtonDisplayMode: 'minimal' }} />
-        {facilities === null ? <ActivityIndicator color={p.accent} style={{ padding: 40 }} /> : <Text style={[styles.empty, { color: p.muted }]}>등록된 매장이 없어요.</Text>}
+        <OwnerLoadState facilities={facilities} failed={facilitiesFailed} refresh={refresh} />
       </SafeAreaView>
     );
   }
@@ -120,7 +131,7 @@ export default function BenefitsScreen() {
                     <Text style={[styles.itemTitle, { color: b.isEnabled ? p.ink : p.muted }]}>{b.title}</Text>
                     {b.description ? <Text style={[styles.itemDetail, { color: p.muted }]}>{b.description}</Text> : null}
                   </View>
-                  <Switch value={b.isEnabled} onValueChange={() => void toggle(b)} trackColor={{ true: p.accent }} thumbColor="#FFFFFF" />
+                  <Switch value={b.isEnabled} disabled={toggling.has(b.benefitId)} onValueChange={() => void toggle(b)} trackColor={{ true: p.accent }} thumbColor="#FFFFFF" />
                   <Pressable onPress={() => void remove(b)} style={styles.del} hitSlop={6}>
                     <Ionicons name="trash-outline" size={18} color={p.muted} />
                   </Pressable>

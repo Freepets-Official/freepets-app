@@ -779,14 +779,12 @@ export function toOwnerAmenities(tags: (string | null | undefined)[] | null | un
   return (tags ?? []).filter((t): t is OwnerAmenity => typeof t === 'string' && t in OWNER_AMENITY_LABEL);
 }
 
-function toOwnerProfileView(p: ServerFacilityDetail['ownerProfile']): OwnerProfileView | null | undefined {
-  if (p === undefined) return undefined; // 필드 자체가 없으면 '모른다' — 캐시에 있던 값을 지우지 않는다
-  if (p === null) return null;
+function toOwnerProfileView(p: NonNullable<ServerFacilityDetail['ownerProfile']> | null): OwnerProfileView | null {
+  if (p === null) return null; // 명시된 '소개 없음'은 그대로 둔다(사장님이 지운 경우)
   return { introduction: p.introduction ?? null, amenityTags: toOwnerAmenities(p.amenityTags) };
 }
 
-function toFacilityBenefits(b: ServerFacilityDetail['benefits']): FacilityBenefit[] | undefined {
-  if (b == null) return undefined;
+function toFacilityBenefits(b: NonNullable<ServerFacilityDetail['benefits']>): FacilityBenefit[] {
   return b.map((x) => ({ benefitId: x.benefitId, title: x.title, description: x.description ?? null }));
 }
 
@@ -845,9 +843,11 @@ function toFacilityDetail(s: ServerFacilityDetail): FacilityDetail {
     confidence: confidence ?? (confirmed ? 'CONFIRMED' : 'ESTIMATED'),
     confidenceSource: source ?? (confirmed ? 'SERVER' : 'PARSED'),
     confirmedAt: s.confirmedAt,
-    maxWeightInclusive: s.maxWeightInclusive ?? null,
-    ownerProfile: toOwnerProfileView(s.ownerProfile),
-    benefits: toFacilityBenefits(s.benefits),
+    // 아래 선택 필드는 서버가 생략하면 **키를 만들지 않는다**. 스토어가 `...detail`로 병합하므로
+    // undefined/null 키가 있으면 검색으로 알던 값(체중 '이하/미만' 등)이 지워진다.
+    ...(s.maxWeightInclusive !== undefined ? { maxWeightInclusive: s.maxWeightInclusive } : {}),
+    ...(s.ownerProfile !== undefined ? { ownerProfile: toOwnerProfileView(s.ownerProfile) } : {}),
+    ...(s.benefits != null ? { benefits: toFacilityBenefits(s.benefits) } : {}),
   };
 }
 
