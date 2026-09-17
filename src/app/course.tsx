@@ -10,7 +10,7 @@ import { ResultBadge } from '@/components/badge';
 import { Chip } from '@/components/chip';
 import { courseShareUrl } from '@/constants/links';
 import { copyText } from '@/lib/clipboard';
-import { confirmDialog } from '@/lib/notify';
+import { confirmDialog, promptText } from '@/lib/notify';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import {
   PRESET_COURSES,
@@ -377,6 +377,24 @@ export default function CourseScreen() {
     void importShared(shareCode).finally(() => router.setParams({ share: '' }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareCode, restoring, session.authed]);
+
+  /** 이름만 바꾼다 — `PATCH /courses/{id}/name`. 스톱을 다시 보내는 PUT과 달리 가볍다 */
+  const renameCourse = async (course: SavedCourse) => {
+    const next = await promptText('코스 이름 바꾸기', '새 이름을 입력해 주세요 (30자 이내)', course.name);
+    const name = next?.trim();
+    if (!name || name === course.name) return;
+    if (name.length > 30) {
+      setSaveMessage({ text: '코스 이름은 30자 이내로 해 주세요', failed: true });
+      return;
+    }
+    try {
+      const updated = await coursesApi.rename(course.courseId, name);
+      setSavedCourses((prev) => prev.map((c) => (c.courseId === updated.courseId ? updated : c)));
+      setSaveMessage(null);
+    } catch (e) {
+      setSaveMessage({ text: e instanceof Error ? e.message : '이름을 바꾸지 못했어요', failed: true });
+    }
+  };
 
   /**
    * 내 코스를 공개/비공개로 바꾼다. 서버 `PUT /courses/{id}`는 부분 수정이 아니라 **전체 교체**라
@@ -932,6 +950,9 @@ export default function CourseScreen() {
                         <Text style={[styles.savedMeta, { color: p.muted, marginLeft: 'auto' }]}>
                           {c.stopIds.length}곳
                         </Text>
+                      </Pressable>
+                      <Pressable onPress={() => void renameCourse(c)} hitSlop={8} accessibilityLabel="코스 이름 바꾸기">
+                        <Ionicons name="pencil-outline" size={15} color={p.muted} />
                       </Pressable>
                       {/* 공개 토글 — 켜면 둘러보기 목록에 뜬다. 되돌릴 수 있으니 확인은 묻지 않는다 */}
                       {publicPendingId === c.courseId ? (

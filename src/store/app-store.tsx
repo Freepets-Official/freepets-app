@@ -30,6 +30,7 @@ import {
   type BusinessClaimInput,
   type BusinessClaimResult,
   type BusinessIdentity,
+  type MyClaim,
   type DenialAlert,
   type ServerDenialReport,
 } from '@/lib/api';
@@ -501,15 +502,18 @@ interface AppStore {
   registerBusiness: (reg: BusinessReg) => void;
   businessRegOf: (facilityId: number) => BusinessReg | null;
   /**
-   * 내 매장 조건을 서버에 확정한다(`POST /business/facilities/{id}/claim`).
-   * 성공하면 로컬 override·내 매장 목록·시설 캐시를 같이 갱신한다. 실패는 ApiError로 던진다.
+   * 내 매장 등록을 **신청**한다(`POST /business/facilities/{id}/claim`, 등록증 사진 필수).
+   * 운영자가 승인하기 전까지는 확정이 아니다 — 로컬 override를 걸지 않고 신청 목록만 갱신한다.
    */
   claimFacility: (
     facilityId: number,
     identity: BusinessIdentity,
     input: BusinessClaimInput,
-    bizNoMasked: string,
+    certificateUri: string,
   ) => Promise<BusinessClaimResult>;
+  /** 내 매장 등록 신청 목록(대기·승인·반려·해제). 로그인 시와 신청 뒤에 받는다 */
+  myClaims: MyClaim[];
+  reloadMyClaims: () => Promise<void>;
   /** 사업자 확정 조건을 반영한 시설 — 판별·표시는 모두 이걸 기준으로 한다 */
   effectiveFacility: (f: Facility) => Facility;
 
@@ -1639,6 +1643,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         .me()
         .then(applyGamification)
         .catch(() => {}),
+      businessApi
+        .myClaims()
+        .then(setMyClaims)
+        .catch(() => {}),
     ]);
   }, [session.authed, session.key]);
 
@@ -1760,28 +1768,39 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 손님 화면의 '확정'도 이 기기에서만 보였다. 이제 서버가 시설 자체를 CONFIRMED/OWNER로
    * 올리므로, 확정 뒤 상세를 다시 받아 캐시를 서버 값으로 맞춘다.
    */
+  /**
+   * 신청 목록. 대시보드의 「신청 현황」이 그린다. 승인되면 `account.ownedFacilityIds`에 들어오므로
+   * 목록 갱신 때 계정도 같이 다시 받는다.
+   */
+  const [myClaims, setMyClaims] = useState<MyClaim[]>([]);
+  const reloadMyClaims = useCallback(async () => {
+    if (!session.authed) return;
+    try {
+      setMyClaims(await businessApi.myClaims());
+    } catch {
+      // 못 받으면 이전 목록이 남는다. 대시보드를 막지 않는다
+    }
+  }, [session.authed]);
+  useEffect(() => {
+    if (!session.authed) {
+      setMyClaims([]);
+      return;
+    }
+    void reloadMyClaims();
+  }, [session.authed, session.key, reloadMyClaims]);
+
+  /**
+   * 예전에는 신청 즉시 로컬 override(CONFIRMED)를 걸었다. 이제 운영자가 등록증을 보고 승인해야
+   * 서버가 시설을 CONFIRMED/OWNER로 올린다 — 승인 전에 "확정"을 그리면 남의 매장을 먼저 신청한
+   * 사람이 손님 화면을 바꾸는 꼴이 된다. 앱은 신청 사실만 보여준다.
+   */
   const claimFacility = useCallback(
-    async (facilityId: number, identity: BusinessIdentity, input: BusinessClaimInput, bizNoMasked: string) => {
-      const res = await businessApi.claim(facilityId, identity, input);
-      registerBusiness({
-        facilityId,
-        bizNoMasked,
-        petAllowed: input.petAllowed === 'ALLOWED',
-        maxWeight: input.maxWeight,
-        requirements: input.requirements,
-        conditionRaw: input.conditionRaw,
-        confirmedAt: res.confirmedAt,
-      });
-      setAccount((prev) =>
-        prev.ownedFacilityIds.includes(facilityId)
-          ? prev
-          : { ...prev, ownedFacilityIds: [...prev.ownedFacilityIds, facilityId] },
-      );
-      // 상세를 못 받아도 확정은 이미 끝났다. 캐시는 다음 조회에서 맞춰진다
-      void loadFacility(facilityId).catch(() => {});
+    async (facilityId: number, identity: BusinessIdentity, input: BusinessClaimInput, certificateUri: string) => {
+      const res = await businessApi.claim(facilityId, identity, input, certificateUri);
+      void reloadMyClaims();
       return res;
     },
-    [registerBusiness, loadFacility],
+    [reloadMyClaims],
   );
 
   const effectiveFacility = useCallback(
@@ -2010,12 +2029,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 매장을 하나라도 등록하면 사업자 프로필이 계정에 생긴다 (A-하이브리드: 가입은 소비자 하나)
   // 이번 실행에서 확정한 것(businessRegs)뿐 아니라 **서버가 기억하는 매장**도 센다.
   // 안 그러면 기기를 바꾸거나 앱을 다시 깔았을 때 사업자 프로필이 사라진 것처럼 보인다.
+  // 신청만 해둔 사람도 사업자 화면(신청 현황)에 들어갈 수 있어야 한다
   const availableProfiles = useMemo<ProfileKind[]>(
     () =>
-      Object.keys(businessRegs).length > 0 || account.ownedFacilityIds.length > 0
+      Object.keys(businessRegs).length > 0 || account.ownedFacilityIds.length > 0 || myClaims.length > 0
         ? ['consumer', 'owner']
         : ['consumer'],
-    [businessRegs, account.ownedFacilityIds],
+    [businessRegs, account.ownedFacilityIds, myClaims.length],
   );
 
   const login = useCallback((email: string) => {
@@ -2683,6 +2703,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       businessRegs,
       registerBusiness,
       claimFacility,
+      myClaims,
+      reloadMyClaims,
       businessRegOf,
       effectiveFacility,
       promotions,
@@ -2776,6 +2798,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       businessRegs,
       registerBusiness,
       claimFacility,
+      myClaims,
+      reloadMyClaims,
       businessRegOf,
       effectiveFacility,
       promotions,

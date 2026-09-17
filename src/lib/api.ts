@@ -1531,6 +1531,12 @@ export const coursesApi = {
   remove: (courseId: number) =>
     request<{ courseId: number }>('DELETE', `/api/v1/courses/${courseId}`, { auth: true }),
 
+  /** 이름만 바꾼다(백엔드 PR #97). PUT처럼 스톱을 다시 보내지 않아도 된다. 본인 코스만. */
+  rename: async (courseId: number, name: string): Promise<SavedCourse> =>
+    toSavedCourse(
+      await request<SavedCourse>('PATCH', `/api/v1/courses/${courseId}/name`, { body: { name }, auth: true }),
+    ),
+
   /**
    * 공유 코드 발급. 같은 코스에 다시 부르면 같은 코드가 오는지, 새 코드가 오는지는 서버가
    * 정한다 — 앱은 매번 받은 값을 쓴다. 공개 여부와 무관하게 코드로는 담을 수 있다.
@@ -1870,11 +1876,18 @@ export type BusinessClaimInput = {
   conditionRaw: string;
 };
 
-export type BusinessClaimResult = {
+/** 신청 상태 — 운영자가 사업자등록증을 보고 정한다. APPROVED가 돼야 시설이 CONFIRMED/OWNER로 바뀐다 */
+export type ClaimStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVOKED';
+
+export type BusinessClaimResult = { claimId: number; status: ClaimStatus };
+
+export type MyClaim = {
+  claimId: number;
   facilityId: number;
-  confidence: Confidence;
-  confidenceSource: ConfidenceSource;
-  confirmedAt: string;
+  facilityName: string;
+  facilityAddress: string | null;
+  status: ClaimStatus;
+  appliedAt: string;
 };
 
 export const businessApi = {
@@ -1891,29 +1904,50 @@ export const businessApi = {
     };
   },
   /**
-   * 내 매장 조건 확정. 서버가 시설의 신뢰도를 `CONFIRMED / OWNER`로 올리고 확정 시각을 돌려준다.
+   * 내 매장 등록 **신청**(multipart). 사업자등록증 사진이 필수다 — 운영자가 보고 승인해야 시설이
+   * `CONFIRMED / OWNER`로 바뀐다(백엔드 PR #107). 그 전까지는 `PENDING`이고 손님 화면은 그대로다.
    * maxWeight는 제한이 없으면 아예 보내지 않는다 — 0을 보내면 "0kg까지"가 된다.
+   *
+   * BUSINESS4003 다른 사람이 이미 승인된 매장 · BUSINESS4004 내 대기 신청이 있음 · BUSINESS4005 이미 내 승인 매장.
    */
-  claim: async (facilityId: number, id: BusinessIdentity, input: BusinessClaimInput): Promise<BusinessClaimResult> => {
-    const body: Record<string, unknown> = {
-      ...id,
-      petAllowed: input.petAllowed,
-      maxWeightInclusive: input.maxWeightInclusive,
-      requirements: input.requirements,
-      conditionRaw: input.conditionRaw,
-    };
-    if (input.maxWeight !== null && input.maxWeight > 0) body.maxWeight = input.maxWeight;
+  claim: async (
+    facilityId: number,
+    id: BusinessIdentity,
+    input: BusinessClaimInput,
+    certificateUri: string,
+  ): Promise<BusinessClaimResult> => {
+    const epoch = getSessionEpoch();
+    const fd = new FormData();
+    fd.append('businessNumber', id.businessNumber);
+    fd.append('representativeName', id.representativeName);
+    fd.append('openingDate', id.openingDate);
+    fd.append('petAllowed', input.petAllowed);
+    fd.append('maxWeightInclusive', input.maxWeightInclusive ? 'true' : 'false');
+    for (const r of input.requirements) fd.append('requirements', r);
+    if (input.conditionRaw) fd.append('conditionRaw', input.conditionRaw);
+    if (input.maxWeight !== null && input.maxWeight > 0) fd.append('maxWeight', String(input.maxWeight));
+    const blob = await (await fetch(certificateUri)).blob();
+    fd.append('registrationCertificate', blob, 'certificate.jpg');
     const r = await request<Partial<BusinessClaimResult>>(
       'POST',
       `/api/v1/business/facilities/${facilityId}/claim`,
-      { body, auth: true },
+      { body: fd, auth: true, epoch },
     );
-    return {
-      facilityId: r.facilityId ?? facilityId,
-      confidence: r.confidence ?? 'CONFIRMED',
-      confidenceSource: r.confidenceSource ?? 'OWNER',
-      confirmedAt: r.confirmedAt ?? new Date().toISOString(),
-    };
+    return { claimId: r.claimId ?? 0, status: (r.status as ClaimStatus) ?? 'PENDING' };
+  },
+  /** 내 신청 목록 — 상태별. 반려 사유는 아직 응답에 없다(백엔드 요청 중). */
+  myClaims: async (): Promise<MyClaim[]> => {
+    const r = await request<{ claims?: Partial<MyClaim>[] }>('GET', '/api/v1/business/claims', { auth: true });
+    return (r.claims ?? [])
+      .filter((c): c is MyClaim => typeof c?.claimId === 'number' && typeof c?.facilityId === 'number')
+      .map((c) => ({
+        claimId: c.claimId,
+        facilityId: c.facilityId,
+        facilityName: c.facilityName ?? '',
+        facilityAddress: c.facilityAddress ?? null,
+        status: (c.status as ClaimStatus) ?? 'PENDING',
+        appliedAt: c.appliedAt ?? '',
+      }));
   },
 };
 
