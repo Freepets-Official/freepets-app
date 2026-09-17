@@ -958,6 +958,8 @@ type ServerReview = {
   tags: string[];
   visitedAt: string;
   reportedByMe: boolean;
+  helpfulCount?: number;
+  helpfulByMe?: boolean;
 };
 type ServerReviewList = {
   grade: { level: number; label: string; score: number; count: number; needMore: number };
@@ -990,6 +992,8 @@ function toReview(s: ServerReview): Review {
     tags: (s.tags ?? []).filter(isReviewTag),
     visitedAt: s.visitedAt,
     reportedByMe: s.reportedByMe ?? false,
+    helpfulCount: typeof s.helpfulCount === 'number' ? s.helpfulCount : undefined,
+    helpfulByMe: s.helpfulByMe,
   };
 }
 
@@ -1647,6 +1651,18 @@ export const reviewsApi = {
   /** 작성/수정(upsert). 자격 없으면 REVIEW4001, 남의 펫이면 PET4002 등으로 던진다. */
   create: (facilityId: number, body: NewReviewBody) =>
     request<ServerReview>('POST', `/api/v1/facilities/${facilityId}/reviews`, { body, auth: true }),
+  /**
+   * 수정(reviewId 기준, 본인만). 필드는 create와 같다. 경험치는 다시 주지 않는다.
+   * REVIEW4041 없는 리뷰 · REVIEW4002 남의 리뷰.
+   */
+  update: (reviewId: number, body: NewReviewBody) =>
+    request<ServerReview>('PUT', `/api/v1/reviews/${reviewId}`, { body, auth: true }),
+  /**
+   * 「도움됐어요」 — 남의 리뷰에만(본인 리뷰는 REVIEW4005). 취소 API는 없다(멱등, 중복 카운트 없음).
+   * 리뷰 작성자의 '구원자' 배지 카운트가 이걸로 오른다.
+   */
+  helpful: (reviewId: number) =>
+    request<{ reviewId: number; helpfulCount: number }>('POST', `/api/v1/reviews/${reviewId}/helpful`, { auth: true }),
   /** 삭제(본인만, 소프트). */
   remove: (reviewId: number) =>
     request<{ reviewId: number }>('DELETE', `/api/v1/reviews/${reviewId}`, { auth: true }),
@@ -1994,5 +2010,20 @@ export const gamificationApi = {
       { body: { levelUpNotificationEnabled: enabled }, auth: true },
     );
     return r.levelUpNotificationEnabled ?? enabled;
+  },
+};
+
+// ─────────────────────────── 공지사항 ───────────────────────────
+// GET /notices — 인증 불필요. 고정(pinned) 먼저, 그 안에서 최신순. 작성·수정 API는 없다(운영자가 DB에 직접).
+export type Notice = { id: number; title: string; body: string; createdAt: string; pinned: boolean };
+
+export const noticesApi = {
+  list: async (): Promise<Notice[]> => {
+    const r = await request<Partial<Notice>[] | { notices?: Partial<Notice>[] }>('GET', '/api/v1/notices');
+    // 명세는 배열이지만 다른 도메인처럼 감싸 올 가능성에도 대비한다
+    const arr = Array.isArray(r) ? r : (r?.notices ?? []);
+    return arr
+      .filter((n): n is Notice => typeof n?.id === 'number' && typeof n?.title === 'string')
+      .map((n) => ({ id: n.id, title: n.title, body: n.body ?? '', createdAt: n.createdAt ?? '', pinned: n.pinned === true }));
   },
 };

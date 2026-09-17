@@ -388,6 +388,10 @@ interface AppStore {
   loadReviews: (facilityId: number) => Promise<void>;
   /** 리뷰 작성/수정(upsert). 자격·소유 오류는 ApiError로 던진다 */
   addReview: (input: NewReview) => Promise<void>;
+  /** 내 리뷰 수정(`PUT /reviews/{id}`). 경험치는 다시 안 준다 */
+  updateReview: (reviewId: number, input: NewReview) => Promise<void>;
+  /** 남의 리뷰에 「도움됐어요」. 취소는 없다. 실패는 던진다 */
+  markHelpful: (reviewId: number, facilityId: number) => Promise<void>;
   removeReview: (reviewId: number, facilityId: number) => Promise<void>;
   /** 해당 시설에 판별 이력이 있어야 리뷰 작성 자격이 생긴다 */
   canReview: (facilityId: number) => boolean;
@@ -1153,6 +1157,43 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     },
     [loadReviews],
   );
+
+  const updateReview = useCallback(
+    async (reviewId: number, input: NewReview) => {
+      await reviewsApi.update(reviewId, {
+        petIds: input.petIds,
+        showPetInfo: input.showPetInfo,
+        ratingSpace: input.ratingSpace,
+        ratingStaff: input.ratingStaff,
+        ratingAmenity: input.ratingAmenity,
+        content: input.content ?? '',
+        tags: input.tags,
+      });
+      await loadReviews(input.facilityId);
+    },
+    [loadReviews],
+  );
+
+  /**
+   * 「도움됐어요」. 성공 응답의 카운트를 그 리뷰에만 반영한다 — 목록을 다시 받으면
+   * 스크롤·펼침 상태가 흔들린다.
+   */
+  const markHelpful = useCallback(async (reviewId: number, facilityId: number) => {
+    const r = await reviewsApi.helpful(reviewId);
+    setReviewData((prev) => {
+      const data = prev[facilityId];
+      if (!data) return prev;
+      return {
+        ...prev,
+        [facilityId]: {
+          ...data,
+          reviews: data.reviews.map((x) =>
+            x.reviewId === reviewId ? { ...x, helpfulCount: r.helpfulCount ?? (x.helpfulCount ?? 0) + 1, helpfulByMe: true } : x,
+          ),
+        },
+      };
+    });
+  }, []);
 
   /** 리뷰 삭제. 실패를 삼키지 않는다 — 지워지지도 않았는데 지워진 것처럼 보이면 안 된다. */
   /**
@@ -2614,6 +2655,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reviewErrorOf,
       loadReviews,
       addReview,
+      updateReview,
+      markHelpful,
       removeReview,
       canReview,
       myReviewFor,
@@ -2708,6 +2751,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reviewErrorOf,
       loadReviews,
       addReview,
+      updateReview,
+      markHelpful,
       removeReview,
       canReview,
       myReviewFor,

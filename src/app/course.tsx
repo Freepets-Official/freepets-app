@@ -10,7 +10,7 @@ import { ResultBadge } from '@/components/badge';
 import { Chip } from '@/components/chip';
 import { courseShareUrl } from '@/constants/links';
 import { copyText } from '@/lib/clipboard';
-import { promptText } from '@/lib/notify';
+import { confirmDialog, promptText } from '@/lib/notify';
 import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import {
   PRESET_COURSES,
@@ -251,6 +251,9 @@ export default function CourseScreen() {
   };
 
   const removeCourse = async (courseId: number) => {
+    // 되돌릴 수 없다. 공개 코스면 담아간 사람들 것은 남지만 내 것은 사라진다 — 한 번 묻는다
+    const name = savedCourses.find((c) => c.courseId === courseId)?.name ?? '이 코스';
+    if (!(await confirmDialog('코스를 삭제할까요?', `'${name}'을(를) 지우면 되돌릴 수 없어요.`))) return;
     try {
       await coursesApi.remove(courseId);
       // 삭제 성공을 화면에 먼저 반영한다(같은 이유로 목록 재조회 실패에 기대지 않는다)
