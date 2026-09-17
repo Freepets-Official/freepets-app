@@ -567,6 +567,12 @@ interface AppStore {
     tokens: { accessToken: string; refreshToken: string; userId?: number | string },
     provider?: LoginProvider,
   ) => void;
+  /**
+   * 로그인 없이 둘러보는 중인가. 로그인 화면의 「둘러보기」로 켜지고, 로그인·로그아웃에 꺼진다.
+   * 저장하지 않는다 — 다음 실행에선 다시 로그인 화면에서 고른다.
+   */
+  guest: boolean;
+  enterGuest: () => void;
   /** 현재 액세스 토큰(인증 헤더용). 미로그인이면 null */
   accessToken: string | null;
   /** 로그아웃. 탈퇴 직후에는 `skipPushUnregister`로 부른다 — 서버가 이미 토큰을 지웠다. */
@@ -701,6 +707,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // 세션이 바뀔 때마다 오른다. 복원은 await가 두 번 있어 그 사이에 로그인·로그아웃이
   // 끼어들 수 있는데, 그때 복원이 늦게 끝나면 **옛 계정으로 되돌려놓는다.**
   // 네이버 로그인에서 돌아오는 흐름이 복원과 나란히 도는 실제 경로가 있다.
+  const [guest, setGuest] = useState(false);
+  const enterGuest = useCallback(() => setGuest(true), []);
   const sessionRev = useRef(0);
   /** 토큰 재발급 뒤 세션을 다시 저장할 때 제공자를 잃지 않으려고 미러로 든다 */
   const providerRef = useRef<LoginProvider | null>(null);
@@ -2123,6 +2131,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       provider: LoginProvider = 'email',
     ) => {
       providerRef.current = provider;
+      setGuest(false);
       /**
        * 이미 다른 계정으로 들어와 있는 상태에서 인증이 끝났다(이메일·소셜 동시 진행).
        * 토큰만 바꾸면 A의 반려동물·판별 이력 위에 B가 얹힌다 — 먼저 비운다.
@@ -2302,6 +2311,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const notifPushRef = useMirrorRef(settings.notifPush);
 
   const finishLogout = useCallback(() => {
+    setGuest(false);
     bumpSessionEpoch();
     refreshedRef.current = null;
     restoredEmailRef.current = null;
@@ -2725,6 +2735,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       toggleMedTaken,
       isMedTaken,
       session,
+      guest,
+      enterGuest,
       restoring,
       availableProfiles,
       login,
@@ -2820,6 +2832,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       toggleMedTaken,
       isMedTaken,
       session,
+      guest,
+      enterGuest,
       restoring,
       availableProfiles,
       login,

@@ -61,7 +61,7 @@ const pendingHref = {
 };
 
 function useAuthGate() {
-  const { session, restoring } = useAppStore();
+  const { session, restoring, guest } = useAppStore();
   const segments = useSegments();
   const router = useRouter();
   const pathname = usePathname();
@@ -84,13 +84,20 @@ function useAuthGate() {
      * 앱 안에서도 가입 전에 약관을 확인하려는 사람을 막을 이유가 없다.
      */
     const isPublicDoc = seg === 'policy';
+    /**
+     * 둘러보기(게스트)가 갈 수 있는 곳 — 계정과 무관한 화면만(애플 5.1.1(v)).
+     * 탭은 통째로 열되 홈·캘린더·반려동물·설정은 각 화면이 안내를 그린다. 시설 상세는 열고,
+     * 그 안의 판별·리뷰 쓰기·도장은 화면이 잠근다. 코스·리뷰 쓰기·제보 같은 화면은 로그인으로
+     * 보내고 로그인 뒤 그 자리로 돌아온다(pendingHref).
+     */
+    const guestAllowed = guest && (seg === '(tabs)' || seg === 'facility' || seg === 'notices');
 
     const first = firstDecisionRef.current;
     firstDecisionRef.current = false;
 
     if (!session.authed) {
-      if (!onAuth && !isPublicDoc) {
-        if (first) {
+      if (!onAuth && !isPublicDoc && !guestAllowed) {
+        if (first || guest) {
           // 홈·탭은 기억할 가치가 없다. 파라미터가 있는 깊은 주소만 남긴다(공유 링크가 그렇다)
           const qs = Object.entries(params)
             .flatMap(([k, v]) => (Array.isArray(v) ? v : [v]).filter((x): x is string => typeof x === 'string' && !!x).map((x) => [k, x] as const))
@@ -109,7 +116,7 @@ function useAuthGate() {
       if (target && session.activeProfile !== 'owner') router.replace(target as Href);
       else router.replace(session.activeProfile === 'owner' ? '/owner-dashboard' : '/');
     }
-  }, [restoring, session.authed, session.activeProfile, segments, router, pathname, params]);
+  }, [restoring, session.authed, session.activeProfile, guest, segments, router, pathname, params]);
 }
 
 /**

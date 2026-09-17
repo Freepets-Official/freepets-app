@@ -17,6 +17,7 @@ import {
 } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { notify } from '@/lib/notify';
+import { GuestScreen } from '@/components/guest-prompt';
 import { useAppStore } from '@/store/app-store';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -39,6 +40,7 @@ export default function CalendarScreen() {
     isMedTaken,
     loadCalendarMonth,
     calendarErrorRef,
+    session,
   } = useAppStore();
 
   const today = ymd(new Date());
@@ -74,6 +76,10 @@ export default function CalendarScreen() {
 
   const selDate = new Date(`${selected}T00:00:00`);
   const selLabel = `${selDate.getMonth() + 1}월 ${selDate.getDate()}일 (${WEEKDAYS[selDate.getDay()]})`;
+
+  if (!session.authed) {
+    return <GuestScreen eyebrow="반려동물 캘린더" title="캘린더" body="예방접종·약 복용·여행 일정을 아이별로 관리하고 알림을 받아요." />;
+  }
 
   return (
     <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
