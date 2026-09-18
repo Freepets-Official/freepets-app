@@ -3,11 +3,14 @@ import { Stack, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
+import { PawChooser } from '@/components/paw-chooser';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { TIER_ANIMAL_LABEL } from '@/data/level';
 import { usePalette } from '@/hooks/use-theme';
 import { questsApi, type DailyQuests, type QuestSource } from '@/lib/api';
+import { useAppStore } from '@/store/app-store';
 
 /** 퀘스트를 실제로 할 수 있는 화면. 라벨만 보여주고 갈 곳이 없으면 퀘스트가 아니다 */
 const QUEST_META: Record<QuestSource, { icon: keyof typeof Ionicons.glyphMap; hint: string; route: Href }> = {
@@ -39,6 +42,13 @@ function resetHint(resetsAt: string | null): string {
 export default function QuestsScreen() {
   const p = usePalette();
   const router = useRouter();
+  /**
+   * 발바닥은 이 화면에서 고른다. 처음 들어오면(고른 적 없으면) 퀘스트 대신 고르는 화면을
+   * 먼저 보여준다 — 레벨 배지가 내 아이와 무관한 모양으로 시작하지 않게.
+   */
+  const { settings, updateSettings } = useAppStore();
+  const [choosing, setChoosing] = useState(false);
+  const needsPaw = settings.pawAnimal === '';
   const [data, setData] = useState<DailyQuests | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -63,6 +73,22 @@ export default function QuestsScreen() {
   const quests = data?.quests ?? [];
   const doneCount = quests.filter((q) => q.completed >= q.target).length;
   const xpToday = quests.reduce((sum, q) => sum + q.earnedXpToday, 0);
+
+  if (needsPaw || choosing) {
+    return (
+      <Screen hasNavHeader eyebrow="오늘의 퀘스트" title="발바닥 정하기">
+        <Stack.Screen options={{ title: '오늘의 퀘스트', headerBackButtonDisplayMode: 'minimal' }} />
+        <PawChooser
+          onPick={(animal) => {
+            updateSettings({ pawAnimal: animal });
+            setChoosing(false);
+          }}
+          // 처음 진입이면 건너뛸 수 있게 — 퀘스트를 보러 왔는데 선택을 강요하지 않는다
+          onSkip={choosing ? () => setChoosing(false) : undefined}
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen
@@ -140,6 +166,16 @@ export default function QuestsScreen() {
             })}
           </View>
 
+          <Pressable
+            onPress={() => setChoosing(true)}
+            style={({ pressed }) => [styles.pawRow, { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' }]}>
+            <Ionicons name="paw" size={15} color={p.accent} />
+            <Text style={[styles.pawRowText, { color: p.ink }]}>
+              내 발바닥 · {settings.pawAnimal ? TIER_ANIMAL_LABEL[settings.pawAnimal] : '미선택'}
+            </Text>
+            <Text style={[styles.pawRowAction, { color: p.accent }]}>바꾸기</Text>
+          </Pressable>
+
           <Text style={[styles.note, { color: p.muted }]}>
             퀘스트는 따로 받는 게 아니라, 평소 하던 행동이 오늘 몇 번째인지 보여주는 거예요. 상한을 채우면 그 행동의 경험치는 내일 다시 쌓여요.
           </Text>
@@ -168,5 +204,17 @@ const styles = StyleSheet.create({
   track: { height: 6, borderRadius: 3, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 3 },
   questHint: { fontSize: 11.5 },
+  pawRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 13,
+    marginTop: Spacing.lg,
+  },
+  pawRowText: { flex: 1, fontSize: 13.5, fontWeight: '800' },
+  pawRowAction: { fontSize: 13, fontWeight: '800' },
   note: { fontSize: 12, lineHeight: 18, marginTop: Spacing.lg },
 });

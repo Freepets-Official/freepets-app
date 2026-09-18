@@ -53,7 +53,7 @@ import { loadSettings, saveSettings } from '@/lib/settings-store';
 import type { Coords } from '@/lib/location';
 import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
 import { eventOccursOn, nextVaccinationOf, pawGradeOf, vaccinationDday } from '@/data/types';
-import type { Gamification } from '@/data/level';
+import type { Gamification, TierAnimal } from '@/data/level';
 import { tierName } from '@/data/level';
 import { matchRegion, type Stamp } from '@/data/stamps';
 import type {
@@ -163,6 +163,14 @@ export interface AppSettings {
   appLock: boolean;
   /** 글씨 크기 — 앱 전체 텍스트에 같은 배율로 걸린다 */
   fontSize: FontSizeMode;
+  /**
+   * 레벨 배지에 쓸 발바닥 — 사용자가 고른다(`''`면 아직 안 골랐다).
+   *
+   * 서버는 레벨로 동물을 정하지만(1~35 개, 36~70 고양이) 그건 "내 아이"와 무관한 값이라,
+   * 퀘스트 화면에 처음 들어올 때 한 번 고르게 하고 그 뒤로는 이 값이 이긴다. 기기에 남는
+   * 취향이라 계정이 아니라 설정에 둔다.
+   */
+  pawAnimal: '' | TierAnimal;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -177,6 +185,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoTravelLog: true,
   appLock: false,
   fontSize: 'normal',
+  pawAnimal: '',
 };
 
 /**
