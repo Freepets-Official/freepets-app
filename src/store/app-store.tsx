@@ -31,6 +31,8 @@ import {
   type BusinessClaimInput,
   type BusinessClaimResult,
   type BusinessIdentity,
+  type NewFacilityInput,
+  type NewFacilityResult,
   type MyClaim,
   type DenialAlert,
   type ServerDenialReport,
@@ -461,6 +463,11 @@ interface AppStore {
   businessRegs: Record<number, BusinessReg>;
   registerBusiness: (reg: BusinessReg) => void;
   businessRegOf: (facilityId: number) => BusinessReg | null;
+  /**
+   * 관광공사 목록에 없는 매장을 직접 등록한다(`POST /business/facilities`).
+   * 등록증·운영자 승인이 없고 응답이 바로 `APPROVED`다 — 소유 프로필이 즉시 생긴다.
+   */
+  registerNewFacility: (identity: BusinessIdentity, input: NewFacilityInput) => Promise<NewFacilityResult>;
   /**
    * 내 매장 등록을 **신청**한다(`POST /business/facilities/{id}/claim`, 등록증 사진 필수).
    * 운영자가 승인하기 전까지는 확정이 아니다 — 로컬 override를 걸지 않고 신청 목록만 갱신한다.
@@ -1762,6 +1769,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [reloadMyClaims],
   );
 
+  /**
+   * 신규 매장 등록 — 응답이 바로 APPROVED라 소유 프로필이 즉시 생긴다.
+   * 대시보드가 새 매장을 보려면 모듈 캐시를 비워야 한다(`useOwnerFacilities`).
+   */
+  const registerNewFacility = useCallback(
+    async (identity: BusinessIdentity, input: NewFacilityInput) => {
+      const res = await businessApi.registerFacility(identity, input);
+      clearOwnerFacilitiesCache();
+      void reloadMyClaims();
+      return res;
+    },
+    [reloadMyClaims],
+  );
+
   const effectiveFacility = useCallback(
     (f: Facility): Facility => {
       const reg = businessRegs[f.facilityId];
@@ -2623,6 +2644,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       confidenceOf,
       businessRegs,
       registerBusiness,
+      registerNewFacility,
       claimFacility,
       myClaims,
       reloadMyClaims,
@@ -2713,6 +2735,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       confidenceOf,
       businessRegs,
       registerBusiness,
+      registerNewFacility,
       claimFacility,
       myClaims,
       reloadMyClaims,

@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -35,6 +35,11 @@ export default function BusinessScreen() {
   /** 사업자등록증 사진 — 운영자 승인의 근거. 없으면 신청 자체가 안 된다 */
   const [certUri, setCertUri] = useState<string | null>(null);
 
+  /**
+   * 신규 등록 화면의 중복 후보("이 매장인가요?")에서 넘어오면 그 매장을 미리 골라둔다 —
+   * 사장님이 같은 매장을 다시 찾아 헤매지 않게.
+   */
+  const { facilityId: preselectParam } = useLocalSearchParams<{ facilityId?: string }>();
   const [facilityId, setFacilityId] = useState<number | null>(null);
   // 인증이 끝나고 아직 매장을 안 골랐을 때만 검색을 돌린다 — 그 전엔 위치 권한을 묻지 않는다
   const picker = useFacilityPicker(!!identity && facilityId === null);
@@ -187,6 +192,9 @@ export default function BusinessScreen() {
                 onVerified={(id, masked) => {
                   setIdentity(id);
                   setBizMasked(masked);
+                  // 신규 등록의 중복 후보에서 넘어왔으면 그 매장을 바로 고른다(검색을 다시 헤매지 않게)
+                  const pre = Number(preselectParam);
+                  if (Number.isInteger(pre) && pre > 0) selectFacility(pre);
                 }}
               />
             )}
@@ -256,6 +264,16 @@ export default function BusinessScreen() {
                     </View>
                   )}
                 </>
+              )}
+
+              {/* 관광공사 목록에 없는 매장 — claim이 아니라 시설 자체를 만드는 다른 경로다 */}
+              {facilityId === null && (
+                <Pressable
+                  onPress={() => router.push('/business/new')}
+                  style={({ pressed }) => [styles.newFacility, { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' }]}>
+                  <Ionicons name="add-circle-outline" size={16} color={p.accent} />
+                  <Text style={[styles.newFacilityText, { color: p.accent }]}>목록에 없는 매장이에요 — 직접 등록하기</Text>
+                </Pressable>
               )}
             </Animated.View>
           )}
@@ -420,6 +438,8 @@ function StepLabel({ n, label, done }: { n: number; label: string; done: boolean
 }
 
 const styles = StyleSheet.create({
+  newFacility: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed', borderRadius: Radius.md, paddingVertical: 12, marginTop: 4 },
+  newFacilityText: { fontSize: 13, fontWeight: '800' },
   safe: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 64, alignItems: 'center' },
   inner: { width: '100%', maxWidth: MaxContentWidth, gap: Spacing.xl, paddingTop: Spacing.sm },

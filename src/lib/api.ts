@@ -61,11 +61,17 @@ export type LoginResult = { accessToken: string; refreshToken: string; userId?: 
 export class ApiError extends Error {
   code?: string;
   status?: number;
-  constructor(message: string, code?: string, status?: number) {
+  /**
+   * 실패 응답의 `result`. 대부분 비어 있지만 일부 오류가 후속 화면에 필요한 데이터를 싣는다 —
+   * `BUSINESS4010`(근처에 비슷한 이름의 시설)이 중복 후보 목록을 여기로 준다.
+   */
+  result?: unknown;
+  constructor(message: string, code?: string, status?: number, result?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
+    this.result = result;
   }
 }
 
@@ -416,7 +422,7 @@ async function request<T>(method: Method, path: string, opts: RequestOpts = {}):
       throw new ApiError(`서버 응답 오류 (${res.status})`, undefined, res.status);
     }
     if (!json.isSuccess) {
-      throw new ApiError(json.message || '요청에 실패했어요.', json.code, res.status);
+      throw new ApiError(json.message || '요청에 실패했어요.', json.code, res.status, json.result);
     }
     return json.result;
   } finally {
@@ -1962,6 +1968,61 @@ export type ClaimStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'REVOKED';
 
 export type BusinessClaimResult = { claimId: number; status: ClaimStatus };
 
+/** 5-1·5-2의 중복 후보. `source`는 출처(관광공사 적재분 / 다른 사업자의 자체 등록) */
+export type DuplicateCandidate = {
+  facilityId: number;
+  name: string;
+  address: string | null;
+  category: Category;
+  source: 'TOUR_API' | 'BUSINESS_SELF';
+  distanceMeters: number | null;
+};
+
+/** 신규 매장 등록(5-2) 입력. 좌표는 서버가 주소를 지오코딩해 채운다 — 앱이 보내지 않는다 */
+export type NewFacilityInput = BusinessClaimInput & {
+  name: string;
+  category: Category;
+  address: string;
+  phone: string | null;
+  /** `GET /facilities/regions`에서 고른 값을 **그대로** 보낸다 */
+  sidoCode: string;
+  sigunguCode: string | null;
+  /** 유사 후보를 보고도 "다른 매장이다"를 확인했는가. false면 서버가 BUSINESS4010으로 막는다 */
+  duplicateCheckAcknowledged: boolean;
+};
+
+export type NewFacilityResult = {
+  facilityId: number;
+  claimId: number;
+  name: string;
+  address: string | null;
+  status: ClaimStatus;
+};
+
+function toCandidates(raw: unknown): DuplicateCandidate[] {
+  const list = Array.isArray(raw) ? raw : [];
+  return list
+    .filter((c): c is Record<string, unknown> => !!c && typeof (c as { facilityId?: unknown }).facilityId === 'number')
+    .map((c) => ({
+      facilityId: c.facilityId as number,
+      name: typeof c.name === 'string' ? c.name : '',
+      address: typeof c.address === 'string' ? c.address : null,
+      category: CATEGORY_FROM_SERVER[String(c.category)] ?? 'TOUR',
+      source: c.source === 'BUSINESS_SELF' ? 'BUSINESS_SELF' : 'TOUR_API',
+      distanceMeters: typeof c.distanceMeters === 'number' ? c.distanceMeters : null,
+    }));
+}
+
+/**
+ * `BUSINESS4010`(중복 후보 미확인)에 실려 온 후보 목록. 다른 오류면 빈 배열이다.
+ * 이 코드를 받으면 화면이 후보를 보여주고 "이 매장인가요?"를 물어야 한다(business.md 5-2).
+ */
+export function duplicateCandidatesOf(e: unknown): DuplicateCandidate[] {
+  if (!(e instanceof ApiError) || e.code !== 'BUSINESS4010') return [];
+  const r = e.result as { candidates?: unknown } | null | undefined;
+  return toCandidates(r?.candidates);
+}
+
 export type MyClaim = {
   claimId: number;
   facilityId: number;
@@ -2018,6 +2079,51 @@ export const businessApi = {
       { body: fd, auth: true, epoch },
     );
     return { claimId: r.claimId ?? 0, status: (r.status as ClaimStatus) ?? 'PENDING' };
+  },
+  /**
+   * 5-1. 중복 후보 사전조회 — 이름·주소만으로. 사업자 정보는 아직 필요 없다.
+   * 반경 100m·이름 유사 최대 5건. 비어 있으면 새로 등록해도 안전하다는 뜻이다.
+   */
+  duplicateCheck: async (name: string, address: string): Promise<DuplicateCandidate[]> => {
+    const r = await request<{ candidates?: unknown }>('POST', '/api/v1/business/facilities/duplicate-check', {
+      body: { name, address },
+      auth: true,
+    });
+    return toCandidates(r.candidates);
+  },
+  /**
+   * 5-2. 신규 매장 등록 — 관광공사 목록에 없는 매장을 직접 만들고 소유권까지 확정한다.
+   * 등록증·운영자 승인이 없다(대조할 관광공사 데이터가 없으니 국세청 진위확인으로 대신한다).
+   * 응답은 항상 `APPROVED` — claim과 달리 PENDING을 거치지 않는다.
+   */
+  registerFacility: async (id: BusinessIdentity, input: NewFacilityInput): Promise<NewFacilityResult> => {
+    const r = await request<Partial<NewFacilityResult>>('POST', '/api/v1/business/facilities', {
+      body: {
+        businessNumber: id.businessNumber,
+        representativeName: id.representativeName,
+        openingDate: id.openingDate,
+        name: input.name,
+        category: input.category,
+        address: input.address,
+        phone: input.phone,
+        sidoCode: input.sidoCode,
+        sigunguCode: input.sigunguCode,
+        petAllowed: input.petAllowed,
+        maxWeight: input.maxWeight,
+        maxWeightInclusive: input.maxWeightInclusive,
+        requirements: input.requirements,
+        conditionRaw: input.conditionRaw,
+        duplicateCheckAcknowledged: input.duplicateCheckAcknowledged,
+      },
+      auth: true,
+    });
+    return {
+      facilityId: r.facilityId ?? 0,
+      claimId: r.claimId ?? 0,
+      name: r.name ?? input.name,
+      address: r.address ?? input.address,
+      status: (r.status as ClaimStatus) ?? 'APPROVED',
+    };
   },
   /** 내 신청 목록 — 상태별. 반려 사유는 아직 응답에 없다(백엔드 요청 중). */
   myClaims: async (): Promise<MyClaim[]> => {

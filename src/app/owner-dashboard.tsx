@@ -206,6 +206,7 @@ export default function OwnerDashboard() {
           <View style={styles.menuGroup}>
             <View style={[styles.menuCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
               <MenuRow icon="add-circle-outline" label="매장 추가 등록" onPress={() => router.push('/business')} />
+              <MenuRow icon="storefront-outline" label="목록에 없는 매장 직접 등록" onPress={() => router.push('/business/new')} />
               <MenuRow icon="swap-horizontal-outline" label="일반 프로필로 전환" onPress={switchProfile} />
               <MenuRow icon="log-out-outline" label="로그아웃" onPress={() => logout()} tint last />
             </View>
