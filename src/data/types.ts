@@ -122,15 +122,21 @@ export const OWNER_AMENITY_LABEL: Record<OwnerAmenity, string> = {
   CUSHION_BLANKET: '방석·담요',
 };
 
-/** 손님 시설 상세 "사장님이 전하는 우리 매장" — 사장님이 대시보드에서 저장한 소개·편의시설 */
-export interface OwnerProfileView {
+/**
+ * 손님 시설 상세 "사장님이 전하는 우리 매장" — 사장님이 대시보드에서 저장한 소개·편의시설.
+ * 서버 필드명은 `ownerIntroduction`이다(사업자 쪽 `profile`과 이름이 다르다).
+ */
+export interface OwnerIntroductionView {
   introduction: string | null;
   amenityTags: OwnerAmenity[];
 }
 
-/** 손님에게 켜 둔(isEnabled) 방문 혜택만 */
-export interface FacilityBenefit {
-  benefitId: number;
+/**
+ * 손님에게 켜 둔(`isEnabled: true`) 방문 혜택. 등록순으로 온다.
+ * **`benefitId`가 없다** — 손님 화면은 읽기 전용이라 서버가 의도적으로 뺐다(백엔드 PR #117).
+ * 목록 key는 순서를 쓴다.
+ */
+export interface VisitBenefit {
   title: string;
   description: string | null;
 }
@@ -165,8 +171,8 @@ export interface Facility {
    * 사장님 소개·혜택. 상세 응답에만 실린다 — 서버가 아직 안 내려주면 undefined라 화면은 그 섹션을
    * 그리지 않는다(백엔드 요청 중, owner-dashboard.md 참고).
    */
-  ownerProfile?: OwnerProfileView | null;
-  benefits?: FacilityBenefit[];
+  ownerIntroduction?: OwnerIntroductionView | null;
+  visitBenefits?: VisitBenefit[];
 }
 
 /** 신뢰도 배지 표시용 정보 (라벨·근거·최종확인 문구) */
