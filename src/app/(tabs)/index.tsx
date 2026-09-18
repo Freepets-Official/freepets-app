@@ -1,5 +1,4 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -7,23 +6,21 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withRepeat,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
+import { PetIdCard } from '@/components/pet-id-card';
 import { Text } from '@/components/text';
 import { ResultBadge } from '@/components/badge';
 import { GameCardFx } from '@/components/game-card-fx';
-import { PetAvatar } from '@/components/pet-avatar';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
 import { Radius, Spacing } from '@/constants/theme';
 import { FACILITIES } from '@/data/mock';
-import { CATEGORY_LABEL, satisfactionMood, type Pet } from '@/data/types';
+import { type Pet } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { uniqueRegionCount } from '@/data/stamps';
-import { levelProgress, tierName } from '@/data/level';
 import { GuestScreen } from '@/components/guest-prompt';
 import { useAppStore } from '@/store/app-store';
 
@@ -146,8 +143,8 @@ export default function HomeScreen() {
           </Text>
         </View>
       ) : pets.length === 1 ? (
-        <View style={[styles.card, { borderColor: p.line, backgroundColor: p.card }]}>
-          <PetCardBody pet={pets[0]} />
+        <View style={styles.card}>
+          <PetIdCard pet={pets[0]} />
           <GameCardFx />
         </View>
       ) : (
@@ -232,7 +229,7 @@ export default function HomeScreen() {
 }
 
 /** 거부 알림의 통통 뛰는 벨 — 시선을 끈다 */
-const STACK_CARD_H = 280;
+const STACK_CARD_H = 344;
 const STACK_PEEK = 72;
 const STACK_SPRING = { damping: 16, stiffness: 180, mass: 0.7 };
 // 틸트가 원위치로 돌아올 때의 스프링 — 살짝 출렁이며 손을 떼는 느낌
@@ -282,7 +279,6 @@ function StackCard({
   total: number;
   onFront: () => void;
 }) {
-  const p = usePalette();
   // 뒤 카드는 위로 살짝 올라가 헤더만 보이고(peek), 앞 카드가 그 위를 덮는다
   const tY = useSharedValue((total - 1 - pos) * STACK_PEEK);
   const sc = useSharedValue(1 - pos * 0.03);
@@ -336,7 +332,7 @@ function StackCard({
   return (
     <Animated.View style={[styles.stackItem, { zIndex: total - pos }, anim]}>
       <Animated.View
-        style={[styles.card, styles.stackCard, { borderColor: p.line, backgroundColor: p.card }, isFront && tilt]}
+        style={[styles.card, styles.stackCard, isFront && tilt]}
         onLayout={isFront ? (e) => { dim.current = { w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height }; } : undefined}
         onPointerMove={isFront ? onMove : undefined}
         onPointerLeave={isFront ? resetTilt : undefined}
@@ -344,140 +340,18 @@ function StackCard({
         onPointerCancel={isFront ? resetTilt : undefined}>
         {isFront ? (
           <>
-            <PetCardBody pet={pet} />
+            <PetIdCard pet={pet} />
             <GameCardFx />
           </>
         ) : (
           <Pressable onPress={onFront} style={styles.flex}>
             <View pointerEvents="none">
-              <PetCardBody pet={pet} />
+              <PetIdCard pet={pet} />
             </View>
           </Pressable>
         )}
       </Animated.View>
     </Animated.View>
-  );
-}
-
-/** 여권 카드 내용(테두리 카드 안에 들어가는 본문) — 원형 프로필 + 좋아한 곳 TOP 3 */
-
-function PetCardBody({ pet }: { pet: Pet }) {
-  const p = usePalette();
-  const router = useRouter();
-  const { topPlacesForPet, gamification } = useAppStore();
-  const top = topPlacesForPet(pet.petId, 3);
-
-  const medal = ['🥇', '🥈', '🥉'];
-
-  /**
-   * 레벨·XP는 **서버 값**이다(`GET /me/gamification`).
-   *
-   * 예전에는 여기서 만족도×12 + 판별×6 + 도장×15로 직접 계산했다. 서버가 XP를 지급하기
-   * 시작한 뒤로는 그 숫자가 서버와 달라서, 같은 활동을 하고도 화면마다 레벨이 달랐다.
-   *
-   * XP는 계정 단위로 쌓이므로 아이가 여럿이어도 같은 레벨이 보인다. 그래서 아이 이름이
-   * 아니라 **「집사 레벨」**이라고 적는다 — 이 아이의 레벨로 읽히면 안 된다.
-   */
-  const progress = gamification ? levelProgress(gamification) : null;
-
-  return (
-    <>
-      {/* 게임 캐릭터 네임플레이트 — 그라디언트 배너 */}
-      <LinearGradient
-        colors={[p.accent, p.accentDark]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.banner}>
-        <View style={styles.portrait}>
-          {/* 글래스 림 — 좌상단이 밝게 빛나는 유리·금속 질감 링 */}
-          <LinearGradient
-            colors={['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0.7)']}
-            start={{ x: 0.1, y: 0 }}
-            end={{ x: 0.9, y: 1 }}
-            style={styles.portraitRing}>
-            <PetAvatar pet={pet} size={52} />
-          </LinearGradient>
-          {/* 레벨 칩 — 금속·글래스 하이라이트 */}
-          {progress && (
-            <LinearGradient
-              colors={['#FFFFFF', '#E8EBF1']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 0, y: 1 }}
-              style={styles.levelBadge}>
-              <Text style={[styles.levelText, { color: p.accentDark }]}>Lv.{progress.level}</Text>
-            </LinearGradient>
-          )}
-        </View>
-        <View style={styles.bannerInfo}>
-          <Text style={styles.gameName} numberOfLines={1}>
-            {pet.name}
-          </Text>
-          {gamification && progress && (
-            <>
-              <View style={styles.rankChip}>
-                <Text style={styles.rankEmoji}>🏆</Text>
-                <Text style={styles.rankText}>집사 레벨 · {tierName(gamification)}</Text>
-              </View>
-              <View style={styles.xpRow}>
-                <View style={styles.xpTrack}>
-                  <View
-                    style={[styles.xpFill, { width: `${Math.max(6, progress.ratio * 100)}%` }]}
-                  />
-                </View>
-                <Text style={styles.xpText}>
-                  {progress.maxed
-                    ? '최고 레벨'
-                    : `${progress.into.toLocaleString()}/${progress.step.toLocaleString()} XP`}
-                </Text>
-              </View>
-            </>
-          )}
-        </View>
-      </LinearGradient>
-
-      <View style={styles.bodyPad}>
-        <Text style={[styles.favTitle, { color: p.muted }]}>이 아이가 좋아한 곳 TOP 3</Text>
-
-      {top.length === 0 ? (
-        <Text style={[styles.favEmpty, { color: p.muted }]}>
-          아직 기록이 없어요. 방문한 곳에서 만족도를 남기면 여기에 모여요.
-        </Text>
-      ) : (
-        <View style={styles.favList}>
-          {top.map((item, i) => {
-            const mood = satisfactionMood(item.score);
-            return (
-              <View
-                key={item.facility.facilityId}
-                onTouchEnd={() =>
-                  router.push({
-                    pathname: '/facility/[id]',
-                    params: { id: String(item.facility.facilityId) },
-                  })
-                }
-                style={styles.favRow}>
-                <Text style={styles.medal}>{medal[i]}</Text>
-                <View style={styles.favInfo}>
-                  <Text style={[styles.favName, { color: p.ink }]} numberOfLines={1}>
-                    {item.facility.name}
-                  </Text>
-                  <Text style={[styles.favCat, { color: p.muted }]}>
-                    {CATEGORY_LABEL[item.facility.category]}
-                  </Text>
-                </View>
-                <View style={[styles.scorePill, { backgroundColor: p.accentSoft }]}>
-                  <Text style={styles.scoreEmoji}>{mood.emoji}</Text>
-                  <Text style={[styles.scoreValue, { color: p.accent }]}>
-                    {item.score.toFixed(1)}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      )}
-      </View>
-    </>
   );
 }
 
@@ -518,87 +392,6 @@ const styles = StyleSheet.create({
   },
   stackItem: { position: 'absolute', top: 0, left: 0, right: 0 },
   stackCard: { height: STACK_CARD_H },
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
-  },
-  portrait: { width: 60, height: 60 },
-  portraitRing: {
-    width: 60,
-    height: 60,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.85)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    // 유리 디스크가 살짝 떠 보이게
-    shadowColor: '#5B2130',
-    shadowOpacity: 0.18,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  levelBadge: {
-    position: 'absolute',
-    bottom: -4,
-    right: -6,
-    borderRadius: Radius.full,
-    paddingHorizontal: 7,
-    paddingVertical: 1.5,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
-    // 금속 칩이 도드라지게
-    shadowColor: '#5B2130',
-    shadowOpacity: 0.22,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1.5 },
-  },
-  levelText: { fontSize: 11, fontWeight: '900', letterSpacing: -0.2 },
-  bannerInfo: { flex: 1, gap: 5 },
-  gameName: { fontSize: 21, lineHeight: 28, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 },
-  rankChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  rankEmoji: { fontSize: 11 },
-  rankText: { fontSize: 11.5, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.2 },
-  xpRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  xpTrack: {
-    flex: 1,
-    height: 7,
-    borderRadius: Radius.full,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    overflow: 'hidden',
-  },
-  xpFill: { height: '100%', borderRadius: Radius.full, backgroundColor: '#FFFFFF' },
-  xpText: { fontSize: 10, fontWeight: '800', color: 'rgba(255,255,255,0.95)', fontVariant: ['tabular-nums'] },
-  bodyPad: { padding: Spacing.xl, gap: Spacing.md },
-  favTitle: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
-  favEmpty: { fontSize: 13, lineHeight: 20 },
-  favList: { gap: Spacing.sm },
-  favRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  medal: { fontSize: 20, width: 26, textAlign: 'center' },
-  favInfo: { flex: 1, gap: 1 },
-  favName: { fontSize: 15, fontWeight: '700' },
-  favCat: { fontSize: 11.5 },
-  scorePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: Radius.full,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  scoreEmoji: { fontSize: 13 },
-  scoreValue: { fontSize: 13, fontWeight: '900', fontVariant: ['tabular-nums'] },
   empty: {
     alignItems: 'center',
     gap: Spacing.md,

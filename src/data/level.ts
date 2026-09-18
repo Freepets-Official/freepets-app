@@ -5,18 +5,18 @@
  * 레벨 곡선과 티어 구성은 **서버가 확정한 값**이라 여기서 바꾸면 화면과 서버가 어긋난다.
  */
 
-/** 발바닥 티어 동물 10종. 레벨 7칸을 채우면 다음 동물로 넘어간다(7색 × 10종 = 70레벨). */
-export type TierAnimal =
-  | 'DOG'
-  | 'CAT'
-  | 'RABBIT'
-  | 'HAMSTER'
-  | 'GUINEA_PIG'
-  | 'HEDGEHOG'
-  | 'FERRET'
-  | 'PARROT'
-  | 'TURTLE'
-  | 'LIZARD';
+/**
+ * 발바닥 티어 동물 — **개·고양이 2종**(서버 재설계 2026-09-18).
+ * 앱이 지원하지 않는 종(도마뱀·페럿 등)이 레벨 배지에 나오던 위화감을 없앴다.
+ * 레벨 1~35는 개, 36~70은 고양이 — 사용자가 고르는 값이 아니라 레벨에서 나온다.
+ */
+export type TierAnimal = 'DOG' | 'CAT';
+
+/**
+ * 발바닥 선명도 — 같은 발바닥이 레벨이 오를수록 진해진다(7레벨마다 한 단계).
+ * 흐릿함(투명도 80%)에서 시작해 홀로그램(투명도 0%)에서 완전히 선명해진다.
+ */
+export type TierFinish = 'DIM' | 'CLEAR' | 'GLOSSY' | 'SPARKLE' | 'HOLOGRAPHIC';
 
 /** 발바닥 색 7종 — 무지개 순서로 레벨마다 한 칸씩 바뀐다. */
 export type TierColor = 'RED' | 'ORANGE' | 'YELLOW' | 'GREEN' | 'BLUE' | 'INDIGO' | 'VIOLET';
@@ -24,15 +24,29 @@ export type TierColor = 'RED' | 'ORANGE' | 'YELLOW' | 'GREEN' | 'BLUE' | 'INDIGO
 export const TIER_ANIMAL_LABEL: Record<TierAnimal, string> = {
   DOG: '개',
   CAT: '고양이',
-  RABBIT: '토끼',
-  HAMSTER: '햄스터',
-  GUINEA_PIG: '기니피그',
-  HEDGEHOG: '고슴도치',
-  FERRET: '페럿',
-  PARROT: '앵무새',
-  TURTLE: '거북이',
-  LIZARD: '도마뱀',
 };
+
+export const TIER_FINISH_LABEL: Record<TierFinish, string> = {
+  DIM: '흐릿함',
+  CLEAR: '또렷함',
+  GLOSSY: '빛남',
+  SPARKLE: '반짝임',
+  HOLOGRAPHIC: '홀로그램',
+};
+
+/**
+ * 선명도별 발바닥 불투명도. 흐릿함 0.2 → 홀로그램 1.0.
+ * 0.2는 정말 옅어서 배경에 묻히므로, 그리는 쪽에서 같은 색의 옅은 원을 깔아 자리를 잡아준다.
+ */
+export const TIER_FINISH_OPACITY: Record<TierFinish, number> = {
+  DIM: 0.2,
+  CLEAR: 0.4,
+  GLOSSY: 0.6,
+  SPARKLE: 0.8,
+  HOLOGRAPHIC: 1,
+};
+
+export const TIER_FINISHES: TierFinish[] = ['DIM', 'CLEAR', 'GLOSSY', 'SPARKLE', 'HOLOGRAPHIC'];
 
 export const TIER_COLOR_LABEL: Record<TierColor, string> = {
   RED: '빨강',
@@ -76,6 +90,8 @@ export type Gamification = {
   /** 서버가 계산한 "다음 레벨까지 남은 XP". 값이 이상하면 아래 levelProgress가 무시한다 */
   xpToNextLevel: number;
   tierAnimal: TierAnimal;
+  /** 선명도 5단계(서버 신규 필드). 옛 서버 응답이면 레벨에서 계산해 채운다 */
+  tierFinish: TierFinish;
   tierColor: TierColor;
   /** 서버가 만든 표시용 이름(예: "개 · 빨강"). 비어 있으면 앱이 동물·색으로 만든다 */
   tierLabel: string;
@@ -100,9 +116,17 @@ export const levelBaseXp = (level: number) => (100 * level * (level - 1)) / 2;
 export const levelStepXp = (level: number) => 100 * level;
 
 /** 서버가 tierLabel을 비워 보내도 화면에 빈칸이 남지 않게 한다. */
-export function tierName(g: Pick<Gamification, 'tierAnimal' | 'tierColor' | 'tierLabel'>): string {
+export function tierName(g: Pick<Gamification, 'tierAnimal' | 'tierFinish' | 'tierColor' | 'tierLabel'>): string {
   if (g.tierLabel) return g.tierLabel;
-  return `${TIER_ANIMAL_LABEL[g.tierAnimal]} · ${TIER_COLOR_LABEL[g.tierColor]}`;
+  return `${TIER_ANIMAL_LABEL[g.tierAnimal]} 발바닥 · ${TIER_FINISH_LABEL[g.tierFinish]} · ${TIER_COLOR_LABEL[g.tierColor]}`;
+}
+
+/**
+ * 히든 — 마지막 칸(보라 · 홀로그램 = 최대 레벨)을 뚫으면 무지개 발바닥이 된다.
+ * 서버에 별도 필드가 없다. 마지막 조합이 곧 최대 레벨이라 레벨로 판정한다.
+ */
+export function isRainbowTier(g: Pick<Gamification, 'level'>): boolean {
+  return g.level >= MAX_LEVEL;
 }
 
 /**
