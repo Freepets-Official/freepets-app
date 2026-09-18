@@ -3,6 +3,8 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, View } from 'react-native';
 
+import { Image } from 'expo-image';
+
 import { Text } from '@/components/text';
 import { PawBadge } from '@/components/paw-badge';
 import { SectionTitle } from '@/components/section-title';
@@ -208,6 +210,7 @@ export function ReviewSection({
               </View>
             </View>
             {r.content && <Text style={[styles.reviewText, { color: p.ink }]}>{r.content}</Text>}
+            {r.photoUrl ? <Image source={{ uri: r.photoUrl }} style={styles.reviewPhoto} contentFit="cover" transition={150} /> : null}
             {r.tags.length > 0 && (
               <View style={styles.reviewTags}>
                 {r.tags.map((t) => (
@@ -365,6 +368,9 @@ export function ReviewSection({
                   </Text>
                 )}
 
+                {detailTarget.photoUrl ? (
+                  <Image source={{ uri: detailTarget.photoUrl }} style={styles.detailPhoto} contentFit="cover" transition={150} />
+                ) : null}
                 {detailTarget.content && (
                   <Text style={[styles.detailContent, { color: p.ink }]}>{detailTarget.content}</Text>
                 )}
@@ -391,6 +397,8 @@ export function ReviewSection({
 }
 
 const styles = StyleSheet.create({
+  reviewPhoto: { width: '100%', height: 170, borderRadius: Radius.md, marginTop: 2 },
+  detailPhoto: { width: '100%', height: 200, borderRadius: Radius.md },
   summary: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.xl, gap: Spacing.md },
   gradeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   score: { fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },

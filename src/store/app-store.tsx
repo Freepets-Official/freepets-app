@@ -307,6 +307,8 @@ export interface NewReview {
   ratingAmenity: number;
   content: string | null;
   tags: ReviewTag[];
+  /** 방문 인증샷(로컬 uri). 수정에서 비워 보내면 서버가 기존 사진을 유지한다 */
+  photoUri?: string | null;
 }
 
 interface AppStore {
@@ -1097,6 +1099,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ratingAmenity: input.ratingAmenity,
         content: input.content ?? '',
         tags: input.tags,
+        photoUri: input.photoUri,
       });
       // 방금 쓴 글의 id를 남긴다. 서버가 내 userId를 알려주기 전까지 "내 리뷰" 판정에 쓴다.
       if (typeof created?.reviewId === 'number') {
@@ -1121,6 +1124,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ratingAmenity: input.ratingAmenity,
         content: input.content ?? '',
         tags: input.tags,
+        photoUri: input.photoUri,
       });
       await loadReviews(input.facilityId);
     },
