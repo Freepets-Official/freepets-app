@@ -2172,6 +2172,67 @@ type ServerGamification = {
   progress?: { family?: string; label?: string; count?: number; tiers?: { tier?: string; threshold?: number; earnedAt?: string | null }[] }[];
 };
 
+// ─────────────────────────── 오늘의 퀘스트(quest) ───────────────────────────
+// GET /me/gamification/quests — 오늘(KST) 6개 행동의 진행률
+//
+// **퀘스트는 새로운 행동이 아니다.** XP를 주던 기존 6개 행동을 "오늘 몇 번 했는지"로 보여줄
+// 뿐이고, 이 API를 부른다고 XP가 지급되지 않는다(지급은 각 도메인 API에서). 하루 상한이
+// 곧 target이라 completed가 target을 넘는 일은 없다. 리셋은 KST 자정.
+export type QuestSource =
+  | 'PETCHECK'
+  | 'REVIEW'
+  | 'REPORT'
+  | 'SATISFACTION'
+  | 'COURSE_PUBLISHED'
+  | 'COURSE_SHARED_COPY';
+
+export type DailyQuest = {
+  sourceType: QuestSource;
+  label: string;
+  completed: number;
+  target: number;
+  earnedXpToday: number;
+};
+
+export type DailyQuests = {
+  /** 다음 리셋(내일 KST 자정). 서버가 안 주면 null — 화면은 "자정에 초기화"만 안내한다 */
+  resetsAt: string | null;
+  quests: DailyQuest[];
+};
+
+const QUEST_SOURCES = new Set<string>([
+  'PETCHECK',
+  'REVIEW',
+  'REPORT',
+  'SATISFACTION',
+  'COURSE_PUBLISHED',
+  'COURSE_SHARED_COPY',
+]);
+
+export const questsApi = {
+  /** 오늘의 퀘스트 6개. 모르는 sourceType은 버린다 — 라벨만 있고 갈 곳을 모르면 눌러도 막힌다 */
+  today: async (): Promise<DailyQuests> => {
+    const r = await request<{
+      resetsAt?: string | null;
+      quests?: { sourceType?: string; label?: string; completed?: number; target?: number; earnedXpToday?: number }[];
+    }>('GET', '/api/v1/me/gamification/quests', { auth: true });
+    const int = (v: unknown, fallback = 0) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(Math.trunc(v), 0) : fallback);
+    return {
+      resetsAt: r.resetsAt ?? null,
+      quests: (r.quests ?? [])
+        .filter((q): q is { sourceType: QuestSource } & typeof q => !!q.sourceType && QUEST_SOURCES.has(q.sourceType))
+        .map((q) => ({
+          sourceType: q.sourceType,
+          label: q.label || '',
+          completed: int(q.completed),
+          // target이 0이면 진행률이 0으로 나눠져 NaN이 된다. 1로 바닥을 깐다
+          target: Math.max(int(q.target, 1), 1),
+          earnedXpToday: int(q.earnedXpToday),
+        })),
+    };
+  },
+};
+
 export const gamificationApi = {
   /** 내 레벨·티어·배지. 값이 빠져 있어도 화면이 깨지지 않게 여기서 기본값을 채운다. */
   me: async (): Promise<Gamification> => {

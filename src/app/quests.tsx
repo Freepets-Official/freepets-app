@@ -1,0 +1,172 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Stack, useRouter, type Href } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+
+import { Screen } from '@/components/screen';
+import { Text } from '@/components/text';
+import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { usePalette } from '@/hooks/use-theme';
+import { questsApi, type DailyQuests, type QuestSource } from '@/lib/api';
+
+/** 퀘스트를 실제로 할 수 있는 화면. 라벨만 보여주고 갈 곳이 없으면 퀘스트가 아니다 */
+const QUEST_META: Record<QuestSource, { icon: keyof typeof Ionicons.glyphMap; hint: string; route: Href }> = {
+  PETCHECK: { icon: 'search', hint: '시설 상세에서 우리 아이 기준으로 판별해요', route: '/(tabs)/explore' },
+  REVIEW: { icon: 'create', hint: '다녀온 시설에 리뷰를 남겨요', route: '/(tabs)/explore' },
+  REPORT: { icon: 'megaphone', hint: '문 앞에서 거부당했다면 제보해요', route: '/(tabs)/explore' },
+  SATISFACTION: { icon: 'happy', hint: '아이가 그곳을 얼마나 좋아했는지 남겨요', route: '/(tabs)/explore' },
+  COURSE_PUBLISHED: { icon: 'earth', hint: '내가 만든 코스를 공개해요', route: '/course' },
+  COURSE_SHARED_COPY: { icon: 'share-social', hint: '내 공유 코스를 다른 집사가 담으면 올라가요', route: '/course' },
+};
+
+/** "3시간 뒤 초기화" — 자정까지 남은 시간. 날짜만 알려주면 언제 리셋인지 계산을 사용자가 한다 */
+function resetHint(resetsAt: string | null): string {
+  if (!resetsAt) return '매일 자정(KST)에 새로 시작해요';
+  const ms = new Date(resetsAt).getTime() - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) return '곧 새로 시작해요';
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  return h > 0 ? `${h}시간 ${m}분 뒤 새로 시작해요` : `${m}분 뒤 새로 시작해요`;
+}
+
+/**
+ * 오늘의 퀘스트 — `GET /me/gamification/quests`.
+ *
+ * 퀘스트를 "받는" 행위는 없다. 이미 XP를 주던 6개 행동의 **오늘 진행률**을 보여주는 화면이라,
+ * 여기서 뭘 눌러도 XP가 지급되지 않는다(지급은 각 행동을 실제로 했을 때 서버가 한다).
+ * 그래서 각 줄은 "그 행동을 하러 가는 길"로 연결한다.
+ */
+export default function QuestsScreen() {
+  const p = usePalette();
+  const router = useRouter();
+  const [data, setData] = useState<DailyQuests | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    questsApi
+      .today()
+      .then((d) => alive && setData(d))
+      .catch(() => alive && setFailed(true));
+    return () => {
+      alive = false;
+    };
+  }, [attempt]);
+
+  const retry = useCallback(() => {
+    setFailed(false);
+    setData(null);
+    setAttempt((a) => a + 1);
+  }, []);
+
+  const quests = data?.quests ?? [];
+  const doneCount = quests.filter((q) => q.completed >= q.target).length;
+  const xpToday = quests.reduce((sum, q) => sum + q.earnedXpToday, 0);
+
+  return (
+    <Screen
+      hasNavHeader
+      eyebrow="오늘의 퀘스트"
+      title="오늘 할 일"
+      subtitle={resetHint(data?.resetsAt ?? null)}>
+      <Stack.Screen options={{ title: '오늘의 퀘스트', headerBackButtonDisplayMode: 'minimal' }} />
+
+      {failed ? (
+        <Pressable onPress={retry} style={[styles.state, { borderColor: p.line, backgroundColor: p.card }]}>
+          <Ionicons name="cloud-offline-outline" size={26} color={p.muted} />
+          <Text style={[styles.stateText, { color: p.muted }]}>퀘스트를 불러오지 못했어요. 눌러서 다시 시도</Text>
+        </Pressable>
+      ) : !data ? (
+        <ActivityIndicator color={p.accent} style={{ paddingVertical: 40 }} />
+      ) : quests.length === 0 ? (
+        <Text style={[styles.stateText, { color: p.muted, paddingVertical: 32 }]}>오늘 받을 수 있는 퀘스트가 없어요.</Text>
+      ) : (
+        <>
+          <View style={[styles.summary, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryValue, { color: p.ink }]}>
+                {doneCount}
+                <Text style={[styles.summaryUnit, { color: p.muted }]}> / {quests.length}</Text>
+              </Text>
+              <Text style={[styles.summaryLabel, { color: p.muted }]}>오늘 채운 퀘스트</Text>
+            </View>
+            <View style={[styles.summaryDivider, { backgroundColor: p.line }]} />
+            <View style={styles.summaryItem}>
+              <Text style={[styles.summaryValue, { color: p.accent }]}>
+                +{xpToday.toLocaleString()}
+                <Text style={[styles.summaryUnit, { color: p.muted }]}> XP</Text>
+              </Text>
+              <Text style={[styles.summaryLabel, { color: p.muted }]}>오늘 받은 경험치</Text>
+            </View>
+          </View>
+
+          <View style={styles.list}>
+            {quests.map((q) => {
+              const meta = QUEST_META[q.sourceType];
+              const done = q.completed >= q.target;
+              const ratio = Math.min(q.completed / q.target, 1);
+              return (
+                <Pressable
+                  key={q.sourceType}
+                  onPress={() => router.push(meta.route)}
+                  style={({ pressed }) => [
+                    styles.quest,
+                    { backgroundColor: p.card, borderColor: done ? p.success : p.line, opacity: pressed ? 0.94 : 1 },
+                  ]}>
+                  <View style={[styles.questIcon, { backgroundColor: done ? p.successSoft : p.accentSoft }]}>
+                    <Ionicons name={done ? 'checkmark' : meta.icon} size={17} color={done ? p.success : p.accent} />
+                  </View>
+                  <View style={styles.questBody}>
+                    <View style={styles.questTop}>
+                      <Text style={[styles.questLabel, { color: p.ink }]} numberOfLines={1}>
+                        {q.label || q.sourceType}
+                      </Text>
+                      <Text style={[styles.questCount, { color: done ? p.success : p.muted }]}>
+                        {q.completed}/{q.target}
+                      </Text>
+                    </View>
+                    <View style={[styles.track, { backgroundColor: p.surface }]}>
+                      <View style={[styles.fill, { width: `${Math.max(ratio * 100, done ? 100 : 3)}%`, backgroundColor: done ? p.success : p.accent }]} />
+                    </View>
+                    <Text style={[styles.questHint, { color: p.muted }]} numberOfLines={1}>
+                      {done ? '오늘 몫을 다 채웠어요' : meta.hint}
+                      {q.earnedXpToday > 0 ? ` · +${q.earnedXpToday} XP` : ''}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={15} color={p.muted} />
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={[styles.note, { color: p.muted }]}>
+            퀘스트는 따로 받는 게 아니라, 평소 하던 행동이 오늘 몇 번째인지 보여주는 거예요. 상한을 채우면 그 행동의 경험치는 내일 다시 쌓여요.
+          </Text>
+        </>
+      )}
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  state: { alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: Radius.lg, paddingVertical: 28, paddingHorizontal: Spacing.xl },
+  stateText: { fontSize: 13.5, lineHeight: 20, textAlign: 'center' },
+  summary: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: Radius.lg, paddingVertical: Spacing.lg },
+  summaryItem: { flex: 1, alignItems: 'center', gap: 3 },
+  summaryDivider: { width: 1, alignSelf: 'stretch', marginVertical: 4 },
+  summaryValue: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
+  summaryUnit: { fontSize: 13, fontWeight: '800' },
+  summaryLabel: { fontSize: 11.5, fontWeight: '700' },
+  list: { gap: Spacing.sm, marginTop: Spacing.lg },
+  quest: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg },
+  questIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  questBody: { flex: 1, gap: 5 },
+  questTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  questLabel: { flex: 1, fontSize: 14, fontWeight: '800' },
+  questCount: { fontSize: 12.5, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  track: { height: 6, borderRadius: 3, overflow: 'hidden' },
+  fill: { height: '100%', borderRadius: 3 },
+  questHint: { fontSize: 11.5 },
+  note: { fontSize: 12, lineHeight: 18, marginTop: Spacing.lg },
+});

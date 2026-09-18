@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { PetIdCard } from '@/components/pet-id-card';
+import { QuestScrollIcon } from '@/components/quest-scroll-icon';
 import { Text } from '@/components/text';
 import { ResultBadge } from '@/components/badge';
 import { GameCardFx } from '@/components/game-card-fx';
@@ -126,11 +127,24 @@ export default function HomeScreen() {
       title="반려동물 여권"
       subtitle="아이마다 좋아한 장소를 한눈에 확인하세요."
       headerRight={
-        <NotificationBell
-          count={alertCount}
-          urgent={alerts.length > 0}
-          onPress={() => router.push('/notifications')}
-        />
+        <View style={styles.headerActions}>
+          {/* 퀘스트(두루마리)와 알림(종)을 나란히 — 둘 다 "지금 할 일"을 여는 입구다 */}
+          <Pressable
+            onPress={() => router.push('/quests')}
+            hitSlop={8}
+            accessibilityLabel="오늘의 퀘스트"
+            style={({ pressed }) => [
+              styles.bellBtn,
+              { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
+            ]}>
+            <QuestScrollIcon size={21} color={p.ink} />
+          </Pressable>
+          <NotificationBell
+            count={alertCount}
+            urgent={alerts.length > 0}
+            onPress={() => router.push('/notifications')}
+          />
+        </View>
       }
       // 실제로 다시 불러온다. 예전에는 800ms 기다리는 연출뿐이라, 최초 조회가 실패하면
       // 앱을 껐다 켜기 전까지 빈 화면에서 빠져나올 방법이 없었다.
@@ -357,6 +371,7 @@ function StackCard({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bellBtn: {
     width: 42,
     height: 42,
