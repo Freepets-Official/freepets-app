@@ -10,13 +10,13 @@ import { OWNER_AMENITY_LABEL, type Facility } from '@/data/types';
 /**
  * 방문자 시설 상세 "사장님이 전하는 우리 매장" (docs/10) —
  * 소유 사업자가 대시보드에서 등록한 소개·편의시설·방문 혜택을 손님에게 노출한다.
- * 상세 응답(`ownerProfile`·`benefits`)이 비어 있으면 아무것도 그리지 않는다 — 서버가 아직
- * 이 필드를 안 주는 동안은 섹션 자체가 없다.
+ * 상세 응답(`ownerIntroduction`·`visitBenefits`)이 비어 있으면 아무것도 그리지 않는다 —
+ * 라이브 배포 전이라 지금은 섹션 자체가 안 나온다.
  */
 export function OwnerPromotionSection({ facility }: { facility: Facility }) {
   const p = usePalette();
-  const promo = facility.ownerProfile ?? null;
-  const benefits = facility.benefits ?? [];
+  const promo = facility.ownerIntroduction ?? null;
+  const benefits = facility.visitBenefits ?? [];
 
   const hasPromo = !!promo && (!!promo.introduction || promo.amenityTags.length > 0);
   if (!hasPromo && benefits.length === 0) return null;
@@ -49,8 +49,9 @@ export function OwnerPromotionSection({ facility }: { facility: Facility }) {
               <Ionicons name="pricetag" size={14} color={p.accent} />
               <Text style={[styles.benefitHeadText, { color: p.accent }]}>방문 혜택</Text>
             </View>
-            {benefits.map((b) => (
-              <View key={b.benefitId} style={styles.benefitRow}>
+            {/* key는 순서다 — 손님 응답에 benefitId가 없다(읽기 전용이라 서버가 뺐다) */}
+            {benefits.map((b, i) => (
+              <View key={`${i}-${b.title}`} style={styles.benefitRow}>
                 <Text style={[styles.benefitTitle, { color: p.ink }]}>{b.title}</Text>
                 {b.description ? (
                   <Text style={[styles.benefitDetail, { color: p.muted }]}>{b.description}</Text>

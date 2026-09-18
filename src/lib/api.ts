@@ -30,9 +30,9 @@ import type {
   Review,
   ReviewPetInfo,
   ReviewTag,
-  FacilityBenefit,
+  OwnerIntroductionView,
   OwnerAmenity,
-  OwnerProfileView,
+  VisitBenefit,
 } from '@/data/types';
 import { OWNER_AMENITY_LABEL, REVIEW_TAG_LABEL } from '@/data/types';
 import type { Gamification, TierAnimal, TierColor } from '@/data/level';
@@ -775,9 +775,13 @@ type ServerFacilityDetail = {
   maxWeightInclusive?: boolean | null;
   imageUrl: string | null;
   thumbnailUrl: string | null;
-  /** 사장님 소개·혜택 — 아직 서버가 안 준다(백엔드 요청 중). 오면 그대로 손님 화면에 그린다 */
-  ownerProfile?: { introduction?: string | null; amenityTags?: string[] | null } | null;
-  benefits?: { benefitId: number; title: string; description?: string | null }[] | null;
+  /**
+   * 사장님 소개·방문 혜택(백엔드 PR #117). 이름이 사업자 API와 다르다 — 저장은
+   * `PUT /owner/facilities/{id}/profile`인데 손님 응답 키는 `ownerIntroduction`이다.
+   * `visitBenefits`는 켜 둔 것만·등록순이고 `benefitId`가 없다(읽기 전용이라 서버가 뺐다).
+   */
+  ownerIntroduction?: { introduction?: string | null; amenityTags?: string[] | null } | null;
+  visitBenefits?: { title?: string | null; description?: string | null }[] | null;
 };
 
 /** 서버가 모르는 태그 값을 보내도 라벨 조회에서 터지지 않게 아는 값만 남긴다 */
@@ -785,13 +789,16 @@ export function toOwnerAmenities(tags: (string | null | undefined)[] | null | un
   return (tags ?? []).filter((t): t is OwnerAmenity => typeof t === 'string' && t in OWNER_AMENITY_LABEL);
 }
 
-function toOwnerProfileView(p: NonNullable<ServerFacilityDetail['ownerProfile']> | null): OwnerProfileView | null {
+function toOwnerIntroduction(p: NonNullable<ServerFacilityDetail['ownerIntroduction']> | null): OwnerIntroductionView | null {
   if (p === null) return null; // 명시된 '소개 없음'은 그대로 둔다(사장님이 지운 경우)
   return { introduction: p.introduction ?? null, amenityTags: toOwnerAmenities(p.amenityTags) };
 }
 
-function toFacilityBenefits(b: NonNullable<ServerFacilityDetail['benefits']>): FacilityBenefit[] {
-  return b.map((x) => ({ benefitId: x.benefitId, title: x.title, description: x.description ?? null }));
+function toVisitBenefits(b: NonNullable<ServerFacilityDetail['visitBenefits']>): VisitBenefit[] {
+  // 제목이 없는 항목은 버린다 — 빈 줄만 그려지면 손님은 혜택이 깨진 것으로 읽는다
+  return b
+    .filter((x): x is { title: string; description?: string | null } => typeof x?.title === 'string' && x.title.length > 0)
+    .map((x) => ({ title: x.title, description: x.description ?? null }));
 }
 
 /**
@@ -816,8 +823,8 @@ export type FacilityDetail = Pick<
   distanceM: number | null;
   address: string | null;
   maxWeightInclusive?: boolean | null;
-  ownerProfile?: OwnerProfileView | null;
-  benefits?: FacilityBenefit[];
+  ownerIntroduction?: OwnerIntroductionView | null;
+  visitBenefits?: VisitBenefit[];
 };
 
 const CONFIDENCES = new Set<string>(['CONFIRMED', 'LIKELY', 'ESTIMATED', 'UNVERIFIED']);
@@ -852,8 +859,8 @@ function toFacilityDetail(s: ServerFacilityDetail): FacilityDetail {
     // 아래 선택 필드는 서버가 생략하면 **키를 만들지 않는다**. 스토어가 `...detail`로 병합하므로
     // undefined/null 키가 있으면 검색으로 알던 값(체중 '이하/미만' 등)이 지워진다.
     ...(s.maxWeightInclusive !== undefined ? { maxWeightInclusive: s.maxWeightInclusive } : {}),
-    ...(s.ownerProfile !== undefined ? { ownerProfile: toOwnerProfileView(s.ownerProfile) } : {}),
-    ...(s.benefits != null ? { benefits: toFacilityBenefits(s.benefits) } : {}),
+    ...(s.ownerIntroduction !== undefined ? { ownerIntroduction: toOwnerIntroduction(s.ownerIntroduction) } : {}),
+    ...(s.visitBenefits != null ? { visitBenefits: toVisitBenefits(s.visitBenefits) } : {}),
   };
 }
 

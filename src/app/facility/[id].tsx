@@ -542,11 +542,11 @@ export default function FacilityDetailScreen() {
                     ) : null,
                   )}
 
-                  {facility.ownerProfile?.introduction ? (
+                  {facility.ownerIntroduction?.introduction ? (
                     <View style={[styles.ownerNote, { backgroundColor: p.card, borderColor: p.line }]}>
                       <Text style={[styles.ownerNoteLabel, { color: p.accent }]}>사장님 소개</Text>
                       <Text style={[styles.ownerNoteText, { color: p.ink }]}>
-                        {facility.ownerProfile.introduction}
+                        {facility.ownerIntroduction.introduction}
                       </Text>
                     </View>
                   ) : null}
