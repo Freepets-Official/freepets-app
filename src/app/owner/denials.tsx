@@ -58,8 +58,9 @@ export default function OwnerDenialsScreen() {
           ) : alerts.length === 0 ? (
             <Text style={[styles.empty, { color: p.muted }]}>확정 이후 들어온 거부 제보가 없어요.</Text>
           ) : (
-            alerts.map((a) => (
-              <View key={a.reportId} style={[styles.card, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
+            // 서버가 reportId를 안 주므로 key는 순서다(목록은 조회 전용이라 재정렬이 없다)
+            alerts.map((a, i) => (
+              <View key={a.reportId ?? i} style={[styles.card, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
                 <View style={styles.cardHead}>
                   <View style={[styles.tag, { backgroundColor: p.dangerSoft }]}>
                     <Ionicons name="warning" size={12} color={p.danger} />
@@ -67,7 +68,8 @@ export default function OwnerDenialsScreen() {
                   </View>
                   <Text style={[styles.when, { color: p.muted }]}>{sinceText(a.reportedAt)}</Text>
                 </View>
-                <Text style={[styles.body, { color: p.ink }]}>{a.content}</Text>
+                {/* 원문은 아직 응답에 없다(명세엔 있음) — 없으면 사유·시각만 보여준다 */}
+                {a.content ? <Text style={[styles.body, { color: p.ink }]}>{a.content}</Text> : null}
               </View>
             ))
           )}

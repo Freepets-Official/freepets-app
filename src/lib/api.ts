@@ -2342,7 +2342,13 @@ export type OwnerFacility = {
   profile: { introduction: string | null; amenityTags: OwnerAmenity[] };
 };
 
-export type OwnerDenialAlert = { reportId: number; reason: string; content: string; reportedAt: string };
+/**
+ * 사장님이 보는 거부 제보. **사진·제보자는 어떤 경우에도 오지 않는다**(제보 위축 방지).
+ *
+ * 라이브 응답(2026-09-19)은 `{reason, reportedAt}`뿐이고 명세가 말하는 원문(`content`)·
+ * `reportId`는 아직 없다 — 옵셔널로 두고, 없으면 화면이 그 줄을 그리지 않는다.
+ */
+export type OwnerDenialAlert = { reportId?: number; reason: string; content?: string | null; reportedAt: string };
 export type OwnerReviewStats = {
   itemAverages: { reviewCount: number; averageSpace: number; averageStaff: number; averageAmenity: number };
   gradeTrend: { date: string; pawGradeLevel: number | null; petScore: number | null }[];
@@ -2386,8 +2392,11 @@ export const ownerApi = {
       });
   },
   denialAlerts: async (facilityId: number): Promise<OwnerDenialAlert[]> => {
-    const r = await request<{ alerts?: OwnerDenialAlert[] }>('GET', `/api/v1/owner/facilities/${facilityId}/denial-alerts`, { auth: true });
-    return r.alerts ?? [];
+    const r = await request<{ alerts?: Partial<OwnerDenialAlert>[] }>('GET', `/api/v1/owner/facilities/${facilityId}/denial-alerts`, { auth: true });
+    // 사유·시각이 없는 항목은 버린다 — 빈 카드가 쌓이면 제보가 온 것처럼 보인다
+    return (r.alerts ?? [])
+      .filter((a): a is OwnerDenialAlert => typeof a?.reason === 'string' && typeof a?.reportedAt === 'string')
+      .map((a) => ({ reportId: a.reportId, reason: a.reason, content: a.content ?? null, reportedAt: a.reportedAt }));
   },
   /** 재심사 없이 즉시 반영. 판별에 쓰이는 값이 실제로 바뀐 경우에만 confirmedAt이 갱신된다. */
   updateConditions: async (
