@@ -7,7 +7,15 @@ import { Text } from '@/components/text';
 import { TierPaw } from '@/components/tier-paw';
 import { Radius, Spacing } from '@/constants/theme';
 import { levelProgress, tierName } from '@/data/level';
-import { BREED_SIZE_LABEL, CATEGORY_LABEL, PET_KIND_LABEL, satisfactionMood, type Pet } from '@/data/types';
+import {
+  BREED_SIZE_LABEL,
+  CATEGORY_LABEL,
+  PET_GENDER_LABEL,
+  PET_KIND_LABEL,
+  petAgeYears,
+  satisfactionMood,
+  type Pet,
+} from '@/data/types';
 import { useAppStore } from '@/store/app-store';
 
 /**
@@ -69,12 +77,17 @@ export function PetIdCard({ pet }: { pet: Pet }) {
   const medal = ['🥇', '🥈', '🥉'];
   /** 발급번호 — 아이 등록 순서(petId)를 6자리로. 서식의 빈칸을 그럴듯한 값으로 채운다 */
   const serial = String(pet.petId).padStart(6, '0');
-  /** 성별·생년월일이 서버에 생기기 전까지 이 칸을 채운다. 신분증에서 실제로 쓸모 있는 정보다 */
   const vaccinationText = pet.vaccinated
     ? pet.vaccinationDate
       ? `완료 · ${pet.vaccinationDate.replace(/-/g, '.')}`
       : '완료'
     : '미등록';
+  /** 나이는 저장하지 않고 생년월일에서 계산한다 — 저장하면 해가 바뀌어도 그대로 남는다 */
+  const age = petAgeYears(pet.birthDate);
+  const birthText = pet.birthDate ? pet.birthDate.replace(/-/g, '.') : '미등록';
+  const ageText = age === null ? '미등록' : `${age}살`;
+  /** 발급일은 서버가 준 등록 시각. 앱이 만들 수 있는 값이 아니라 없으면 비워 둔다 */
+  const issuedText = pet.createdAt ? pet.createdAt.slice(0, 10).replace(/-/g, '.') : '—';
 
   return (
     <View style={styles.card}>
@@ -102,10 +115,17 @@ export function PetIdCard({ pet }: { pet: Pet }) {
         <View style={styles.fields}>
           <Field label="이름" en="NAME" value={pet.name} strong />
           <View style={styles.fieldRow}>
+            <Field label="성별" en="SEX" value={pet.gender ? PET_GENDER_LABEL[pet.gender] : '미등록'} />
+            <Field label="나이" en="AGE" value={ageText} />
+          </View>
+          <View style={styles.fieldRow}>
             <Field label="품종" en="BREED" value={pet.species || '미등록'} />
             <Field label="몸무게" en="WEIGHT" value={`${pet.weight}kg · ${BREED_SIZE_LABEL[pet.breedSize]}`} />
           </View>
-          <Field label="예방접종" en="VACCINATION" value={vaccinationText} />
+          <View style={styles.fieldRow}>
+            <Field label="생년월일" en="DATE OF BIRTH" value={birthText} />
+            <Field label="예방접종" en="VACCINATION" value={vaccinationText} />
+          </View>
         </View>
       </View>
 
@@ -164,8 +184,10 @@ export function PetIdCard({ pet }: { pet: Pet }) {
       )}
 
       <View style={styles.strip}>
-        <Text style={styles.stripLabel}>발급 ISSUED</Text>
-        <Text style={styles.stripValue}>반갑꼬리 · No. {serial}</Text>
+        <Text style={styles.stripLabel}>발급일 ISSUED</Text>
+        <Text style={styles.stripValue}>
+          {issuedText} · 반갑꼬리 No. {serial}
+        </Text>
       </View>
     </View>
   );
