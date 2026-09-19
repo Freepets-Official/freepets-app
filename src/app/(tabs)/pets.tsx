@@ -18,7 +18,9 @@ import {
   PET_KIND_LABEL,
   nextVaccinationOf,
   vaccinationDday,
+  PET_GENDER_LABEL,
   type BreedSize,
+  type PetGender,
   type PetKind,
 } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
@@ -27,6 +29,7 @@ import { useAppStore } from '@/store/app-store';
 
 const BREED_SIZES = Object.keys(BREED_SIZE_LABEL) as BreedSize[];
 const PET_KINDS = Object.keys(PET_KIND_LABEL) as PetKind[];
+const PET_GENDERS = Object.keys(PET_GENDER_LABEL) as PetGender[];
 
 export default function PetsScreen() {
   const p = usePalette();
@@ -56,6 +59,9 @@ export default function PetsScreen() {
   const [species, setSpecies] = useState('');
   const [weight, setWeight] = useState('');
   const [breedSize, setBreedSize] = useState<BreedSize>('SMALL');
+  // 성별·생년월일은 선택 — 반려동물 주민등록증(홈 카드)의 성별·나이·생년월일 칸을 채운다
+  const [gender, setGender] = useState<PetGender | null>(null);
+  const [birth, setBirth] = useState('');
   // 개·고양이는 체중·체급으로 판별되지만, 그 외 종은 그 값이 무의미하다
   const sizeMatters = kind === 'DOG' || kind === 'CAT';
   const [vaccinated, setVaccinated] = useState(false);
@@ -99,6 +105,8 @@ export default function PetsScreen() {
     setVaccinationDate('');
     setNextVaccinationDate('');
     setPhotoUri(null);
+    setGender(null);
+    setBirth('');
     setError(null);
     setEditingId(null);
   };
@@ -115,6 +123,8 @@ export default function PetsScreen() {
     setVaccinationDate(pet.vaccinationDate ?? '');
     setNextVaccinationDate(pet.nextVaccinationDate ?? '');
     setPhotoUri(pet.photoUri);
+    setGender(pet.gender);
+    setBirth(pet.birthDate ?? '');
     setError(null);
     setFormOpen(true);
   };
@@ -143,6 +153,13 @@ export default function PetsScreen() {
     if (vaccinated && dateInput && dateInput > today) {
       return setError('접종일은 오늘까지의 날짜만 입력할 수 있어요');
     }
+    const birthInput = birth.trim();
+    if (birthInput && !/^\d{4}-\d{2}-\d{2}$/.test(birthInput)) {
+      return setError('생년월일을 YYYY-MM-DD 형식으로 입력해 주세요 (예: 2022-05-14)');
+    }
+    if (birthInput && birthInput > today) {
+      return setError('생년월일은 오늘까지의 날짜만 입력할 수 있어요');
+    }
     const nextInput = nextVaccinationDate.trim();
     if (nextInput && !/^\d{4}-\d{2}-\d{2}$/.test(nextInput)) {
       return setError('다음 접종 예정일을 YYYY-MM-DD 형식으로 입력해 주세요');
@@ -162,6 +179,10 @@ export default function PetsScreen() {
       vaccinationDate: vaccinated && dateInput ? dateInput : null,
       nextVaccinationDate: nextInput || null,
       photoUri,
+      gender,
+      birthDate: birthInput || null,
+      // 등록 시각은 서버가 정한다. 앱이 보내는 값이 아니라 응답으로 받는다
+      createdAt: null,
     };
     // 서버 저장이 끝나야 폼을 닫는다. 실패했는데 닫으면 저장된 줄 안다.
     setSaving(true);
@@ -239,6 +260,27 @@ export default function PetsScreen() {
         placeholder="품종 (예: 말티즈, 앵무새)"
         placeholderTextColor={p.muted}
         maxLength={100}
+        style={[styles.input, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
+      />
+      <Text style={[styles.label, { color: p.muted }]}>성별 (선택)</Text>
+      <View style={styles.sizeRow}>
+        {PET_GENDERS.map((g) => (
+          <Chip
+            key={g}
+            label={PET_GENDER_LABEL[g]}
+            selected={gender === g}
+            // 다시 누르면 해제 — 잘못 고른 뒤 "미입력"으로 되돌릴 방법이 있어야 한다
+            onPress={() => setGender((prev) => (prev === g ? null : g))}
+          />
+        ))}
+      </View>
+      <TextInput
+        value={birth}
+        onChangeText={setBirth}
+        placeholder="생년월일 (선택 · 예: 2022-05-14)"
+        placeholderTextColor={p.muted}
+        keyboardType="numbers-and-punctuation"
+        maxLength={10}
         style={[styles.input, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
       />
       <TextInput

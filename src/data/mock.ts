@@ -307,6 +307,9 @@ export const INITIAL_PETS: Pet[] = [
     // 데모: 작년 접종 → 다음 접종(+1년)이 곧 다가오게
     vaccinationDate: '2025-08-18',
     nextVaccinationDate: null,
+    gender: 'MALE',
+    birthDate: '2022-05-14',
+    createdAt: null,
     photoUri: null,
   },
   {
@@ -319,6 +322,9 @@ export const INITIAL_PETS: Pet[] = [
     vaccinated: false,
     vaccinationDate: null,
     nextVaccinationDate: null,
+    gender: 'FEMALE',
+    birthDate: '2020-03-02',
+    createdAt: null,
     photoUri: null,
   },
   {
@@ -332,6 +338,9 @@ export const INITIAL_PETS: Pet[] = [
     vaccinated: false,
     vaccinationDate: null,
     nextVaccinationDate: null,
+    gender: 'MALE',
+    birthDate: null,
+    createdAt: null,
     photoUri: null,
   },
 ];
