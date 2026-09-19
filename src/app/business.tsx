@@ -58,6 +58,8 @@ export default function BusinessScreen() {
       // 기존 관광공사 정보를 초깃값으로 채워 사업자가 수정만 하면 되게 한다
       setPetAllowed(f.petAllowed !== false);
       setMaxWeight(f.maxWeight !== null ? String(f.maxWeight) : '');
+      // 서버가 이하/미만을 주기 시작했다(백엔드 PR #119). 옛 응답이면 이하로 둔다
+      setMaxWeightInclusive(f.maxWeightInclusive !== false);
       setRequirements(f.requirements);
       setConditionRaw(f.petConditionRaw ?? '');
     }

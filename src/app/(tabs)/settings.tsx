@@ -57,7 +57,8 @@ const SHOW_APP_RATING = false;
  *
  * 화면과 라우트는 지우지 않는다. 1.1에서 verify·claim·profiles 파생까지 묶어 제대로 연다.
  */
-const SHOW_BUSINESS = false;
+/** 사업자 흐름이 서버까지 이어졌다(등록증 승인 신청 → 대시보드 API). 1.1부터 켠다 */
+const SHOW_BUSINESS = true;
 
 /** 설정 「계정 정보」에 어느 방법으로 들어왔는지 적는다 — 탈퇴·재로그인 때 버튼을 헷갈리지 않게 */
 const PROVIDER_LABEL: Record<LoginProvider, string> = {

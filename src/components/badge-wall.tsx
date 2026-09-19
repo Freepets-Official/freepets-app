@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius } from '@/constants/theme';
 import { BADGE_DOMAINS, BADGE_TIERS, parseBadgeCode } from '@/data/badges';
 import { XP_RULES } from '@/data/level';
 import { usePalette } from '@/hooks/use-theme';
@@ -28,11 +28,16 @@ export function BadgeWall() {
     return !parsed || !known.has(parsed.prefix);
   });
 
+  // 서버가 누적 횟수를 주면(progress[]) "몇 번 더"까지 적는다. 옛 서버면 기준만
+  const countOf = new Map(gamification.progress.map((g) => [g.family, g.count] as const));
+
   return (
     <View style={styles.wall}>
       {BADGE_DOMAINS.map((d) => {
         const got = BADGE_TIERS.filter((t) => earned.has(`${d.prefix}_${t.tier}`));
         const next = BADGE_TIERS.find((t) => !earned.has(`${d.prefix}_${t.tier}`));
+        const count = countOf.get(d.prefix);
+        const ratio = next && count !== undefined ? Math.min(1, count / next.threshold) : null;
         return (
           <View key={d.prefix} style={[styles.row, { backgroundColor: p.card, borderColor: p.line }]}>
             <View style={styles.rowHead}>
@@ -61,8 +66,17 @@ export function BadgeWall() {
                 );
               })}
             </View>
+            {ratio !== null && next && (
+              <View style={[styles.track, { backgroundColor: p.surface }]}>
+                <View style={[styles.fill, { width: `${Math.round(ratio * 100)}%`, backgroundColor: next.color }]} />
+              </View>
+            )}
             <Text style={[styles.hint, { color: p.muted }]} numberOfLines={1}>
-              {next ? `다음 · ${next.label} — ${next.threshold}${d.unit} · ${d.how}` : '전부 모았어요!'}
+              {!next
+                ? '전부 모았어요!'
+                : count !== undefined
+                  ? `${next.label}까지 ${Math.max(0, next.threshold - count)}${d.unit} 더 (${count}/${next.threshold}) · ${d.how}`
+                  : `다음 · ${next.label} — ${next.threshold}${d.unit} · ${d.how}`}
             </Text>
           </View>
         );
@@ -133,6 +147,8 @@ const styles = StyleSheet.create({
   gem: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   tierLabel: { fontSize: 10.5, fontWeight: '700' },
   hint: { fontSize: 11.5, lineHeight: 16 },
+  track: { height: 5, borderRadius: 3, overflow: 'hidden' },
+  fill: { height: '100%', borderRadius: 3 },
   quests: { gap: 8 },
   quest: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 10 },
   questXp: { borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 3, minWidth: 44, alignItems: 'center' },

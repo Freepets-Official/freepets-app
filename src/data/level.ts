@@ -82,6 +82,15 @@ export type Gamification = {
   tierBadgeImageUrl: string | null;
   levelUpNotificationEnabled: boolean;
   badges: GamificationBadge[];
+  /** 도메인별 누적 횟수와 단계별 달성 여부. 옛 서버 응답이면 빈 배열 */
+  progress: BadgeProgress[];
+};
+
+export type BadgeProgress = {
+  family: string;
+  label: string;
+  count: number;
+  tiers: { tier: string; threshold: number; earnedAt: string | null }[];
 };
 
 /** 레벨 L에 도달하는 데 필요한 누적 XP — 서버 공식 `100 × L × (L−1) / 2`. */

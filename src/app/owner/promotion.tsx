@@ -1,147 +1,103 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { OwnerLoadState } from '@/components/owner-load-state';
 import { Text } from '@/components/text';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { useOwnerFacilities } from '@/hooks/use-owner-facilities';
 import { usePalette } from '@/hooks/use-theme';
-import { AMENITY_LABEL, useAppStore, type Amenity } from '@/store/app-store';
+import { OWNER_AMENITY_LABEL, type OwnerAmenity } from '@/data/types';
+import { ApiError, ownerApi, type OwnerFacility } from '@/lib/api';
 
-const AMENITIES = Object.keys(AMENITY_LABEL) as Amenity[];
+const AMENITIES = Object.keys(OWNER_AMENITY_LABEL) as OwnerAmenity[];
 
-/** 매장 소개·홍보 (사업자 대시보드 ②) — 반려동물 관점 어필을 손님 시설 상세에 노출한다 */
+/** 매장 소개·홍보 — `PUT /owner/facilities/{id}/profile`. 소개글과 태그를 한 번에 저장한다 */
 export default function PromotionScreen() {
   const p = usePalette();
-  const router = useRouter();
-  const params = useLocalSearchParams<{ facilityId?: string }>();
-  const { businessRegs, account, facilityById, promotionOf, setPromotion } = useAppStore();
-
-  // 파라미터 없이 들어오면(설정 → 바로) 이번 실행에서 확정한 매장, 그것도 없으면 서버가 기억하는 첫 매장
-  const facilityId =
-    Number(params.facilityId) || Number(Object.keys(businessRegs)[0]) || account.ownedFacilityIds[0];
-  const facility = facilityById(facilityId);
-  const existing = promotionOf(facilityId);
-
-  const [intro, setIntro] = useState(existing?.intro ?? '');
-  const [amenities, setAmenities] = useState<Amenity[]>(existing?.amenities ?? []);
-  const [photoCount, setPhotoCount] = useState(existing?.photoCount ?? 0);
-  const [saved, setSaved] = useState(false);
-
-  const toggle = (a: Amenity) =>
-    setAmenities((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
-
-  const save = () => {
-    if (!facility) return;
-    setPromotion({ facilityId, intro: intro.trim(), amenities, photoCount });
-    setSaved(true);
-    setTimeout(() => router.back(), 700);
-  };
+  const { facilityId: idParam } = useLocalSearchParams<{ facilityId?: string }>();
+  const facilityId = Number(idParam);
+  const { facilities, failed, refresh } = useOwnerFacilities();
+  const facility = facilities?.find((f) => f.facilityId === facilityId) ?? null;
 
   if (!facility) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
-        <Stack.Screen options={{ title: '매장 소개·홍보' }} />
-        <Text style={[styles.empty, { color: p.muted }]}>등록된 매장이 없어요.</Text>
+        <Stack.Screen options={{ title: '매장 소개·홍보', headerBackButtonDisplayMode: 'minimal' }} />
+        <OwnerLoadState facilities={facilities} failed={failed} refresh={refresh} />
       </SafeAreaView>
     );
   }
+  // 폼은 서버 값이 온 뒤에 마운트한다 — 초기값으로 한 번 채우고, 사용자가 고치는 중에 재조회가 덮지 않는다
+  return <PromotionForm facility={facility} refresh={refresh} />;
+}
+
+function PromotionForm({ facility, refresh }: { facility: OwnerFacility; refresh: () => Promise<void> }) {
+  const p = usePalette();
+  const router = useRouter();
+  const [intro, setIntro] = useState(facility.profile.introduction ?? '');
+  const [amenities, setAmenities] = useState<OwnerAmenity[]>(facility.profile.amenityTags);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const toggle = (a: OwnerAmenity) => setAmenities((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
+
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await ownerApi.updateProfile(facility.facilityId, { introduction: intro.trim() || null, amenityTags: amenities });
+      await refresh();
+      setSaved(true);
+      setTimeout(() => router.back(), 700);
+    } catch (e) {
+      setError(e instanceof ApiError && e.message ? e.message : '저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
       <Stack.Screen options={{ title: '매장 소개·홍보', headerBackButtonDisplayMode: 'minimal' }} />
-      <ScrollView
-        automaticallyAdjustKeyboardInsets
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView automaticallyAdjustKeyboardInsets keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           <View style={styles.head}>
             <Text style={[styles.eyebrow, { color: p.accent }]}>{facility.name}</Text>
             <Text style={[styles.title, { color: p.ink }]}>사장님이 전하는{'\n'}우리 매장</Text>
-            <Text style={[styles.sub, { color: p.muted }]}>
-              여기서 적은 내용은 손님 시설 상세에 &lsquo;사장님이 전하는 우리 매장&rsquo;으로 보여져요.
-            </Text>
+            <Text style={[styles.sub, { color: p.muted }]}>여기서 적은 내용은 손님 시설 상세에 &lsquo;사장님이 전하는 우리 매장&rsquo;으로 보여져요.</Text>
           </View>
 
-          {/* 대표 사진 */}
-          <View style={styles.field}>
-            <Text style={[styles.label, { color: p.ink }]}>대표 사진</Text>
-            <View style={styles.photos}>
-              {Array.from({ length: photoCount }).map((_, i) => (
-                <View key={i} style={[styles.photo, { backgroundColor: p.accentSoft }]}>
-                  <Ionicons name="paw" size={20} color={p.accent} />
-                  <Pressable
-                    onPress={() => setPhotoCount((c) => Math.max(0, c - 1))}
-                    style={[styles.photoDel, { backgroundColor: p.ink }]}>
-                    <Ionicons name="close" size={11} color="#FFF" />
-                  </Pressable>
-                </View>
-              ))}
-              {photoCount < 5 && (
-                <Pressable
-                  onPress={() => setPhotoCount((c) => c + 1)}
-                  style={[styles.photoAdd, { borderColor: p.line }]}>
-                  <Ionicons name="camera-outline" size={22} color={p.muted} />
-                  <Text style={[styles.photoAddText, { color: p.muted }]}>추가</Text>
-                </Pressable>
-              )}
-            </View>
-            <Text style={[styles.hint, { color: p.muted }]}>
-              사진 업로드는 준비 중이에요. 우선 소개글·편의시설부터 등록해 주세요.
-            </Text>
-          </View>
-
-          {/* 소개글 */}
           <View style={styles.field}>
             <Text style={[styles.label, { color: p.ink }]}>소개글</Text>
-            <TextInput
-              value={intro}
-              onChangeText={setIntro}
-              placeholder="예) 대형견도 환영해요. 야외 테라스에 급수대와 펫 메뉴가 준비돼 있어요."
-              placeholderTextColor={p.muted}
-              multiline
-              style={[styles.textarea, { backgroundColor: p.surface, borderColor: p.line, color: p.ink }]}
-            />
+            <TextInput value={intro} onChangeText={setIntro} placeholder="예) 대형견도 환영해요. 야외 테라스에 급수대와 펫 메뉴가 준비돼 있어요." placeholderTextColor={p.muted} multiline maxLength={500} style={[styles.textarea, { backgroundColor: p.surface, borderColor: p.line, color: p.ink }]} />
+            <Text style={[styles.hint, { color: p.muted }]}>{intro.length}/500</Text>
           </View>
 
-          {/* 편의시설 태그 */}
           <View style={styles.field}>
             <Text style={[styles.label, { color: p.ink }]}>반려동물 편의시설</Text>
             <View style={styles.chips}>
               {AMENITIES.map((a) => {
                 const on = amenities.includes(a);
                 return (
-                  <Pressable
-                    key={a}
-                    onPress={() => toggle(a)}
-                    style={[
-                      styles.chip,
-                      { backgroundColor: on ? p.accentSoft : p.surface, borderColor: on ? p.accent : p.line },
-                    ]}>
-                    <Ionicons
-                      name={on ? 'checkmark-circle' : 'add-circle-outline'}
-                      size={15}
-                      color={on ? p.accent : p.muted}
-                    />
-                    <Text style={[styles.chipText, { color: on ? p.accent : p.muted }]}>
-                      {AMENITY_LABEL[a]}
-                    </Text>
+                  <Pressable key={a} onPress={() => toggle(a)} style={[styles.chip, { backgroundColor: on ? p.accentSoft : p.surface, borderColor: on ? p.accent : p.line }]}>
+                    <Ionicons name={on ? 'checkmark-circle' : 'add-circle-outline'} size={15} color={on ? p.accent : p.muted} />
+                    <Text style={[styles.chipText, { color: on ? p.accent : p.muted }]}>{OWNER_AMENITY_LABEL[a]}</Text>
                   </Pressable>
                 );
               })}
             </View>
           </View>
 
-          <Pressable
-            onPress={save}
-            style={({ pressed }) => [
-              styles.saveBtn,
-              { backgroundColor: saved ? p.success : pressed ? p.accentDark : p.accent },
-            ]}>
-            <Ionicons name={saved ? 'checkmark' : 'save-outline'} size={16} color={p.onAccent} />
-            <Text style={[styles.saveText, { color: p.onAccent }]}>
-              {saved ? '저장했어요' : '저장하기'}
-            </Text>
+          <Text style={[styles.hint, { color: p.muted }]}>대표 사진 업로드는 준비 중이에요. 관광공사 사진이 동기화 때 덮어써서 별도 저장이 필요해요.</Text>
+          {error && <Text style={[styles.err, { color: p.danger }]}>{error}</Text>}
+          <Pressable onPress={() => void save()} disabled={saving} style={({ pressed }) => [styles.saveBtn, { backgroundColor: saved ? p.success : pressed || saving ? p.accentDark : p.accent }]}>
+            {saving ? <ActivityIndicator color={p.onAccent} size="small" /> : <Ionicons name={saved ? 'checkmark' : 'save-outline'} size={16} color={p.onAccent} />}
+            <Text style={[styles.saveText, { color: p.onAccent }]}>{saved ? '저장했어요' : saving ? '저장하는 중…' : '저장하기'}</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -159,57 +115,13 @@ const styles = StyleSheet.create({
   sub: { fontSize: 13, lineHeight: 20, marginTop: 4 },
   field: { gap: 8 },
   label: { fontSize: 14.5, fontWeight: '800' },
-  photos: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  photo: { width: 72, height: 72, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
-  photoDel: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  photoAdd: {
-    width: 72,
-    height: 72,
-    borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  photoAddText: { fontSize: 11, fontWeight: '700' },
   hint: { fontSize: 11.5, lineHeight: 17 },
-  textarea: {
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    padding: Spacing.lg,
-    fontSize: 14.5,
-    minHeight: 96,
-    textAlignVertical: 'top',
-  },
+  err: { fontSize: 12.5, lineHeight: 18, fontWeight: '600' },
+  textarea: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, fontSize: 14.5, minHeight: 96, textAlignVertical: 'top' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderWidth: 1.5,
-    borderRadius: Radius.full,
-    paddingHorizontal: 13,
-    paddingVertical: 8,
-  },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1.5, borderRadius: Radius.full, paddingHorizontal: 13, paddingVertical: 8 },
   chipText: { fontSize: 13, fontWeight: '700' },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: Radius.full,
-    paddingVertical: 15,
-  },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: Radius.full, paddingVertical: 15 },
   saveText: { fontSize: 15, fontWeight: '800' },
   empty: { fontSize: 14, textAlign: 'center', padding: 40 },
 });

@@ -97,6 +97,50 @@ export const CONFIDENCE_SOURCE_LABEL: Record<ConfidenceSource, string> = {
   NONE: '정보 없음',
 };
 
+/**
+ * 사장님이 선언하는 편의시설(서버 `FacilityAmenity`). 리뷰 태그(`Tag`)와 이름이 겹쳐 보여도
+ * 다른 enum — 저쪽은 손님 관측, 이쪽은 사장님 주장이라 값을 공유하지 않는다.
+ */
+export type OwnerAmenity =
+  | 'WATER_BOWL'
+  | 'POOP_BAG'
+  | 'PET_MENU'
+  | 'OUTDOOR_TERRACE'
+  | 'LEASH_FREE_ZONE'
+  | 'PARKING'
+  | 'PET_SUPPLIES'
+  | 'CUSHION_BLANKET';
+
+export const OWNER_AMENITY_LABEL: Record<OwnerAmenity, string> = {
+  WATER_BOWL: '급수대',
+  POOP_BAG: '배변봉투',
+  PET_MENU: '펫 메뉴',
+  OUTDOOR_TERRACE: '야외 테라스',
+  LEASH_FREE_ZONE: '목줄 프리 공간',
+  PARKING: '주차 가능',
+  PET_SUPPLIES: '반려용품 비치',
+  CUSHION_BLANKET: '방석·담요',
+};
+
+/**
+ * 손님 시설 상세 "사장님이 전하는 우리 매장" — 사장님이 대시보드에서 저장한 소개·편의시설.
+ * 서버 필드명은 `ownerIntroduction`이다(사업자 쪽 `profile`과 이름이 다르다).
+ */
+export interface OwnerIntroductionView {
+  introduction: string | null;
+  amenityTags: OwnerAmenity[];
+}
+
+/**
+ * 손님에게 켜 둔(`isEnabled: true`) 방문 혜택. 등록순으로 온다.
+ * **`benefitId`가 없다** — 손님 화면은 읽기 전용이라 서버가 의도적으로 뺐다(백엔드 PR #117).
+ * 목록 key는 순서를 쓴다.
+ */
+export interface VisitBenefit {
+  title: string;
+  description: string | null;
+}
+
 export interface Facility {
   facilityId: number;
   name: string;
@@ -112,6 +156,8 @@ export interface Facility {
   petAllowed: boolean | null;
   petConditionRaw: string | null;
   maxWeight: number | null;
+  /** true="이하", false="미만". maxWeight가 없거나 옛 서버면 null */
+  maxWeightInclusive?: boolean | null;
   requirements: Requirement[];
   /** 행정구역 — 실제로는 관광공사 areaCode/sigunguCode. 목은 이름으로 둔다 */
   sido: string;
@@ -121,6 +167,12 @@ export interface Facility {
   confidenceSource: ConfidenceSource;
   /** 마지막으로 확인된 시각 (ISO). 없으면 확인된 적 없음 */
   confirmedAt: string | null;
+  /**
+   * 사장님 소개·혜택. 상세 응답에만 실린다 — 서버가 아직 안 내려주면 undefined라 화면은 그 섹션을
+   * 그리지 않는다(백엔드 요청 중, owner-dashboard.md 참고).
+   */
+  ownerIntroduction?: OwnerIntroductionView | null;
+  visitBenefits?: VisitBenefit[];
 }
 
 /** 신뢰도 배지 표시용 정보 (라벨·근거·최종확인 문구) */
