@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Image } from 'expo-image';
 
@@ -340,7 +340,10 @@ export function ReviewSection({
         <Pressable style={styles.backdrop} onPress={() => setDetailTarget(null)}>
           <Pressable style={[styles.sheet, { backgroundColor: p.card }]} onPress={(e) => e.stopPropagation()}>
             {detailTarget && (
-              <>
+              <ScrollView
+                contentContainerStyle={styles.detailScroll}
+                showsVerticalScrollIndicator={false}
+                bounces={false}>
                 <View style={styles.detailHead}>
                   <Text style={[styles.sheetTitle, { color: p.ink }]}>{detailTarget.nickname}</Text>
                   <StarsDisplay
@@ -384,7 +387,7 @@ export function ReviewSection({
                   </View>
                 )}
                 <Text style={[styles.visited, { color: p.muted }]}>{detailTarget.visitedAt} 방문</Text>
-              </>
+              </ScrollView>
             )}
             <Pressable onPress={() => setDetailTarget(null)} style={styles.cancel}>
               <Text style={[styles.cancelText, { color: p.muted }]}>닫기</Text>
@@ -465,9 +468,12 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
     paddingBottom: Spacing.xxl,
     gap: Spacing.sm,
+    // 사진까지 들어가면 작은 화면에서 시트가 화면보다 커진다 — 안에서 스크롤되게 상한을 둔다
+    maxHeight: '85%',
   },
   sheetTitle: { fontSize: 17, fontWeight: '900', letterSpacing: -0.4 },
   sheetBody: { fontSize: 12.5, lineHeight: 19, marginBottom: Spacing.sm },
+  detailScroll: { gap: Spacing.sm },
   detailHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   detailPets: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.md, gap: 6, marginTop: 4 },
   detailPetsLabel: { fontSize: 11.5, fontWeight: '800' },

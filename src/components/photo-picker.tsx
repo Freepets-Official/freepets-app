@@ -29,11 +29,16 @@ export function PhotoPicker({
   const p = usePalette();
 
   const pick = async (from: 'camera' | 'library') => {
-    const perm =
-      from === 'camera'
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
+    /**
+     * **앨범은 권한을 묻지 않는다.** 시스템 사진 선택기가 고른 한 장만 앱에 건네주므로
+     * 라이브러리 접근 권한이 필요 없다. 예전처럼 미리 물어보면, 한 번 거부해 둔 사용자는
+     * 앨범 버튼을 눌러도 아무 일도 일어나지 않는다(요청이 즉시 거부로 돌아와 여기서 끊긴다).
+     * 카메라는 실제로 권한이 필요해 그대로 묻는다.
+     */
+    if (from === 'camera') {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) return;
+    }
     const result =
       from === 'camera'
         ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8, exif: false })
