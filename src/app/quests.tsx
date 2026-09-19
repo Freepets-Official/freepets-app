@@ -13,13 +13,13 @@ import { questsApi, type DailyQuests, type QuestSource } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
 
 /** 퀘스트를 실제로 할 수 있는 화면. 라벨만 보여주고 갈 곳이 없으면 퀘스트가 아니다 */
-const QUEST_META: Record<QuestSource, { icon: keyof typeof Ionicons.glyphMap; hint: string; route: Href }> = {
-  PETCHECK: { icon: 'search', hint: '시설 상세에서 우리 아이 기준으로 판별해요', route: '/(tabs)/explore' },
-  REVIEW: { icon: 'create', hint: '다녀온 시설에 리뷰를 남겨요', route: '/(tabs)/explore' },
-  REPORT: { icon: 'megaphone', hint: '문 앞에서 거부당했다면 제보해요', route: '/(tabs)/explore' },
-  SATISFACTION: { icon: 'happy', hint: '아이가 그곳을 얼마나 좋아했는지 남겨요', route: '/(tabs)/explore' },
-  COURSE_PUBLISHED: { icon: 'earth', hint: '내가 만든 코스를 공개해요', route: '/course' },
-  COURSE_SHARED_COPY: { icon: 'share-social', hint: '내 공유 코스를 다른 집사가 담으면 올라가요', route: '/course' },
+const QUEST_META: Record<QuestSource, { icon: keyof typeof Ionicons.glyphMap; hint: string; route: Href; xp: number }> = {
+  PETCHECK: { icon: 'search', hint: '시설 상세에서 우리 아이 기준으로 판별해요', route: '/(tabs)/explore', xp: 5 },
+  REVIEW: { icon: 'create', hint: '다녀온 시설에 리뷰를 남겨요', route: '/(tabs)/explore', xp: 20 },
+  REPORT: { icon: 'megaphone', hint: '문 앞에서 거부당했다면 제보해요', route: '/(tabs)/explore', xp: 15 },
+  SATISFACTION: { icon: 'happy', hint: '아이가 그곳을 얼마나 좋아했는지 남겨요', route: '/(tabs)/explore', xp: 10 },
+  COURSE_PUBLISHED: { icon: 'earth', hint: '내가 만든 코스를 공개해요', route: '/course', xp: 20 },
+  COURSE_SHARED_COPY: { icon: 'share-social', hint: '내 공유 코스를 다른 집사가 담으면 올라가요', route: '/course', xp: 15 },
 };
 
 /** "3시간 뒤 초기화" — 자정까지 남은 시간. 날짜만 알려주면 언제 리셋인지 계산을 사용자가 한다 */
@@ -148,6 +148,7 @@ export default function QuestsScreen() {
                       <Text style={[styles.questLabel, { color: p.ink }]} numberOfLines={1}>
                         {q.label || q.sourceType}
                       </Text>
+                      <Text style={[styles.questXp, { color: p.accent }]}>+{meta.xp}</Text>
                       <Text style={[styles.questCount, { color: done ? p.success : p.muted }]}>
                         {q.completed}/{q.target}
                       </Text>
@@ -176,9 +177,20 @@ export default function QuestsScreen() {
             <Text style={[styles.pawRowAction, { color: p.accent }]}>바꾸기</Text>
           </Pressable>
 
-          <Text style={[styles.note, { color: p.muted }]}>
-            퀘스트는 따로 받는 게 아니라, 평소 하던 행동이 오늘 몇 번째인지 보여주는 거예요. 상한을 채우면 그 행동의 경험치는 내일 다시 쌓여요.
-          </Text>
+          <View style={[styles.howCard, { borderColor: p.line, backgroundColor: p.card }]}>
+            <Text style={[styles.howTitle, { color: p.ink }]}>레벨은 이렇게 올라요</Text>
+            <Text style={[styles.howBody, { color: p.muted }]}>
+              위 여섯 가지 행동에 경험치가 붙고, 그게 모여 <Text style={{ fontWeight: '800', color: p.ink }}>집사 레벨</Text>이 올라가요.
+              레벨이 오를 때마다 발바닥 색이 진해지고(투명도 80%→0%), 다섯 칸을 다 채우면 다음 무지개 색으로 넘어가요.
+            </Text>
+            <Text style={[styles.howBody, { color: p.muted }]}>
+              퀘스트는 따로 받는 게 아니라 평소 하던 행동이 오늘 몇 번째인지 보여주는 거예요. 하루 상한을 채우면 그 행동의 경험치는 내일 다시 쌓여요.
+            </Text>
+            <Pressable onPress={() => router.push('/stamps')} style={styles.howLink}>
+              <Ionicons name="footsteps-outline" size={14} color={p.accent} />
+              <Text style={[styles.howLinkText, { color: p.accent }]}>경험치 규칙 전체 보기 (도장첩)</Text>
+            </Pressable>
+          </View>
         </>
       )}
     </Screen>
@@ -200,6 +212,7 @@ const styles = StyleSheet.create({
   questBody: { flex: 1, gap: 5 },
   questTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   questLabel: { flex: 1, fontSize: 14, fontWeight: '800' },
+  questXp: { fontSize: 11.5, fontWeight: '800' },
   questCount: { fontSize: 12.5, fontWeight: '800', fontVariant: ['tabular-nums'] },
   track: { height: 6, borderRadius: 3, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 3 },
@@ -216,5 +229,9 @@ const styles = StyleSheet.create({
   },
   pawRowText: { flex: 1, fontSize: 13.5, fontWeight: '800' },
   pawRowAction: { fontSize: 13, fontWeight: '800' },
-  note: { fontSize: 12, lineHeight: 18, marginTop: Spacing.lg },
+  howCard: { gap: 7, borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, marginTop: Spacing.lg },
+  howTitle: { fontSize: 14, fontWeight: '800' },
+  howBody: { fontSize: 12.5, lineHeight: 19 },
+  howLink: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingTop: 2 },
+  howLinkText: { fontSize: 12.5, fontWeight: '800' },
 });
