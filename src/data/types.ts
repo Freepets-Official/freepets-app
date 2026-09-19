@@ -498,6 +498,34 @@ export interface Pet {
   nextVaccinationDate: string | null;
   /** 프로필 사진 (선택). 없으면 이름 첫 글자로 아바타를 만든다 */
   photoUri: string | null;
+  /** 성별(선택). 서버 enum `MALE`|`FEMALE`, 미입력이면 null */
+  gender: PetGender | null;
+  /** 생년월일 `yyyy-MM-dd`(선택). 나이는 이 값으로 앱이 계산한다 */
+  birthDate: string | null;
+  /** 등록 시각(서버). 명함의 '발급일'로 쓴다 — 앱이 만들 수 없는 값이라 서버 것만 신뢰한다 */
+  createdAt: string | null;
+}
+
+export type PetGender = 'MALE' | 'FEMALE';
+
+export const PET_GENDER_LABEL: Record<PetGender, string> = {
+  MALE: '수컷',
+  FEMALE: '암컷',
+};
+
+/**
+ * 생년월일 → 만 나이. 생일이 안 지났으면 한 살 뺀다.
+ * 형식이 깨졌거나 미래 날짜면 null — 명함에 "-1살"이 찍히면 안 된다.
+ */
+export function petAgeYears(birthDate: string | null, now = new Date()): number | null {
+  if (!birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return null;
+  const b = new Date(`${birthDate}T00:00:00`);
+  if (Number.isNaN(b.getTime()) || b > now) return null;
+  let age = now.getFullYear() - b.getFullYear();
+  const beforeBirthday =
+    now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate());
+  if (beforeBirthday) age -= 1;
+  return age >= 0 ? age : null;
 }
 
 /**

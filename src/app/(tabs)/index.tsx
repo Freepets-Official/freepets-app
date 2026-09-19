@@ -243,7 +243,7 @@ export default function HomeScreen() {
 }
 
 /** 거부 알림의 통통 뛰는 벨 — 시선을 끈다 */
-const STACK_CARD_H = 344;
+const STACK_CARD_H = 392;
 const STACK_PEEK = 72;
 const STACK_SPRING = { damping: 16, stiffness: 180, mass: 0.7 };
 // 틸트가 원위치로 돌아올 때의 스프링 — 살짝 출렁이며 손을 떼는 느낌

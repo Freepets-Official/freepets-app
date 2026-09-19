@@ -512,6 +512,10 @@ type ServerPet = {
   vaccinationDate?: string | null;
   nextVaccinationDate?: string | null;
   isVaccinated?: boolean;
+  /** 2026-09-20 배포부터. 옛 서버·미입력이면 없다 */
+  gender?: string | null;
+  birthDate?: string | null;
+  createdAt?: string | null;
 };
 
 /** 서버 → 앱 Pet. profile(URL 문자열)은 photoUri로 그대로 표시된다. */
@@ -527,6 +531,10 @@ function toPet(s: ServerPet): Pet {
     vaccinationDate: s.vaccinationDate ?? null,
     nextVaccinationDate: s.nextVaccinationDate ?? null,
     photoUri: s.profile || null,
+    // 모르는 값이 오면 버린다 — 명함에 빈 성별이 찍히느니 줄을 숨기는 게 낫다
+    gender: s.gender === 'MALE' || s.gender === 'FEMALE' ? s.gender : null,
+    birthDate: s.birthDate ?? null,
+    createdAt: s.createdAt ?? null,
   };
 }
 
@@ -543,6 +551,9 @@ async function toForm(p: Omit<Pet, 'petId'>): Promise<FormData> {
   fd.append('weight', String(p.weight));
   fd.append('breedSize', p.breedSize);
   fd.append('isVaccinated', String(p.vaccinated));
+  // 선택 항목 — 비어 있으면 아예 보내지 않는다(빈 문자열은 서버 검증에 걸린다)
+  if (p.gender) fd.append('gender', p.gender);
+  if (p.birthDate) fd.append('birthDate', p.birthDate);
   if (p.vaccinationDate) fd.append('vaccinationDate', p.vaccinationDate);
   if (p.nextVaccinationDate) fd.append('nextVaccinationDate', p.nextVaccinationDate);
   if (p.photoUri && !/^https?:/.test(p.photoUri)) {
