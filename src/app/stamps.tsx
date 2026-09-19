@@ -47,14 +47,29 @@ export default function StampsScreen() {
           <LevelCard />
           {gamification && (
             <>
-              <Text style={[styles.sectionTitle, { color: p.ink }]}>경험치 얻는 법</Text>
-              {/* 규칙표는 "왜 오르는지", 오늘 몇 번 했는지는 퀘스트 화면이 서버 값으로 보여준다 */}
+              {/*
+                규칙표는 "왜 오르는지"만 알려준다. 오늘 몇 번 했는지는 서버 값이라 퀘스트 화면이
+                보여주므로, 글자 링크가 아니라 홈의 도장첩 입구와 같은 모양의 버튼으로 연결한다.
+              */}
               <Pressable
                 onPress={() => router.push('/quests')}
-                style={({ pressed }) => [styles.questsLink, { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : 'transparent' }]}>
-                <Ionicons name="today-outline" size={15} color={p.accent} />
-                <Text style={[styles.questsLinkText, { color: p.accent }]}>오늘 몇 번 했는지 보기</Text>
+                style={({ pressed }) => [
+                  styles.questsEntry,
+                  { borderColor: p.line, backgroundColor: p.card, opacity: pressed ? 0.92 : 1 },
+                ]}>
+                <View style={[styles.questsEntryIcon, { backgroundColor: p.accentSoft }]}>
+                  <Ionicons name="today" size={18} color={p.accent} />
+                </View>
+                <View style={styles.questsEntryTexts}>
+                  <Text style={[styles.questsEntryTitle, { color: p.ink }]}>오늘의 퀘스트</Text>
+                  <Text style={[styles.questsEntryBody, { color: p.muted }]}>
+                    오늘 몇 번 했는지, 얼마나 더 하면 되는지 확인해요
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={p.muted} />
               </Pressable>
+
+              <Text style={[styles.sectionTitle, { color: p.ink }]}>경험치 얻는 법</Text>
               <QuestList />
             </>
           )}
@@ -277,16 +292,19 @@ const styles = StyleSheet.create({
   summaryNum: { fontSize: 22, fontWeight: '800' },
   summaryLabel: { fontSize: 11.5 },
 
-  questsLink: {
+  questsEntry: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+    gap: 12,
     borderWidth: 1,
-    borderRadius: Radius.full,
-    paddingVertical: 10,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 14,
   },
-  questsLinkText: { fontSize: 13, fontWeight: '800' },
+  questsEntryIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  questsEntryTexts: { flex: 1, gap: 2 },
+  questsEntryTitle: { fontSize: 14.5, fontWeight: '800' },
+  questsEntryBody: { fontSize: 12, lineHeight: 17 },
   sectionTitle: { fontSize: 13.5, fontWeight: '800', marginTop: 10 },
   hint: { fontSize: 11.5, marginTop: -2 },
 
