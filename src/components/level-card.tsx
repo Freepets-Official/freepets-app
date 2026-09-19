@@ -2,22 +2,19 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
+import { TierPaw } from '@/components/tier-paw';
 import { Radius, Spacing } from '@/constants/theme';
 import { MAX_LEVEL, TIER_COLOR_HEX, levelProgress, tierName } from '@/data/level';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
 /**
- * 발바닥 티어 배지.
- *
- * 서버가 그림 URL을 주면 그걸 쓰고, 없으면 **티어 색으로 칠한 발바닥**을 그린다.
- * 색이 곧 등급이라(무지개 7색 × 동물 10종 = 70레벨) 그림이 없어도 정보는 다 보인다.
+ * 발바닥 티어 배지 — 서버가 그림 URL을 주면 그걸, 없으면 `TierPaw`가 직접 그린다.
+ * (디자인 리소스가 없어 지금은 항상 직접 그린다 — `tierBadgeImageUrl`은 늘 생략된다)
  */
 function TierBadge({ size = 56 }: { size?: number }) {
-  const p = usePalette();
   const { gamification } = useAppStore();
   if (!gamification) return null;
-  const color = TIER_COLOR_HEX[gamification.tierColor];
 
   if (gamification.tierBadgeImageUrl) {
     return (
@@ -28,16 +25,7 @@ function TierBadge({ size = 56 }: { size?: number }) {
       />
     );
   }
-  return (
-    <View
-      style={[
-        styles.tierCircle,
-        { width: size, height: size, borderRadius: size / 2, borderColor: color, backgroundColor: p.surface },
-      ]}
-      accessibilityLabel={tierName(gamification)}>
-      <Ionicons name="paw" size={size * 0.5} color={color} />
-    </View>
-  );
+  return <TierPaw gamification={gamification} size={size} />;
 }
 
 /**
