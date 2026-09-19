@@ -29,10 +29,10 @@ import { useAppStore } from '@/store/app-store';
  * ⚠️ 1단계는 인증이 목이다 — 사진을 받되 검사하지 않는다. 실제 비전 판별·GPS 대조는 2단계다.
  */
 /**
- * 지역 랭킹 진입점 — 서버 API가 아직 없어 공모전 제출 범위에서 뺐다.
- * 화면과 클라이언트는 그대로 있으니, 백엔드가 열리면 이 값만 true로 바꾸면 된다.
+ * 랭킹 진입점 — 서버 API(`GET /gamification/ranking`)가 열리면 켠다.
+ * 화면과 클라이언트는 붙어 있고, 없으면 "곧 열려요"로 떨어진다.
  */
-const SHOW_REGION_RANKING = false;
+const SHOW_RANKING = false;
 
 export default function StampsScreen() {
   const p = usePalette();
@@ -80,9 +80,9 @@ export default function StampsScreen() {
                 **서버 API가 없어 공모전 제출 범위에서 뺐다.** 화면(`/region-ranking`)은 붙어 있으니
                 백엔드가 열리면 이 플래그만 켜면 된다.
               */}
-              {SHOW_REGION_RANKING && (
+              {SHOW_RANKING && (
               <Pressable
-                onPress={() => router.push('/region-ranking')}
+                onPress={() => router.push('/ranking')}
                 style={({ pressed }) => [
                   styles.questsEntry,
                   { borderColor: p.line, backgroundColor: p.card, opacity: pressed ? 0.92 : 1 },
@@ -91,9 +91,9 @@ export default function StampsScreen() {
                   <Ionicons name="trophy" size={17} color={p.accent} />
                 </View>
                 <View style={styles.questsEntryTexts}>
-                  <Text style={[styles.questsEntryTitle, { color: p.ink }]}>지역 랭킹</Text>
+                  <Text style={[styles.questsEntryTitle, { color: p.ink }]}>집사 랭킹</Text>
                   <Text style={[styles.questsEntryBody, { color: p.muted }]}>
-                    같은 지역을 다녀온 집사들 사이에서 내 자리를 확인해요
+                    경험치로 줄 세운 전체 순위에서 내 자리를 확인해요
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={p.muted} />
