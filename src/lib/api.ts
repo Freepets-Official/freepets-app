@@ -35,8 +35,8 @@ import type {
   VisitBenefit,
 } from '@/data/types';
 import { OWNER_AMENITY_LABEL, REVIEW_TAG_LABEL } from '@/data/types';
-import type { Gamification, TierAnimal, TierColor, TierFinish } from '@/data/level';
-import { MAX_LEVEL, TIER_ANIMAL_LABEL, TIER_COLOR_LABEL, TIER_FINISH_LABEL, TIER_FINISHES } from '@/data/level';
+import type { Gamification, TierAnimal, TierColor } from '@/data/level';
+import { MAX_LEVEL, TIER_ANIMAL_LABEL, TIER_COLOR_LABEL } from '@/data/level';
 
 import { API_URL, DEV_TOKEN } from './config';
 
@@ -2363,18 +2363,11 @@ export const gamificationApi = {
     const level = Math.min(Math.max(Math.trunc(r.level ?? 1), 1), MAX_LEVEL);
     const animal = (r.tierAnimal ?? 'DOG') as TierAnimal;
     const color = (r.tierColor ?? 'RED') as TierColor;
-    /**
-     * 선명도는 신규 필드다. 안 오면 서버 공식 `((레벨-1) / 7) % 5`로 채운다 —
-     * 배지를 안 그리고 비워두면 레벨이 올라도 모양이 그대로라 보상이 사라진다.
-     */
-    const finishRaw = (r.tierFinish ?? '') as TierFinish;
-    const finish = TIER_FINISH_LABEL[finishRaw] ? finishRaw : TIER_FINISHES[Math.floor((level - 1) / 7) % 5];
     return {
       level,
       totalXp: Math.max(r.totalXp ?? 0, 0),
       xpToNextLevel: Math.max(r.xpToNextLevel ?? 0, 0),
       tierAnimal: TIER_ANIMAL_LABEL[animal] ? animal : 'DOG',
-      tierFinish: finish,
       tierColor: TIER_COLOR_LABEL[color] ? color : 'RED',
       tierLabel: r.tierLabel ?? '',
       // 빈 문자열이 오면 <Image>가 조용히 깨진다. 없는 것과 같게 만든다

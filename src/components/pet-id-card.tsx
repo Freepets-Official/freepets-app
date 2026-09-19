@@ -71,7 +71,7 @@ function Field({ label, en, value, strong }: { label: string; en: string; value:
 
 export function PetIdCard({ pet }: { pet: Pet }) {
   const router = useRouter();
-  const { topPlacesForPet, gamification, account } = useAppStore();
+  const { topPlacesForPet, gamification, account, settings } = useAppStore();
   const top = topPlacesForPet(pet.petId, 3);
   const progress = gamification ? levelProgress(gamification) : null;
   const medal = ['🥇', '🥈', '🥉'];
@@ -178,7 +178,7 @@ export function PetIdCard({ pet }: { pet: Pet }) {
             </Text>
           </View>
           <Text style={styles.guardianTier} numberOfLines={1}>
-            {tierName(gamification)}
+            {tierName(gamification, settings.pawAnimal || gamification.tierAnimal)}
           </Text>
         </View>
       )}
