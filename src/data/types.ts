@@ -253,6 +253,8 @@ export interface Review {
   visitedAt: string;
   /** 내가 이 리뷰를 신고했는지 (서버 제공). 목 폴백에선 undefined */
   reportedByMe?: boolean;
+  /** 방문 인증샷 URL. 사진 없는 리뷰는 서버가 키 자체를 빼므로 undefined */
+  photoUrl?: string | null;
   /** 「도움됐어요」 누적. 옛 서버 응답엔 없어 undefined */
   helpfulCount?: number;
   helpfulByMe?: boolean;

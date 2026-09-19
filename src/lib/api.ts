@@ -1001,6 +1001,8 @@ type ServerReview = {
   tags: string[];
   visitedAt: string;
   reportedByMe: boolean;
+  /** 사진을 첨부한 리뷰에만 온다(`@JsonInclude(NON_NULL)`) */
+  photoUrl?: string | null;
   helpfulCount?: number;
   helpfulByMe?: boolean;
 };
@@ -1034,6 +1036,7 @@ function toReview(s: ServerReview): Review {
     content: s.content ?? null,
     tags: (s.tags ?? []).filter(isReviewTag),
     visitedAt: s.visitedAt,
+    photoUrl: s.photoUrl ?? null,
     reportedByMe: s.reportedByMe ?? false,
     helpfulCount: typeof s.helpfulCount === 'number' ? s.helpfulCount : undefined,
     helpfulByMe: s.helpfulByMe,
@@ -1061,7 +1064,30 @@ export type NewReviewBody = {
   content: string;
   tags: ReviewTag[];
   visitedAt?: string;
+  /**
+   * 방문 인증샷(로컬 uri). 있으면 multipart로, 없으면 지금까지처럼 JSON으로 보낸다.
+   * **수정에서 생략하면 서버가 기존 사진을 유지한다** — 사진만 지우는 API는 없다.
+   */
+  photoUri?: string | null;
 };
+
+/** 사진이 있으면 multipart(FormData), 없으면 JSON 본문. 서버는 둘 다 받는다(review.md) */
+async function reviewPayload(body: NewReviewBody): Promise<FormData | Omit<NewReviewBody, 'photoUri'>> {
+  const { photoUri, ...rest } = body;
+  if (!photoUri) return rest;
+  const fd = new FormData();
+  for (const id of rest.petIds) fd.append('petIds', String(id));
+  fd.append('showPetInfo', rest.showPetInfo ? 'true' : 'false');
+  fd.append('ratingSpace', String(rest.ratingSpace));
+  fd.append('ratingStaff', String(rest.ratingStaff));
+  fd.append('ratingAmenity', String(rest.ratingAmenity));
+  fd.append('content', rest.content);
+  for (const t of rest.tags) fd.append('tags', t);
+  if (rest.visitedAt) fd.append('visitedAt', rest.visitedAt);
+  const blob = await (await fetch(photoUri)).blob();
+  fd.append('photo', blob, 'review.jpg');
+  return fd;
+}
 
 // ─────────────────────────── AI 판별(ai) ───────────────────────────
 // POST /ai/check — 규칙 엔진 판별. Claude 호출이 없는 순수 규칙 엔진이라 응답이 빠르다.
@@ -1692,14 +1718,27 @@ export const reviewsApi = {
     };
   },
   /** 작성/수정(upsert). 자격 없으면 REVIEW4001, 남의 펫이면 PET4002 등으로 던진다. */
-  create: (facilityId: number, body: NewReviewBody) =>
-    request<ServerReview>('POST', `/api/v1/facilities/${facilityId}/reviews`, { body, auth: true }),
+  create: async (facilityId: number, body: NewReviewBody) => {
+    // 사진을 읽는 동안 계정이 바뀌면 이전 계정 토큰으로 나가지 않게 세대를 고정한다
+    const epoch = getSessionEpoch();
+    return request<ServerReview>('POST', `/api/v1/facilities/${facilityId}/reviews`, {
+      body: await reviewPayload(body),
+      auth: true,
+      epoch,
+    });
+  },
   /**
    * 수정(reviewId 기준, 본인만). 필드는 create와 같다. 경험치는 다시 주지 않는다.
    * REVIEW4041 없는 리뷰 · REVIEW4002 남의 리뷰.
    */
-  update: (reviewId: number, body: NewReviewBody) =>
-    request<ServerReview>('PUT', `/api/v1/reviews/${reviewId}`, { body, auth: true }),
+  update: async (reviewId: number, body: NewReviewBody) => {
+    const epoch = getSessionEpoch();
+    return request<ServerReview>('PUT', `/api/v1/reviews/${reviewId}`, {
+      body: await reviewPayload(body),
+      auth: true,
+      epoch,
+    });
+  },
   /**
    * 「도움됐어요」 — 남의 리뷰에만(본인 리뷰는 REVIEW4005). 취소 API는 없다(멱등, 중복 카운트 없음).
    * 리뷰 작성자의 '구원자' 배지 카운트가 이걸로 오른다.

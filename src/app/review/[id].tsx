@@ -2,7 +2,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Image } from 'expo-image';
 
+import { PhotoPicker } from '@/components/photo-picker';
 import { Text } from '@/components/text';
 import { Screen } from '@/components/screen';
 import { StarInput } from '@/components/star-rating';
@@ -48,6 +50,12 @@ export default function ReviewWriteScreen() {
    * 문서와 동작이 어긋날 뿐 아니라 옵트인이라고 부를 수도 없다.
    */
   const [showPetInfo, setShowPetInfo] = useState(editing ? editing.pets.length > 0 : false);
+  /**
+   * 방문 인증샷(선택). 수정에서 새로 고르지 않으면 요청에서 빼 서버가 기존 사진을 유지한다 —
+   * 사진만 지우는 API가 없어 "첨부 취소"는 새로 고른 사진을 되돌리는 것까지만 할 수 있다.
+   */
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const existingPhoto = editing?.photoUrl ?? null;
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -88,6 +96,7 @@ export default function ReviewWriteScreen() {
         ratingAmenity: amenity,
         content: content.trim() || null,
         tags,
+        photoUri,
       };
       if (editing) await updateReview(editing.reviewId, input);
       else await addReview(input);
@@ -209,6 +218,21 @@ export default function ReviewWriteScreen() {
       </View>
 
       <View style={styles.block}>
+        <Text style={[styles.blockLabel, { color: p.ink }]}>방문 인증샷 (선택)</Text>
+        <Text style={[styles.blockHint, { color: p.muted }]}>
+          {existingPhoto && !photoUri
+            ? '이미 올린 사진이 있어요. 새로 고르면 교체됩니다.'
+            : '함께 간 모습이나 매장 분위기를 한 장 남겨 주세요. 위치 정보는 지우고 올라갑니다.'}
+        </Text>
+        {existingPhoto && !photoUri ? (
+          <View style={styles.existingPhoto}>
+            <Image source={{ uri: existingPhoto }} style={styles.existingImage} contentFit="cover" />
+          </View>
+        ) : null}
+        <PhotoPicker uri={photoUri} onChange={setPhotoUri} height={200} libraryLabel="앨범에서 고르기" />
+      </View>
+
+      <View style={styles.block}>
         <Text style={[styles.blockLabel, { color: p.ink }]}>한 줄 후기 (선택)</Text>
         <TextInput
           value={content}
@@ -279,6 +303,8 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   error: { fontSize: 13, fontWeight: '700' },
+  existingPhoto: { height: 140, borderRadius: 12, overflow: 'hidden' },
+  existingImage: { width: '100%', height: '100%' },
   submit: {
     flexDirection: 'row',
     alignItems: 'center',

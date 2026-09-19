@@ -1,7 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+
+import { Image } from 'expo-image';
 
 import { Text } from '@/components/text';
 import { PawBadge } from '@/components/paw-badge';
@@ -208,6 +210,7 @@ export function ReviewSection({
               </View>
             </View>
             {r.content && <Text style={[styles.reviewText, { color: p.ink }]}>{r.content}</Text>}
+            {r.photoUrl ? <Image source={{ uri: r.photoUrl }} style={styles.reviewPhoto} contentFit="cover" transition={150} /> : null}
             {r.tags.length > 0 && (
               <View style={styles.reviewTags}>
                 {r.tags.map((t) => (
@@ -337,7 +340,10 @@ export function ReviewSection({
         <Pressable style={styles.backdrop} onPress={() => setDetailTarget(null)}>
           <Pressable style={[styles.sheet, { backgroundColor: p.card }]} onPress={(e) => e.stopPropagation()}>
             {detailTarget && (
-              <>
+              <ScrollView
+                contentContainerStyle={styles.detailScroll}
+                showsVerticalScrollIndicator={false}
+                bounces={false}>
                 <View style={styles.detailHead}>
                   <Text style={[styles.sheetTitle, { color: p.ink }]}>{detailTarget.nickname}</Text>
                   <StarsDisplay
@@ -365,6 +371,9 @@ export function ReviewSection({
                   </Text>
                 )}
 
+                {detailTarget.photoUrl ? (
+                  <Image source={{ uri: detailTarget.photoUrl }} style={styles.detailPhoto} contentFit="cover" transition={150} />
+                ) : null}
                 {detailTarget.content && (
                   <Text style={[styles.detailContent, { color: p.ink }]}>{detailTarget.content}</Text>
                 )}
@@ -378,7 +387,7 @@ export function ReviewSection({
                   </View>
                 )}
                 <Text style={[styles.visited, { color: p.muted }]}>{detailTarget.visitedAt} 방문</Text>
-              </>
+              </ScrollView>
             )}
             <Pressable onPress={() => setDetailTarget(null)} style={styles.cancel}>
               <Text style={[styles.cancelText, { color: p.muted }]}>닫기</Text>
@@ -391,6 +400,8 @@ export function ReviewSection({
 }
 
 const styles = StyleSheet.create({
+  reviewPhoto: { width: '100%', height: 170, borderRadius: Radius.md, marginTop: 2 },
+  detailPhoto: { width: '100%', height: 200, borderRadius: Radius.md },
   summary: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.xl, gap: Spacing.md },
   gradeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   score: { fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
@@ -457,9 +468,12 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
     paddingBottom: Spacing.xxl,
     gap: Spacing.sm,
+    // 사진까지 들어가면 작은 화면에서 시트가 화면보다 커진다 — 안에서 스크롤되게 상한을 둔다
+    maxHeight: '85%',
   },
   sheetTitle: { fontSize: 17, fontWeight: '900', letterSpacing: -0.4 },
   sheetBody: { fontSize: 12.5, lineHeight: 19, marginBottom: Spacing.sm },
+  detailScroll: { gap: Spacing.sm },
   detailHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   detailPets: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.md, gap: 6, marginTop: 4 },
   detailPetsLabel: { fontSize: 11.5, fontWeight: '800' },
