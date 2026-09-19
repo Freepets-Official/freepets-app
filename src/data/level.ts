@@ -115,10 +115,32 @@ export const levelBaseXp = (level: number) => (100 * level * (level - 1)) / 2;
 /** 레벨 L 안에서 다음 레벨까지 필요한 XP — 위 식의 차분이라 `100 × L`이다. */
 export const levelStepXp = (level: number) => 100 * level;
 
-/** 서버가 tierLabel을 비워 보내도 화면에 빈칸이 남지 않게 한다. */
-export function tierName(g: Pick<Gamification, 'tierAnimal' | 'tierFinish' | 'tierColor' | 'tierLabel'>): string {
-  if (g.tierLabel) return g.tierLabel;
-  return `${TIER_ANIMAL_LABEL[g.tierAnimal]} 발바닥 · ${TIER_FINISH_LABEL[g.tierFinish]} · ${TIER_COLOR_LABEL[g.tierColor]}`;
+/**
+ * 배지 이름.
+ *
+ * `animal`을 넘기면 그 모양 기준으로 문장을 만든다 — 사용자가 발바닥을 고르면 서버의
+ * `tierLabel`("고양이 발바닥 …")과 화면에 그려진 모양이 어긋나기 때문이다.
+ * 고른 적이 없으면 서버 문장을 그대로 쓴다(서버가 문구를 바꿔도 따라간다).
+ */
+export function tierName(
+  g: Pick<Gamification, 'tierAnimal' | 'tierFinish' | 'tierColor' | 'tierLabel'>,
+  animal?: TierAnimal,
+): string {
+  if (!animal && g.tierLabel) return g.tierLabel;
+  const a = animal ?? g.tierAnimal;
+  return `${TIER_ANIMAL_LABEL[a]} 발바닥 · ${TIER_FINISH_LABEL[g.tierFinish]} · ${TIER_COLOR_LABEL[g.tierColor]}`;
+}
+
+/**
+ * 두 번째 바퀴(레벨 36~70)인가.
+ *
+ * 서버는 동물로 이 구간을 구분했다(1~35 개, 36~70 고양이). 발바닥 **모양을 사용자가 고르면서
+ * 그 축이 사라져** 7색 × 5선명도 = 35가지만 남았고, 레벨 1과 36이 똑같이 보였다.
+ * 그래서 모양 대신 **테두리 링**으로 같은 정보를 준다 — 색·선명도는 그대로 두고 70단계를 되살린다.
+ */
+export function isSecondCycle(g: Pick<Gamification, 'level' | 'tierAnimal'>): boolean {
+  // 레벨이 우선이고, 서버가 레벨을 못 줬을 때만 동물로 판단한다
+  return g.level >= 36 || g.tierAnimal === 'CAT';
 }
 
 /**

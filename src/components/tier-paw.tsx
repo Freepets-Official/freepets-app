@@ -37,7 +37,7 @@ export function TierPaw({ gamification, size = 56 }: { gamification: Gamificatio
   const animal = settings.pawAnimal || gamification.tierAnimal;
 
   return (
-    <View accessibilityLabel={tierName(gamification)} accessible>
+    <View accessibilityLabel={tierName(gamification, animal)} accessible>
       <Svg width={size} height={size} viewBox="0 0 64 64">
         <Defs>
           <LinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
