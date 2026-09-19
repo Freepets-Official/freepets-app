@@ -2209,6 +2209,113 @@ const QUEST_SOURCES = new Set<string>([
   'COURSE_SHARED_COPY',
 ]);
 
+// ─────────────────────────── 지역 랭킹(region ranking) ───────────────────────────
+// GET /gamification/ranking — 사용자를 시/도·시/군/구로 줄 세운다.
+//
+// **시설 발자국 랭킹(`facilitiesApi.ranking`)과 다른 기능이다.** 저쪽은 시설을 등급순으로,
+// 이쪽은 사람을 누적 XP순으로 세운다. 명세는 `docs/13-지역-랭킹.md`(프론트 작성) 기준이고,
+// 백엔드 구현 중이라 **경로·필드가 달라질 수 있다** — 없으면 화면이 "준비 중"으로 떨어진다.
+const REGION_RANKING_PATH = '/api/v1/gamification/ranking';
+
+export type RankingScope = 'NATION' | 'SIDO' | 'SIGUNGU';
+
+export type RegionRankingEntry = {
+  rank: number;
+  userId: number | null;
+  nickname: string;
+  xp: number;
+  level: number;
+  tierAnimal: TierAnimal;
+  tierColor: TierColor;
+  isMe: boolean;
+};
+
+export type RegionRankingMe = {
+  rank: number;
+  /** 이 지역에서 집계된 사람 수 — "340명 중 12번째"의 340 */
+  participantCount: number;
+  xp: number;
+  level: number;
+  /** 참여자가 최소 인원 미만이면 false — 순위를 감춘다 */
+  ranked: boolean;
+};
+
+export type RegionRanking = {
+  scope: RankingScope;
+  sido: string | null;
+  sigungu: string | null;
+  me: RegionRankingMe | null;
+  items: RegionRankingEntry[];
+  total: number;
+  /** 집계 기준 시각. 스냅샷이면 "오늘 새벽 기준"을 밝혀야 한다 */
+  updatedAt: string | null;
+};
+
+/** 서버가 아직 이 API를 안 만들었을 때(404·405) 던진다 — 화면이 오류 대신 "준비 중"을 그린다 */
+export class NotDeployedError extends Error {
+  constructor() {
+    super('아직 준비 중인 기능이에요.');
+    this.name = 'NotDeployedError';
+  }
+}
+
+const TIER_ANIMALS = new Set<string>(['DOG', 'CAT']);
+const TIER_COLORS = new Set<string>(['RED', 'ORANGE', 'YELLOW', 'GREEN', 'BLUE', 'INDIGO', 'VIOLET']);
+const int = (v: unknown, fallback = 0) => (typeof v === 'number' && Number.isFinite(v) ? Math.trunc(v) : fallback);
+
+function toEntry(raw: unknown, index: number): RegionRankingEntry | null {
+  const e = raw as Record<string, unknown> | null;
+  if (!e || typeof e.nickname !== 'string') return null;
+  const animal = String(e.tierAnimal);
+  const color = String(e.tierColor);
+  return {
+    rank: int(e.rank, index + 1),
+    userId: typeof e.userId === 'number' ? e.userId : null,
+    nickname: e.nickname,
+    xp: Math.max(int(e.xp), 0),
+    level: Math.max(int(e.level, 1), 1),
+    tierAnimal: TIER_ANIMALS.has(animal) ? (animal as TierAnimal) : 'DOG',
+    tierColor: TIER_COLORS.has(color) ? (color as TierColor) : 'RED',
+    isMe: e.isMe === true,
+  };
+}
+
+export const regionRankingApi = {
+  get: async (params: { scope: RankingScope; sidoCode?: string | null; sigunguCode?: string | null; size?: number }): Promise<RegionRanking> => {
+    const q = new URLSearchParams({ scope: params.scope, size: String(params.size ?? 20) });
+    if (params.scope !== 'NATION' && params.sidoCode) q.set('sidoCode', params.sidoCode);
+    if (params.scope === 'SIGUNGU' && params.sigunguCode) q.set('sigunguCode', params.sigunguCode);
+    let r: Record<string, unknown>;
+    try {
+      r = await request<Record<string, unknown>>('GET', `${REGION_RANKING_PATH}?${q.toString()}`, { auth: true });
+    } catch (e) {
+      // 아직 배포 전이면 404가 온다. 오류 화면 대신 "준비 중"으로 안내한다
+      if (e instanceof ApiError && (e.status === 404 || e.status === 405)) throw new NotDeployedError();
+      throw e;
+    }
+    const meRaw = r.me as Record<string, unknown> | null | undefined;
+    return {
+      scope: (r.scope as RankingScope) ?? params.scope,
+      sido: typeof r.sido === 'string' ? r.sido : null,
+      sigungu: typeof r.sigungu === 'string' ? r.sigungu : null,
+      me:
+        meRaw && typeof meRaw.rank === 'number'
+          ? {
+              rank: int(meRaw.rank, 0),
+              participantCount: Math.max(int(meRaw.participantCount), 0),
+              xp: Math.max(int(meRaw.xp), 0),
+              level: Math.max(int(meRaw.level, 1), 1),
+              // 서버가 안 주면 "순위를 보여도 된다"로 본다 — 준 경우에만 감춘다
+              ranked: meRaw.ranked !== false,
+            }
+          : null,
+      items: (Array.isArray(r.items) ? r.items : []).map(toEntry).filter((x): x is RegionRankingEntry => x !== null),
+      total: Math.max(int(r.total), 0),
+      updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : null,
+    };
+  },
+};
+
 export const questsApi = {
   /** 오늘의 퀘스트 6개. 모르는 sourceType은 버린다 — 라벨만 있고 갈 곳을 모르면 눌러도 막힌다 */
   today: async (): Promise<DailyQuests> => {

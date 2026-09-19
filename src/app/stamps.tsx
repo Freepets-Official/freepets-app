@@ -69,6 +69,25 @@ export default function StampsScreen() {
                 <Ionicons name="chevron-forward" size={18} color={p.muted} />
               </Pressable>
 
+              {/* 레벨·XP는 비교 대상이 있어야 의미가 생긴다 — 같은 지역 집사들 사이의 내 자리 */}
+              <Pressable
+                onPress={() => router.push('/region-ranking')}
+                style={({ pressed }) => [
+                  styles.questsEntry,
+                  { borderColor: p.line, backgroundColor: p.card, opacity: pressed ? 0.92 : 1 },
+                ]}>
+                <View style={[styles.questsEntryIcon, { backgroundColor: p.accentSoft }]}>
+                  <Ionicons name="trophy" size={17} color={p.accent} />
+                </View>
+                <View style={styles.questsEntryTexts}>
+                  <Text style={[styles.questsEntryTitle, { color: p.ink }]}>지역 랭킹</Text>
+                  <Text style={[styles.questsEntryBody, { color: p.muted }]}>
+                    같은 지역을 다녀온 집사들 사이에서 내 자리를 확인해요
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={p.muted} />
+              </Pressable>
+
               <Text style={[styles.sectionTitle, { color: p.ink }]}>경험치 얻는 법</Text>
               <QuestList />
             </>
