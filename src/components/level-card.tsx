@@ -4,7 +4,7 @@ import { Image, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/text';
 import { TierPaw } from '@/components/tier-paw';
 import { Radius, Spacing } from '@/constants/theme';
-import { MAX_LEVEL, TIER_COLOR_HEX, levelProgress, tierName } from '@/data/level';
+import { MAX_LEVEL, TIER_COLOR_HEX, levelProgress, tierLook, tierName } from '@/data/level';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -13,7 +13,7 @@ import { useAppStore } from '@/store/app-store';
  * (디자인 리소스가 없어 지금은 항상 직접 그린다 — `tierBadgeImageUrl`은 늘 생략된다)
  */
 function TierBadge({ size = 56 }: { size?: number }) {
-  const { gamification } = useAppStore();
+  const { gamification, settings } = useAppStore();
   if (!gamification) return null;
 
   if (gamification.tierBadgeImageUrl) {
@@ -21,7 +21,7 @@ function TierBadge({ size = 56 }: { size?: number }) {
       <Image
         source={{ uri: gamification.tierBadgeImageUrl }}
         style={{ width: size, height: size, borderRadius: size / 2 }}
-        accessibilityLabel={tierName(gamification)}
+        accessibilityLabel={tierName(gamification, settings.pawAnimal || gamification.tierAnimal)}
       />
     );
   }
@@ -37,11 +37,13 @@ function TierBadge({ size = 56 }: { size?: number }) {
  */
 export function LevelCard() {
   const p = usePalette();
-  const { gamification } = useAppStore();
+  const { gamification, settings } = useAppStore();
   if (!gamification) return null;
 
   const { level, into, step, remain, ratio, maxed } = levelProgress(gamification);
-  const color = TIER_COLOR_HEX[gamification.tierColor];
+  // 진행바 색도 배지와 같은 규칙에서 가져온다(무지개 구간은 보라로 대신한다)
+  const look = tierLook(gamification.level);
+  const color = TIER_COLOR_HEX[look.color ?? 'VIOLET'];
 
   return (
     <View style={[styles.card, { backgroundColor: p.surface, borderColor: p.line }]}>
@@ -51,7 +53,7 @@ export function LevelCard() {
           <Text style={[styles.level, { color: p.ink }]}>Lv.{level}</Text>
           <View style={[styles.tierChip, { backgroundColor: p.card, borderColor: color }]}>
             <Text style={[styles.tierText, { color }]} numberOfLines={1}>
-              {tierName(gamification)}
+              {tierName(gamification, settings.pawAnimal || gamification.tierAnimal)}
             </Text>
           </View>
           <Text style={[styles.max, { color: p.muted }]}>/ {MAX_LEVEL}</Text>

@@ -1331,12 +1331,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [gamificationNews, setGamificationNews] = useState<{ kind: 'level' | 'badge'; text: string } | null>(null);
   const dismissGamificationNews = useCallback(() => setGamificationNews(null), []);
   const gamificationRef = useMirrorRef(gamification);
+  // 토스트 문구에 쓸 발바닥 모양 — 렌더마다 콜백을 새로 만들지 않으려고 ref로 읽는다
+  const pawAnimalRef = useMirrorRef(settings.pawAnimal);
   const applyGamification = useCallback((g: Gamification) => {
     const prev = gamificationRef.current;
     if (prev) {
       const newBadges = g.badges.filter((b) => !prev.badges.some((x) => x.code === b.code));
       if (g.level > prev.level) {
-        setGamificationNews({ kind: 'level', text: `Lv.${g.level} 달성! ${tierName(g)} 발바닥을 받았어요` });
+        setGamificationNews({ kind: 'level', text: `Lv.${g.level} 달성! ${tierName(g, pawAnimalRef.current || g.tierAnimal)}` });
       } else if (newBadges.length > 0) {
         setGamificationNews({
           kind: 'badge',
