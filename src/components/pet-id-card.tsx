@@ -63,12 +63,18 @@ function Field({ label, en, value, strong }: { label: string; en: string; value:
 
 export function PetIdCard({ pet }: { pet: Pet }) {
   const router = useRouter();
-  const { topPlacesForPet, gamification } = useAppStore();
+  const { topPlacesForPet, gamification, account } = useAppStore();
   const top = topPlacesForPet(pet.petId, 3);
   const progress = gamification ? levelProgress(gamification) : null;
   const medal = ['🥇', '🥈', '🥉'];
   /** 발급번호 — 아이 등록 순서(petId)를 6자리로. 서식의 빈칸을 그럴듯한 값으로 채운다 */
   const serial = String(pet.petId).padStart(6, '0');
+  /** 성별·생년월일이 서버에 생기기 전까지 이 칸을 채운다. 신분증에서 실제로 쓸모 있는 정보다 */
+  const vaccinationText = pet.vaccinated
+    ? pet.vaccinationDate
+      ? `완료 · ${pet.vaccinationDate.replace(/-/g, '.')}`
+      : '완료'
+    : '미등록';
 
   return (
     <View style={styles.card}>
@@ -99,30 +105,7 @@ export function PetIdCard({ pet }: { pet: Pet }) {
             <Field label="품종" en="BREED" value={pet.species || '미등록'} />
             <Field label="몸무게" en="WEIGHT" value={`${pet.weight}kg · ${BREED_SIZE_LABEL[pet.breedSize]}`} />
           </View>
-          {progress && (
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>
-                레벨 <Text style={styles.fieldLabelEn}>LEVEL</Text>
-              </Text>
-              <View style={styles.levelRow}>
-                <Text style={styles.fieldValueStrong}>Lv.{progress.level}</Text>
-                <View style={styles.xpTrack}>
-                  <View style={[styles.xpFill, { width: `${Math.max(5, progress.ratio * 100)}%` }]} />
-                </View>
-                <Text style={styles.xpText}>
-                  {progress.maxed ? '최고 레벨' : `${progress.into.toLocaleString()}/${progress.step.toLocaleString()}`}
-                </Text>
-              </View>
-            </View>
-          )}
-          {gamification && (
-            <View style={styles.grade}>
-              <Text style={styles.gradeLabel}>등급 GRADE</Text>
-              <Text style={styles.gradeValue} numberOfLines={1}>
-                {tierName(gamification)}
-              </Text>
-            </View>
-          )}
+          <Field label="예방접종" en="VACCINATION" value={vaccinationText} />
         </View>
       </View>
 
@@ -150,6 +133,35 @@ export function PetIdCard({ pet }: { pet: Pet }) {
           ))
         )}
       </View>
+
+      {/*
+        레벨·XP·티어는 **계정(집사) 값**이다. 아이가 여럿이어도 같은 숫자라, 아이 정보 사이에
+        두면 이 아이의 레벨로 읽힌다. 신분증의 "발급기관" 자리처럼 보호자 칸으로 분리한다.
+      */}
+      {gamification && progress && (
+        <View style={styles.guardian}>
+          <View style={styles.guardianHead}>
+            <Text style={styles.guardianLabel}>
+              보호자 <Text style={styles.fieldLabelEn}>GUARDIAN</Text>
+            </Text>
+            <Text style={styles.guardianName} numberOfLines={1}>
+              {account.nickname}
+            </Text>
+          </View>
+          <View style={styles.guardianLevel}>
+            <Text style={styles.guardianLv}>집사 Lv.{progress.level}</Text>
+            <View style={styles.xpTrack}>
+              <View style={[styles.xpFill, { width: `${Math.max(5, progress.ratio * 100)}%` }]} />
+            </View>
+            <Text style={styles.xpText}>
+              {progress.maxed ? '최고 레벨' : `${progress.into.toLocaleString()}/${progress.step.toLocaleString()}`}
+            </Text>
+          </View>
+          <Text style={styles.guardianTier} numberOfLines={1}>
+            {tierName(gamification)}
+          </Text>
+        </View>
+      )}
 
       <View style={styles.strip}>
         <Text style={styles.stripLabel}>발급 ISSUED</Text>
@@ -194,25 +206,23 @@ const styles = StyleSheet.create({
   fieldLabelEn: { fontSize: 9, fontWeight: '700', color: CARD.sub, opacity: 0.8 },
   fieldValue: { fontSize: 13.5, fontWeight: '800', color: CARD.ink },
   fieldValueStrong: { fontSize: 18, fontWeight: '900', color: CARD.ink, letterSpacing: -0.4 },
-  levelRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   xpTrack: { flex: 1, height: 6, borderRadius: 3, backgroundColor: CARD.paperDeep, overflow: 'hidden' },
   xpFill: { height: '100%', borderRadius: 3, backgroundColor: CARD.gold },
   xpText: { fontSize: 10, fontWeight: '700', color: CARD.sub, fontVariant: ['tabular-nums'] },
-  grade: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: CARD.gold,
-    borderRadius: Radius.sm,
-    backgroundColor: 'rgba(176,138,60,0.12)',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    maxWidth: '100%',
+  guardian: {
+    borderTopWidth: 1,
+    borderTopColor: CARD.line,
+    marginHorizontal: Spacing.lg,
+    paddingTop: 9,
+    paddingBottom: Spacing.md,
+    gap: 5,
   },
-  gradeLabel: { fontSize: 9.5, fontWeight: '800', color: CARD.gold },
-  gradeValue: { flexShrink: 1, fontSize: 12.5, fontWeight: '900', color: CARD.ink },
+  guardianHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  guardianLabel: { fontSize: 10, fontWeight: '800', color: CARD.sub },
+  guardianName: { flexShrink: 1, fontSize: 13, fontWeight: '900', color: CARD.ink },
+  guardianLevel: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  guardianLv: { fontSize: 13, fontWeight: '900', color: CARD.ink, fontVariant: ['tabular-nums'] },
+  guardianTier: { fontSize: 10.5, fontWeight: '700', color: CARD.gold },
   favBlock: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md, gap: 5 },
   favTitle: { fontSize: 10.5, fontWeight: '800', color: CARD.sub },
   favEmpty: { fontSize: 11.5, lineHeight: 17, color: CARD.sub },
