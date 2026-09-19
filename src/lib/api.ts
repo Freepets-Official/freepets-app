@@ -756,7 +756,9 @@ function toFacility(s: ServerFacility): Facility {
 
 // GET /facilities/{id} — 상세. 검색을 안 거치고 들어와도(홈 TOP3·알림·딥링크) 화면이 채워진다.
 // 검색 응답에 없는 것: 동반 조건 안내문·전화·좌표·확정 시각.
-// 검색에만 있는 것: maxWeight·requirements(상세 응답엔 없음) → 스토어에서 병합한다.
+// 검색에만 있는 것: requirements(상세 응답엔 아직 없음) → 스토어에서 병합한다.
+// `maxWeight`는 2026-09-17 배포부터 **상세에도 온다** — 검색을 안 거친 경로(홈 TOP3·딥링크·
+// 알림)에서 체중 제한이 비어 판별이 통과로 뒤집히던 문제가 이걸로 해소된다.
 type ServerFacilityDetail = {
   facilityId: number;
   name: string;
@@ -768,6 +770,8 @@ type ServerFacilityDetail = {
   distanceM: number | null;
   petAllowed: 'ALLOWED' | 'DENIED' | 'PENDING';
   petConditionRaw: string | null;
+  /** 2026-09-17 배포부터 상세에도 포함. 옛 서버면 키가 없다(그때는 검색 값을 유지한다) */
+  maxWeight?: number | null;
   confirmedAt: string | null;
   /** 서버가 실제로 내려준다(2026-09-12 명세). 사업자 확정·거부 제보 하향이 여기 실린다 */
   confidence?: string | null;
@@ -822,6 +826,7 @@ export type FacilityDetail = Pick<
 > & {
   distanceM: number | null;
   address: string | null;
+  maxWeight?: number | null;
   maxWeightInclusive?: boolean | null;
   ownerIntroduction?: OwnerIntroductionView | null;
   visitBenefits?: VisitBenefit[];
@@ -857,7 +862,8 @@ function toFacilityDetail(s: ServerFacilityDetail): FacilityDetail {
     confidenceSource: source ?? (confirmed ? 'SERVER' : 'PARSED'),
     confirmedAt: s.confirmedAt,
     // 아래 선택 필드는 서버가 생략하면 **키를 만들지 않는다**. 스토어가 `...detail`로 병합하므로
-    // undefined/null 키가 있으면 검색으로 알던 값(체중 '이하/미만' 등)이 지워진다.
+    // undefined/null 키가 있으면 검색으로 알던 값(체중 제한·'이하/미만' 등)이 지워진다.
+    ...(s.maxWeight !== undefined ? { maxWeight: s.maxWeight } : {}),
     ...(s.maxWeightInclusive !== undefined ? { maxWeightInclusive: s.maxWeightInclusive } : {}),
     ...(s.ownerIntroduction !== undefined ? { ownerIntroduction: toOwnerIntroduction(s.ownerIntroduction) } : {}),
     ...(s.visitBenefits != null ? { visitBenefits: toVisitBenefits(s.visitBenefits) } : {}),
