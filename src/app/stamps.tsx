@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,6 +30,7 @@ import { useAppStore } from '@/store/app-store';
  */
 export default function StampsScreen() {
   const p = usePalette();
+  const router = useRouter();
   const { stamps, stampRegions, reloadStampRegions, stampSaveFailed, gamification } = useAppStore();
 
   const progress = useMemo(() => groupBySido(stamps, stampRegions), [stamps, stampRegions]);
@@ -46,6 +47,28 @@ export default function StampsScreen() {
           <LevelCard />
           {gamification && (
             <>
+              {/*
+                규칙표는 "왜 오르는지"만 알려준다. 오늘 몇 번 했는지는 서버 값이라 퀘스트 화면이
+                보여주므로, 글자 링크가 아니라 홈의 도장첩 입구와 같은 모양의 버튼으로 연결한다.
+              */}
+              <Pressable
+                onPress={() => router.push('/quests')}
+                style={({ pressed }) => [
+                  styles.questsEntry,
+                  { borderColor: p.line, backgroundColor: p.card, opacity: pressed ? 0.92 : 1 },
+                ]}>
+                <View style={[styles.questsEntryIcon, { backgroundColor: p.accentSoft }]}>
+                  <Ionicons name="today" size={18} color={p.accent} />
+                </View>
+                <View style={styles.questsEntryTexts}>
+                  <Text style={[styles.questsEntryTitle, { color: p.ink }]}>오늘의 퀘스트</Text>
+                  <Text style={[styles.questsEntryBody, { color: p.muted }]}>
+                    오늘 몇 번 했는지, 얼마나 더 하면 되는지 확인해요
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={p.muted} />
+              </Pressable>
+
               <Text style={[styles.sectionTitle, { color: p.ink }]}>경험치 얻는 법</Text>
               <QuestList />
             </>
@@ -269,6 +292,19 @@ const styles = StyleSheet.create({
   summaryNum: { fontSize: 22, fontWeight: '800' },
   summaryLabel: { fontSize: 11.5 },
 
+  questsEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 14,
+  },
+  questsEntryIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  questsEntryTexts: { flex: 1, gap: 2 },
+  questsEntryTitle: { fontSize: 14.5, fontWeight: '800' },
+  questsEntryBody: { fontSize: 12, lineHeight: 17 },
   sectionTitle: { fontSize: 13.5, fontWeight: '800', marginTop: 10 },
   hint: { fontSize: 11.5, marginTop: -2 },
 

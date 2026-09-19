@@ -163,7 +163,7 @@ export function levelProgress(g: Gamification) {
  */
 export const XP_RULES: { title: string; xp: number; cap: number | null; note?: string; route: string }[] = [
   { title: 'AI 판별 요청하기', xp: 5, cap: 10, route: '/(tabs)/explore' },
-  { title: '다녀온 시설에 리뷰 쓰기', xp: 20, cap: null, note: '시설당 1개', route: '/(tabs)/explore' },
+  { title: '다녀온 시설에 리뷰 쓰기', xp: 20, cap: 5, note: '시설당 1개', route: '/(tabs)/explore' },
   { title: '현장 거부 제보하기', xp: 15, cap: 5, route: '/(tabs)/explore' },
   { title: '아이 만족도 남기기', xp: 10, cap: 5, note: '시설·아이당 처음 1회', route: '/(tabs)/explore' },
   { title: '내 코스 공개하기', xp: 20, cap: 5, note: '+ 스톱 수 × 5, 코스당 1회', route: '/course' },
