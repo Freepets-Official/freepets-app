@@ -28,6 +28,12 @@ import { useAppStore } from '@/store/app-store';
  *
  * ⚠️ 1단계는 인증이 목이다 — 사진을 받되 검사하지 않는다. 실제 비전 판별·GPS 대조는 2단계다.
  */
+/**
+ * 지역 랭킹 진입점 — 서버 API가 아직 없어 공모전 제출 범위에서 뺐다.
+ * 화면과 클라이언트는 그대로 있으니, 백엔드가 열리면 이 값만 true로 바꾸면 된다.
+ */
+const SHOW_REGION_RANKING = false;
+
 export default function StampsScreen() {
   const p = usePalette();
   const router = useRouter();
@@ -68,6 +74,31 @@ export default function StampsScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={p.muted} />
               </Pressable>
+
+              {/*
+                레벨·XP는 비교 대상이 있어야 의미가 생긴다 — 같은 지역 집사들 사이의 내 자리.
+                **서버 API가 없어 공모전 제출 범위에서 뺐다.** 화면(`/region-ranking`)은 붙어 있으니
+                백엔드가 열리면 이 플래그만 켜면 된다.
+              */}
+              {SHOW_REGION_RANKING && (
+              <Pressable
+                onPress={() => router.push('/region-ranking')}
+                style={({ pressed }) => [
+                  styles.questsEntry,
+                  { borderColor: p.line, backgroundColor: p.card, opacity: pressed ? 0.92 : 1 },
+                ]}>
+                <View style={[styles.questsEntryIcon, { backgroundColor: p.accentSoft }]}>
+                  <Ionicons name="trophy" size={17} color={p.accent} />
+                </View>
+                <View style={styles.questsEntryTexts}>
+                  <Text style={[styles.questsEntryTitle, { color: p.ink }]}>지역 랭킹</Text>
+                  <Text style={[styles.questsEntryBody, { color: p.muted }]}>
+                    같은 지역을 다녀온 집사들 사이에서 내 자리를 확인해요
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={p.muted} />
+              </Pressable>
+              )}
 
               <Text style={[styles.sectionTitle, { color: p.ink }]}>경험치 얻는 법</Text>
               <QuestList />
