@@ -29,7 +29,9 @@ const FIELDS = [
   ['시설 상세 · 사장님 소개', 'FacilityDetail', 'ownerIntroduction'],
   ['시설 상세 · 방문 혜택', 'FacilityDetail', 'visitBenefits'],
   ['시설 상세 · 체중 이하/미만', 'FacilityDetail', 'maxWeightInclusive'],
-  ['리뷰 · 사진 URL', 'Review', 'photoUrl'],
+  ['리뷰 목록 · 사진 URL', 'ReviewDetail', 'photoUrl'],
+  ['리뷰 목록 · 도움됐어요', 'ReviewDetail', 'helpfulCount'],
+  ['리뷰 작성 응답 · 사진 URL', 'UpsertResult', 'photoUrl'],
   ['게이미피케이션 · 배지 진행도', 'MyStatus', 'progress'],
   ['게이미피케이션 · 선명도', 'MyStatus', 'tierFinish'],
   ['내 신청 · 반려 사유', 'MyClaim', 'reviewReason'],
@@ -45,7 +47,11 @@ const doc = await res.json();
 const paths = Object.keys(doc.paths ?? {});
 const schemas = doc.components?.schemas ?? {};
 
-/** 스키마 이름은 FQCN이라 끝부분으로 찾는다. 같은 이름이 여럿이면 필드가 있는 쪽을 택한다 */
+/**
+ * 스키마 이름은 FQCN이라 끝부분으로 찾는다. 같은 이름이 여럿이면 필드가 있는 쪽을 택한다.
+ * **끝부분을 정확히 적어야 한다** — 'Review'로 찾으면 실제 이름인 `ReviewDetail`이 안 걸려
+ * 배포된 필드를 미배포로 잘못 읽는다(2026-09-19에 실제로 겪었다).
+ */
 const findField = (suffix, field) =>
   Object.entries(schemas).some(([name, s]) => name.endsWith(suffix) && s?.properties?.[field]);
 
