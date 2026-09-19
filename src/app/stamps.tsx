@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,6 +30,7 @@ import { useAppStore } from '@/store/app-store';
  */
 export default function StampsScreen() {
   const p = usePalette();
+  const router = useRouter();
   const { stamps, stampRegions, reloadStampRegions, stampSaveFailed, gamification } = useAppStore();
 
   const progress = useMemo(() => groupBySido(stamps, stampRegions), [stamps, stampRegions]);
@@ -47,6 +48,13 @@ export default function StampsScreen() {
           {gamification && (
             <>
               <Text style={[styles.sectionTitle, { color: p.ink }]}>경험치 얻는 법</Text>
+              {/* 규칙표는 "왜 오르는지", 오늘 몇 번 했는지는 퀘스트 화면이 서버 값으로 보여준다 */}
+              <Pressable
+                onPress={() => router.push('/quests')}
+                style={({ pressed }) => [styles.questsLink, { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : 'transparent' }]}>
+                <Ionicons name="today-outline" size={15} color={p.accent} />
+                <Text style={[styles.questsLinkText, { color: p.accent }]}>오늘 몇 번 했는지 보기</Text>
+              </Pressable>
               <QuestList />
             </>
           )}
@@ -269,6 +277,16 @@ const styles = StyleSheet.create({
   summaryNum: { fontSize: 22, fontWeight: '800' },
   summaryLabel: { fontSize: 11.5 },
 
+  questsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: Radius.full,
+    paddingVertical: 10,
+  },
+  questsLinkText: { fontSize: 13, fontWeight: '800' },
   sectionTitle: { fontSize: 13.5, fontWeight: '800', marginTop: 10 },
   hint: { fontSize: 11.5, marginTop: -2 },
 
