@@ -2215,17 +2215,16 @@ const QUEST_SOURCES = new Set<string>([
   'COURSE_SHARED_COPY',
 ]);
 
-// ─────────────────────────── 지역 랭킹(region ranking) ───────────────────────────
-// GET /gamification/ranking — 사용자를 시/도·시/군/구로 줄 세운다.
+// ─────────────────────────── 전체 랭킹(overall ranking) ───────────────────────────
+// GET /gamification/ranking — 사용자를 누적 XP순으로 줄 세운다.
 //
 // **시설 발자국 랭킹(`facilitiesApi.ranking`)과 다른 기능이다.** 저쪽은 시설을 등급순으로,
-// 이쪽은 사람을 누적 XP순으로 세운다. 명세는 `docs/13-지역-랭킹.md`(프론트 작성) 기준이고,
-// 백엔드 구현 중이라 **경로·필드가 달라질 수 있다** — 없으면 화면이 "준비 중"으로 떨어진다.
-const REGION_RANKING_PATH = '/api/v1/gamification/ranking';
+// 이쪽은 사람을 XP순으로 세운다. 1단계는 **전국 하나**다 — 지역 단위(시/도·시/군/구)는
+// XP 적립 로그에 지역 코드가 쌓여야 해서 후속으로 미뤘다(`docs/13`).
+// 좌표는 보내지 않는다(위치정보 수집 없음).
+const RANKING_PATH = '/api/v1/gamification/ranking';
 
-export type RankingScope = 'NATION' | 'SIDO' | 'SIGUNGU';
-
-export type RegionRankingEntry = {
+export type RankingEntry = {
   rank: number;
   userId: number | null;
   nickname: string;
@@ -2236,9 +2235,9 @@ export type RegionRankingEntry = {
   isMe: boolean;
 };
 
-export type RegionRankingMe = {
+export type RankingMe = {
   rank: number;
-  /** 이 지역에서 집계된 사람 수 — "340명 중 12번째"의 340 */
+  /** 집계된 전체 사람 수 — "1,204명 중 87번째"의 1,204 */
   participantCount: number;
   xp: number;
   level: number;
@@ -2246,12 +2245,9 @@ export type RegionRankingMe = {
   ranked: boolean;
 };
 
-export type RegionRanking = {
-  scope: RankingScope;
-  sido: string | null;
-  sigungu: string | null;
-  me: RegionRankingMe | null;
-  items: RegionRankingEntry[];
+export type OverallRanking = {
+  me: RankingMe | null;
+  items: RankingEntry[];
   total: number;
   /** 집계 기준 시각. 스냅샷이면 "오늘 새벽 기준"을 밝혀야 한다 */
   updatedAt: string | null;
@@ -2267,33 +2263,30 @@ export class NotDeployedError extends Error {
 
 const TIER_ANIMALS = new Set<string>(['DOG', 'CAT']);
 const TIER_COLORS = new Set<string>(['RED', 'ORANGE', 'YELLOW', 'GREEN', 'BLUE', 'INDIGO', 'VIOLET']);
-const int = (v: unknown, fallback = 0) => (typeof v === 'number' && Number.isFinite(v) ? Math.trunc(v) : fallback);
+const rankInt = (v: unknown, fallback = 0) => (typeof v === 'number' && Number.isFinite(v) ? Math.trunc(v) : fallback);
 
-function toEntry(raw: unknown, index: number): RegionRankingEntry | null {
+function toEntry(raw: unknown, index: number): RankingEntry | null {
   const e = raw as Record<string, unknown> | null;
   if (!e || typeof e.nickname !== 'string') return null;
   const animal = String(e.tierAnimal);
   const color = String(e.tierColor);
   return {
-    rank: int(e.rank, index + 1),
+    rank: rankInt(e.rank, index + 1),
     userId: typeof e.userId === 'number' ? e.userId : null,
     nickname: e.nickname,
-    xp: Math.max(int(e.xp), 0),
-    level: Math.max(int(e.level, 1), 1),
+    xp: Math.max(rankInt(e.xp), 0),
+    level: Math.max(rankInt(e.level, 1), 1),
     tierAnimal: TIER_ANIMALS.has(animal) ? (animal as TierAnimal) : 'DOG',
     tierColor: TIER_COLORS.has(color) ? (color as TierColor) : 'RED',
     isMe: e.isMe === true,
   };
 }
 
-export const regionRankingApi = {
-  get: async (params: { scope: RankingScope; sidoCode?: string | null; sigunguCode?: string | null; size?: number }): Promise<RegionRanking> => {
-    const q = new URLSearchParams({ scope: params.scope, size: String(params.size ?? 20) });
-    if (params.scope !== 'NATION' && params.sidoCode) q.set('sidoCode', params.sidoCode);
-    if (params.scope === 'SIGUNGU' && params.sigunguCode) q.set('sigunguCode', params.sigunguCode);
+export const rankingApi = {
+  overall: async (size = 20): Promise<OverallRanking> => {
     let r: Record<string, unknown>;
     try {
-      r = await request<Record<string, unknown>>('GET', `${REGION_RANKING_PATH}?${q.toString()}`, { auth: true });
+      r = await request<Record<string, unknown>>('GET', `${RANKING_PATH}?size=${size}`, { auth: true });
     } catch (e) {
       // 아직 배포 전이면 404가 온다. 오류 화면 대신 "준비 중"으로 안내한다
       if (e instanceof ApiError && (e.status === 404 || e.status === 405)) throw new NotDeployedError();
@@ -2301,22 +2294,19 @@ export const regionRankingApi = {
     }
     const meRaw = r.me as Record<string, unknown> | null | undefined;
     return {
-      scope: (r.scope as RankingScope) ?? params.scope,
-      sido: typeof r.sido === 'string' ? r.sido : null,
-      sigungu: typeof r.sigungu === 'string' ? r.sigungu : null,
       me:
         meRaw && typeof meRaw.rank === 'number'
           ? {
-              rank: int(meRaw.rank, 0),
-              participantCount: Math.max(int(meRaw.participantCount), 0),
-              xp: Math.max(int(meRaw.xp), 0),
-              level: Math.max(int(meRaw.level, 1), 1),
+              rank: rankInt(meRaw.rank, 0),
+              participantCount: Math.max(rankInt(meRaw.participantCount), 0),
+              xp: Math.max(rankInt(meRaw.xp), 0),
+              level: Math.max(rankInt(meRaw.level, 1), 1),
               // 서버가 안 주면 "순위를 보여도 된다"로 본다 — 준 경우에만 감춘다
               ranked: meRaw.ranked !== false,
             }
           : null,
-      items: (Array.isArray(r.items) ? r.items : []).map(toEntry).filter((x): x is RegionRankingEntry => x !== null),
-      total: Math.max(int(r.total), 0),
+      items: (Array.isArray(r.items) ? r.items : []).map(toEntry).filter((x): x is RankingEntry => x !== null),
+      total: Math.max(rankInt(r.total), 0),
       updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : null,
     };
   },
