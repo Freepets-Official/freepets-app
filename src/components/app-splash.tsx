@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
-import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+import { useCallback, useEffect } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 import { AnimatedText } from '@/components/text';
 import Animated, {
   Easing,
@@ -28,6 +29,27 @@ const LETTER_STAGGER = 155; // 글자 사이 간격
 export function AppSplash({ onDone }: { onDone: () => void }) {
   const gone = useSharedValue(0); // 전체 페이드아웃
 
+  /**
+   * 네이티브 런치 스크린은 **이 화면이 그려진 뒤에** 내린다.
+   *
+   * iOS는 런치 스크린을 없앨 수 없다 — OS가 우리 프로세스보다 먼저 그린다. 그냥 두면
+   * 런치 스크린이 사라진 순간과 이 화면이 처음 그려지는 순간 사이가 벌어져 흰 화면이
+   * 한 번 깜빡인다. 사진이 자리잡은 뒤에 내리면 같은 그림 위에 같은 그림이 겹쳐 있다가
+   * 아래 것만 빠지므로 **눈에는 한 장**으로 이어진다.
+   */
+  const handOff = useCallback(() => {
+    if (Platform.OS === 'web') return;
+    SplashScreen.hideAsync().catch(() => {
+      // 이미 내려갔거나 네이티브가 없는 환경 — 화면은 이미 우리 것이라 할 일이 없다
+    });
+  }, []);
+
+  // `onDisplay`가 끝내 안 불리는 경우(디코드 실패 등)에도 네이티브 스플래시가 남지 않게 한다
+  useEffect(() => {
+    const safety = setTimeout(handOff, 2_000);
+    return () => clearTimeout(safety);
+  }, [handOff]);
+
   useEffect(() => {
     // 글자가 다 들어오고 잠깐 머문 뒤 사라진다
     const hold = LETTER_START + LETTERS.length * LETTER_STAGGER + 900;
@@ -52,15 +74,28 @@ export function AppSplash({ onDone }: { onDone: () => void }) {
         움직임은 뒤이어 들어오는 글자가 맡는다.
       */}
       <View style={styles.photoCard}>
-        <Image source={PETS} style={styles.photo} contentFit="contain" />
+        {/*
+          인계 시점은 `onLayout`이 아니라 `onDisplay`다. 레이아웃이 끝났다는 건 **자리를
+          잡았다**는 뜻이지 그림이 디코드돼 화면에 올라왔다는 뜻이 아니다. 콜드 스타트에서
+          레이아웃이 먼저 끝나면 그림 없는 빈 칸 위에서 런치 스크린이 빠져 흰 화면이 스친다.
+          `onDisplay`는 이미지 뷰가 실제로 그려낸 뒤에 불린다(expo-image 57).
+        */}
+        <Image source={PETS} style={styles.photo} contentFit="contain" onDisplay={handOff} />
       </View>
 
-      <View style={styles.row}>
-        {LETTERS.map((c, i) => (
-          <Letter key={c + i} index={i}>
-            {c}
-          </Letter>
-        ))}
+      {/*
+        글자를 사진의 **형제가 아니라 겹친 층**으로 둔다. 같은 흐름에 놓으면 글자 높이만큼
+        사진이 위로 밀려 올라가(약 40pt) 네이티브 런치 스크린의 사진과 어긋난다.
+        네이티브는 사진을 화면 정중앙에 놓기 때문에 우리도 정중앙이어야 한 장으로 이어진다.
+      */}
+      <View style={styles.letterLayer} pointerEvents="none">
+        <View style={styles.row}>
+          {LETTERS.map((c, i) => (
+            <Letter key={c + i} index={i}>
+              {c}
+            </Letter>
+          ))}
+        </View>
       </View>
     </Animated.View>
   );
@@ -101,22 +136,35 @@ function Letter({ children, index }: { children: string; index: number }) {
  */
 const PHOTO_SIZE = 270;
 
+/** 사진 아래끝과 글자 사이 */
+const LETTER_GAP = 26;
+
 const styles = StyleSheet.create({
   wrap: {
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 26,
     zIndex: 100,
     pointerEvents: 'none',
   },
   // 테두리·배경 없이 그림만 — 흰 배경에 동화된다.
-  // 화면 너비에 비례시킨다. 고정값이면 작은 기기에서 넘치고 큰 기기에서 허전하다.
   photoCard: {
     width: PHOTO_SIZE,
     height: PHOTO_SIZE,
   },
   photo: { width: '100%', height: '100%' },
+  /**
+   * 화면 정중앙(`top: '50%'`)에서 사진 반지름만큼 내려온 자리에 글자를 건다.
+   * 사진이 차지하는 흐름 밖이라 사진 위치에 영향을 주지 않는다.
+   */
+  letterLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '50%',
+    marginTop: PHOTO_SIZE / 2 + LETTER_GAP,
+    alignItems: 'center',
+  },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
   letter: { color: '#E86397', fontSize: 46, fontWeight: '900', letterSpacing: -1 },
 });

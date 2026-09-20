@@ -1,5 +1,6 @@
 import { DefaultTheme, Stack, ThemeProvider, useGlobalSearchParams, usePathname, useRouter, useSegments, type Href } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useEffect, useRef, useState } from 'react';
@@ -14,6 +15,18 @@ import { AppThemeProvider, usePalette, useColorScheme } from '@/hooks/use-theme'
 import { FontScaleProvider } from '@/components/text';
 import { onNotificationTap } from '@/lib/push';
 import { AppStoreProvider, useAppStore } from '@/store/app-store';
+
+/**
+ * 네이티브 런치 스크린을 **우리가 내릴 때까지** 붙잡아 둔다.
+ *
+ * 기본값은 첫 프레임이 그려지는 순간 자동으로 사라지는 것인데, 그 순간 `AppSplash`는
+ * 아직 레이아웃 전이라 흰 화면이 한 번 깜빡인다. 붙잡아 뒀다가 `AppSplash`의 사진이
+ * 자리잡은 뒤 내리면 같은 그림이 겹친 채로 아래 것만 빠져 한 장처럼 이어진다.
+ * 내리는 쪽은 `components/app-splash.tsx`다.
+ */
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // 웹이거나 이미 사라진 뒤 — 붙잡을 게 없으면 그대로 진행한다
+});
 
 /**
  * 인증·프로필 게이트. 세션 상태에 따라 진입 화면을 강제한다.
