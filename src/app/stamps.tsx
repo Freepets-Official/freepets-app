@@ -29,10 +29,10 @@ import { useAppStore } from '@/store/app-store';
  * ⚠️ 1단계는 인증이 목이다 — 사진을 받되 검사하지 않는다. 실제 비전 판별·GPS 대조는 2단계다.
  */
 /**
- * 랭킹 진입점 — 서버 API(`GET /gamification/ranking`)가 열리면 켠다.
- * 화면과 클라이언트는 붙어 있고, 없으면 "곧 열려요"로 떨어진다.
+ * 랭킹 진입점 — 서버 API(`GET /gamification/ranking`)가 2026-09-20 배포돼 켰다.
+ * 서버가 내려가도 화면이 "곧 열려요"·"다시 시도"로 떨어지므로 켜둬도 안전하다.
  */
-const SHOW_RANKING = false;
+const SHOW_RANKING = true;
 
 export default function StampsScreen() {
   const p = usePalette();
