@@ -28,7 +28,6 @@ type Mode = 'nearby' | 'all' | 'ranking';
 // 전체 모드: 내 주변보다 훨씬 넓게 검색. 위치 권한이 없어도 되게 기본 중심(서울)을 둔다.
 // 백엔드가 반경을 최대 100km로 제한(200km↑는 400)하므로 그 상한을 쓴다. 진짜 전국(키워드 전역)
 // 검색은 반경 무제한/키워드 전역 API가 나오면 교체.
-const RADIUS_ALL_M = 100_000;
 const DEFAULT_CENTER = { latitude: 37.5665, longitude: 126.978 };
 
 const HEADER: Record<Mode, { eyebrow: string; title: string; subtitle: string }> = {
@@ -101,7 +100,14 @@ export default function ExploreScreen() {
           longitude: center.longitude,
           keyword: keyword.trim() || undefined,
           category: category ?? undefined,
-          radiusM: mode === 'all' ? RADIUS_ALL_M : settings.searchRadiusKm * 1000,
+          /**
+           * **전체 모드는 반경을 보내지 않는다 — 생략이 곧 전국이다**(`api-specs/facility.md`).
+           *
+           * 예전엔 상한인 100km를 보냈는데, 기준점이 서울이라 전국 48,743곳 중 21,809곳만
+           * 잡혔다(2026-09-20 실측). "전체 시설"이라고 적어놓고 절반만 보여주던 셈이다.
+           * 반경을 빼면 서버가 전 건을 대상으로 거리순 정렬한다 — 응답도 더 빨랐다(0.15s vs 0.20s).
+           */
+          radiusM: mode === 'all' ? undefined : settings.searchRadiusKm * 1000,
           // 클라이언트에서 거르지 않고 서버 필터를 쓴다 — 30건 받아와서 6건만 남기면
           // 페이지네이션과 total이 어긋난다.
           petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
