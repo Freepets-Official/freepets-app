@@ -2243,6 +2243,9 @@ export type RankingEntry = {
   level: number;
   tierAnimal: TierAnimal;
   tierColor: TierColor;
+  /** 대표 반려동물(가장 먼저 등록한 1마리). 서버가 주면 랭킹 줄에 "보리 집사"로 붙인다 */
+  petName: string | null;
+  petPhotoUrl: string | null;
   isMe: boolean;
 };
 
@@ -2289,9 +2292,39 @@ function toEntry(raw: unknown, index: number): RankingEntry | null {
     level: Math.max(rankInt(e.level, 1), 1),
     tierAnimal: TIER_ANIMALS.has(animal) ? (animal as TierAnimal) : 'DOG',
     tierColor: TIER_COLORS.has(color) ? (color as TierColor) : 'RED',
+    petName: typeof e.petName === 'string' && e.petName ? e.petName : null,
+    petPhotoUrl: typeof e.petPhotoUrl === 'string' && e.petPhotoUrl ? e.petPhotoUrl : null,
     isMe: e.isMe === true,
   };
 }
+
+// ─────────────────────────── 아이별 기록(pet stats) ───────────────────────────
+// GET /pets/{petId}/stats — 그 아이가 낀 활동의 누적 횟수.
+//
+// **레벨이 아니다.** XP·레벨은 계정 하나뿐이고(docs/12 0절), 아이 쪽은 "얼마나 같이 다녔는지"를
+// 상한 없이 센다. 기기 기록으로 세던 값을 이걸로 대체한다 — 기기를 바꿔도 줄지 않는다.
+export type PetStats = {
+  checkCount: number;
+  reviewCount: number;
+  satisfactionCount: number;
+  stampCount: number;
+  total: number;
+};
+
+export const petStatsApi = {
+  get: async (petId: number): Promise<PetStats> => {
+    const r = await request<Partial<PetStats>>('GET', `/api/v1/pets/${petId}/stats`, { auth: true });
+    const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(Math.trunc(v), 0) : 0);
+    return {
+      checkCount: n(r.checkCount),
+      reviewCount: n(r.reviewCount),
+      satisfactionCount: n(r.satisfactionCount),
+      stampCount: n(r.stampCount),
+      // total을 서버가 빼먹어도 화면이 0으로 죽지 않게 항목 합으로 채운다
+      total: n(r.total) || n(r.checkCount) + n(r.reviewCount) + n(r.satisfactionCount) + n(r.stampCount),
+    };
+  },
+};
 
 export const rankingApi = {
   overall: async (size = 20): Promise<OverallRanking> => {
