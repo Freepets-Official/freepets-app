@@ -44,7 +44,7 @@ export function AppSplash({ onDone }: { onDone: () => void }) {
     });
   }, []);
 
-  // `onLayout`이 끝내 안 불리는 경우(렌더 실패 등)에도 네이티브 스플래시가 남지 않게 한다
+  // `onDisplay`가 끝내 안 불리는 경우(디코드 실패 등)에도 네이티브 스플래시가 남지 않게 한다
   useEffect(() => {
     const safety = setTimeout(handOff, 2_000);
     return () => clearTimeout(safety);
@@ -73,8 +73,14 @@ export function AppSplash({ onDone }: { onDone: () => void }) {
         그림이 한 번 튀었다가 자리잡는 것처럼 보인다 — 한 장이 쭉 떠 있어야 한다.
         움직임은 뒤이어 들어오는 글자가 맡는다.
       */}
-      <View style={styles.photoCard} onLayout={handOff}>
-        <Image source={PETS} style={styles.photo} contentFit="contain" />
+      <View style={styles.photoCard}>
+        {/*
+          인계 시점은 `onLayout`이 아니라 `onDisplay`다. 레이아웃이 끝났다는 건 **자리를
+          잡았다**는 뜻이지 그림이 디코드돼 화면에 올라왔다는 뜻이 아니다. 콜드 스타트에서
+          레이아웃이 먼저 끝나면 그림 없는 빈 칸 위에서 런치 스크린이 빠져 흰 화면이 스친다.
+          `onDisplay`는 이미지 뷰가 실제로 그려낸 뒤에 불린다(expo-image 57).
+        */}
+        <Image source={PETS} style={styles.photo} contentFit="contain" onDisplay={handOff} />
       </View>
 
       {/*
