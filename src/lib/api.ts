@@ -2173,15 +2173,20 @@ export const businessApi = {
 // PATCH /me/gamification/notification  — 레벨업 알림 on/off
 //
 // XP는 **계정 단위**다(판별·리뷰·제보·만족도·코스 공개/복사). 반려동물별로 나뉘지 않는다.
-// 레벨 곡선(`100 × L × (L−1) / 2`, 최대 70)과 티어 구성은 서버가 확정했다 — `data/level.ts` 참고.
+// 레벨 곡선(`100 × L × (L−1) / 2`)과 만렙 40은 서버와 합의된 값이다 — `data/level.ts` 참고.
+// 서버는 색·투명도(`tierColor`/`tierOpacityPercent`)도 함께 주지만 앱은 쓰지 않는다: 배지·명함·랭킹이
+// 전부 레벨 하나로 계산해야 같은 사람이 화면마다 다른 색으로 보이지 않는다.
 type ServerGamification = {
   level?: number;
   totalXp?: number;
   xpToNextLevel?: number;
+  /** 옛 서버만 준다(2026-09-20 배포로 제거). 모양은 사용자가 고르므로 없어도 무방하다 */
   tierAnimal?: string;
-  /** 선명도 5단계(서버 재설계 2026-09-18). 옛 서버엔 없다 */
+  /** 옛 서버만 준다(2026-09-20 배포로 `tierOpacityPercent`로 교체). 쓰지 않는다 */
   tierFinish?: string;
   tierColor?: string;
+  /** 서버가 계산한 투명도. 앱은 레벨에서 직접 구하므로 참고만 한다 */
+  tierOpacityPercent?: number;
   tierLabel?: string;
   tierBadgeImageUrl?: string | null;
   levelUpNotificationEnabled?: boolean;

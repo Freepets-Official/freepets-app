@@ -5,8 +5,8 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
+import { TierDot } from '@/components/tier-paw';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
-import { TIER_COLOR_HEX } from '@/data/level';
 import { usePalette } from '@/hooks/use-theme';
 import { NotDeployedError, rankingApi, type OverallRanking } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
@@ -128,7 +128,9 @@ export default function RankingScreen() {
                     { borderColor: e.isMe ? p.accent : p.line, backgroundColor: e.isMe ? p.accentSoft : p.card },
                   ]}>
                   <Text style={[styles.rank, { color: e.rank <= 3 ? p.accent : p.muted }]}>{e.rank}</Text>
-                  <View style={[styles.dot, { backgroundColor: TIER_COLOR_HEX[e.tierColor] }]} />
+                  <View style={styles.dot}>
+                    <TierDot level={e.level} size={10} />
+                  </View>
                   <View style={styles.who}>
                     <Text style={[styles.nickname, { color: p.ink }]} numberOfLines={1}>
                       {e.nickname}
@@ -170,7 +172,7 @@ const styles = StyleSheet.create({
   list: { gap: 6, marginTop: Spacing.lg },
   row: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: 11 },
   rank: { width: 24, fontSize: 13.5, fontWeight: '900', fontVariant: ['tabular-nums'] },
-  dot: { width: 9, height: 9, borderRadius: 5 },
+  dot: { width: 10, height: 10 },
   who: { flex: 1, gap: 1 },
   nickname: { fontSize: 13.5, fontWeight: '800' },
   petLine: { fontSize: 10.5, fontWeight: '700' },

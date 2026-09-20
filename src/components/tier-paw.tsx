@@ -99,3 +99,36 @@ function pawPaths(animal: TierAnimal, fill: string) {
     </>
   );
 }
+
+/**
+ * 랭킹 줄에 붙는 작은 티어 점.
+ *
+ * 남의 줄에는 발바닥을 그리지 않는다 — 개·고양이는 **그 사람이 고른 모양**이라 내 설정으로
+ * 대신 그리면 거짓말이 된다. 색과 투명도만 보여주면 레벨대는 그대로 읽힌다.
+ *
+ * 색을 서버의 `tierColor`가 아니라 `tierLook(level)`에서 뽑는 이유: 배지·명함이 전부 레벨로
+ * 계산하는데 여기만 서버 값을 쓰면 같은 사람이 화면마다 다른 색으로 보인다.
+ */
+export function TierDot({ level, size = 10 }: { level: number; size?: number }) {
+  const gradientId = `tier-dot-${useId()}`;
+  const look = tierLook(level);
+  const fill = look.rainbow ? `url(#${gradientId})` : TIER_COLOR_HEX[look.color ?? 'RED'];
+  return (
+    <Svg width={size} height={size} viewBox="0 0 10 10">
+      <Defs>
+        <LinearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor={TIER_COLOR_HEX.RED} />
+          <Stop offset="0.17" stopColor={TIER_COLOR_HEX.ORANGE} />
+          <Stop offset="0.34" stopColor={TIER_COLOR_HEX.YELLOW} />
+          <Stop offset="0.5" stopColor={TIER_COLOR_HEX.GREEN} />
+          <Stop offset="0.66" stopColor={TIER_COLOR_HEX.BLUE} />
+          <Stop offset="0.83" stopColor={TIER_COLOR_HEX.INDIGO} />
+          <Stop offset="1" stopColor={TIER_COLOR_HEX.VIOLET} />
+        </LinearGradient>
+      </Defs>
+      {/* 투명도 80% 칸은 점이 거의 안 보인다 — 옅은 바탕을 깔아 자리는 남긴다 */}
+      <Circle cx="5" cy="5" r="5" fill={fill} opacity={0.18} />
+      <Circle cx="5" cy="5" r="5" fill={fill} opacity={look.opacity} />
+    </Svg>
+  );
+}
