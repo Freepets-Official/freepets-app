@@ -34,6 +34,7 @@ import type {
   OwnerAmenity,
   VisitBenefit,
 } from '@/data/types';
+import type { Stamp } from '@/data/stamps';
 import { OWNER_AMENITY_LABEL, REVIEW_TAG_LABEL } from '@/data/types';
 import type { Gamification, TierAnimal, TierColor } from '@/data/level';
 import { MAX_LEVEL, TIER_ANIMAL_LABEL, TIER_COLOR_LABEL } from '@/data/level';
@@ -2309,6 +2310,106 @@ export type PetStats = {
   satisfactionCount: number;
   stampCount: number;
   total: number;
+};
+
+// ─────────────────────────── 여권 도장(stamps) ───────────────────────────
+// GET  /me/stamps — 내 도장첩(목록 + 요약)
+// POST /me/stamps — 도장 찍기(multipart)
+//
+// 도장은 원래 기기(SecureStore/localStorage)에만 있었다 — 기기를 바꾸면 사라졌다.
+// 2026-09-20 서버가 열려 계정에 묶는다. 좌표(lat·lng)는 **현장 여부 판정에만 쓰고 저장하지
+// 않는다**(개인위치정보를 남기지 않는다). `createdAt`은 기기 이전 전용이다.
+export type StampSummary = {
+  total: number;
+  /** 서로 다른 시/군/구 수 — 정복자 배지 기준 */
+  regionCount: number;
+  onSiteCount: number;
+  thisMonthCount: number;
+};
+
+export type StampCreated = Stamp & {
+  stampId: number;
+  /** 처음 찍은 시설이면 true. 이미 있던 도장을 현장 확인으로 승격만 했으면 false */
+  isNew: boolean;
+  /** 이번 도장으로 그 시/군/구를 처음 채웠는지 */
+  regionCompleted: boolean;
+  /** 그 지역을 완성한 순번("○○시 n번째 등반자"). 서버가 안 주면 null */
+  completionOrder: number | null;
+};
+
+function toStamp(raw: unknown): Stamp | null {
+  const s = raw as Record<string, unknown> | null;
+  if (!s || typeof s.facilityId !== 'number') return null;
+  const str = (v: unknown) => (typeof v === 'string' ? v : '');
+  return {
+    facilityId: s.facilityId,
+    facilityName: str(s.facilityName),
+    sido: str(s.sido),
+    sigungu: str(s.sigungu),
+    sidoCode: typeof s.sidoCode === 'string' ? s.sidoCode : null,
+    sigunguCode: typeof s.sigunguCode === 'string' ? s.sigunguCode : null,
+    petIds: Array.isArray(s.petIds) ? s.petIds.filter((x): x is number => typeof x === 'number') : [],
+    // 서버는 photoUrl, 앱은 photoUri로 부른다(로컬 uri와 같은 자리에 들어간다)
+    photoUri: typeof s.photoUrl === 'string' && s.photoUrl ? s.photoUrl : null,
+    verifiedOnSite: s.verifiedOnSite === true,
+    createdAt: str(s.createdAt) || new Date().toISOString(),
+  };
+}
+
+export const stampsApi = {
+  list: async (): Promise<{ stamps: Stamp[]; summary: StampSummary }> => {
+    const r = await request<{ stamps?: unknown[]; summary?: Partial<StampSummary> }>('GET', '/api/v1/me/stamps', { auth: true });
+    const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.max(Math.trunc(v), 0) : 0);
+    const stamps = (r.stamps ?? []).map(toStamp).filter((x): x is Stamp => x !== null);
+    return {
+      stamps,
+      summary: {
+        total: n(r.summary?.total) || stamps.length,
+        regionCount: n(r.summary?.regionCount),
+        onSiteCount: n(r.summary?.onSiteCount),
+        thisMonthCount: n(r.summary?.thisMonthCount),
+      },
+    };
+  },
+  /**
+   * 도장 찍기. 같은 시설을 다시 찍으면 새로 세지 않고, 원거리(false)로 찍었던 것을
+   * 현장(true)에서 다시 찍으면 승격된다 — 그 판정은 서버가 한다.
+   */
+  create: async (input: {
+    facilityId: number;
+    petIds: number[];
+    photoUri: string | null;
+    coords: { latitude: number; longitude: number } | null;
+    /** 기기 이전 전용 — 원래 찍은 시각. 이때만 verifiedOnSite를 서버가 그대로 믿는다 */
+    createdAt?: string;
+    verifiedOnSite?: boolean;
+  }): Promise<StampCreated | null> => {
+    const epoch = getSessionEpoch();
+    const fd = new FormData();
+    fd.append('facilityId', String(input.facilityId));
+    for (const id of input.petIds) fd.append('petIds', String(id));
+    if (input.coords) {
+      fd.append('lat', String(input.coords.latitude));
+      fd.append('lng', String(input.coords.longitude));
+    }
+    if (input.createdAt) fd.append('createdAt', input.createdAt);
+    if (input.verifiedOnSite !== undefined) fd.append('verifiedOnSite', String(input.verifiedOnSite));
+    // 서버가 못 받는 로컬 uri(http URL)는 올리지 않는다 — 이전된 도장의 옛 사진이 그렇다
+    if (input.photoUri && !/^https?:/.test(input.photoUri)) {
+      const blob = await (await fetch(input.photoUri)).blob();
+      fd.append('photo', blob, 'stamp.jpg');
+    }
+    const r = await request<Record<string, unknown>>('POST', '/api/v1/me/stamps', { body: fd, auth: true, epoch });
+    const stamp = toStamp(r);
+    if (!stamp) return null;
+    return {
+      ...stamp,
+      stampId: typeof r.stampId === 'number' ? r.stampId : 0,
+      isNew: r.isNew !== false,
+      regionCompleted: r.regionCompleted === true,
+      completionOrder: typeof r.completionOrder === 'number' ? r.completionOrder : null,
+    };
+  },
 };
 
 export const petStatsApi = {

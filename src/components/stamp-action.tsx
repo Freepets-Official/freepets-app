@@ -88,8 +88,10 @@ export function StampAction({
        * 사진이 없으면 위치도 묻지 않는다. 아무것도 안 내는 사람에게 권한만 물으면 성가시다.
        */
       let verifiedOnSite = false;
+      // 서버에도 넘겨 현장 여부를 다시 판정하게 한다 — 좌표는 판정에만 쓰고 저장되지 않는다
+      let here: { latitude: number; longitude: number } | null = null;
       if (photoUri && latitude != null && longitude != null) {
-        const here = await getCurrentLocation();
+        here = await getCurrentLocation();
         if (here) {
           verifiedOnSite = distanceMeters(here, { latitude, longitude }) <= ON_SITE_RADIUS_M;
         }
@@ -99,7 +101,16 @@ export function StampAction({
       // 보이지 않아 오히려 흐름이 어색해, 확인하는 시간만큼만 기다린다.
       await new Promise((r) => setTimeout(r, 900));
 
-      const made = addStamp({ facilityId, facilityName, address, petIds, photoUri, verifiedOnSite });
+      const made = addStamp({
+        facilityId,
+        facilityName,
+        address,
+        petIds,
+        photoUri,
+        verifiedOnSite,
+        // 서버가 현장 여부를 다시 판정한다(좌표는 판정에만 쓰고 저장하지 않는다)
+        coords: here,
+      });
       if (!made) {
         // 주소에서 지역을 못 찾았다. 억지로 추측해 엉뚱한 지역에 찍지 않는다.
         // 트리가 없는 경우는 버튼 단계에서 이미 걸러진다. 여기 오는 건 주소를 못 읽은 것이다.

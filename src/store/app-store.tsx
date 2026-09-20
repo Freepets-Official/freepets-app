@@ -37,6 +37,7 @@ import {
   type MyClaim,
   type DenialAlert,
   type ServerDenialReport,
+  stampsApi,
 } from '@/lib/api';
 import { DEV_TOKEN } from '@/lib/config';
 import {
@@ -409,6 +410,8 @@ interface AppStore {
     photoUri: string | null;
     /** 찍을 때 시설 근처에 있었는지. 강제하지 않고 표시만 한다 */
     verifiedOnSite: boolean;
+    /** 현장 판정용 좌표. 서버가 다시 판정하며 저장하지 않는다 */
+    coords?: { latitude: number; longitude: number } | null;
   }) => Stamp | null;
   /** 도장첩이 지역을 알아내는 데 쓰는 트리(TourAPI 코드 포함). 못 받았으면 빈 배열 */
   stampRegions: Region[];
@@ -2415,6 +2418,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // `stampsLoaded`는 **복원이 끝나기 전에 저장하지 않기 위한** 표시다. 없으면 아래 저장
   // 이펙트가 초기 빈 배열을 그대로 기기에 써서 복원 대상을 지워버린다.
   const stampsLoaded = useRef(false);
+  // 동기화 이펙트가 최신 도장 배열을 보되, 배열이 바뀔 때마다 다시 돌지 않게 한다
+  const stampsRef = useMirrorRef(stamps);
   useEffect(() => {
     let alive = true;
     loadStamps().then((list) => {
@@ -2434,6 +2439,57 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 저장 실패는 삼키지 않는다. 이 저장소는 한계가 빠듯해서(`stamp-store.ts` 참고) 실제로
    * 실패할 수 있고, 그때 화면이 계속 성공이라고 말하면 사용자는 앱을 다시 켠 뒤에야 안다.
    */
+  /**
+   * 서버 도장첩과 맞춘다(2026-09-20 API 열림).
+   *
+   * 1) 로그인하면 서버 목록을 받아 상태를 채운다 — 기기를 바꿔도 도장이 따라온다.
+   * 2) 기기에만 있던 옛 도장은 **원래 찍은 시각(`createdAt`)을 붙여** 한 번 올린다.
+   *    시각을 안 보내면 몇 달 전 도장이 전부 오늘로 찍혀 "이번 달 N곳"이 엉킨다.
+   * 3) 올리고 나면 기기 사본을 비운다 — 다음 로그인에 같은 도장을 또 올리지 않게.
+   *
+   * 실패하면 아무것도 지우지 않고 기기 사본으로 계속 쓴다(도장은 복구 경로가 없다).
+   */
+  const stampsSynced = useRef(false);
+  useEffect(() => {
+    if (!accessToken || !stampsLoaded.current || stampsSynced.current) return;
+    stampsSynced.current = true;
+    let alive = true;
+    void (async () => {
+      try {
+        const server = await stampsApi.list();
+        if (!alive) return;
+        const local = stampsRef.current;
+        const missing = local.filter((l) => !server.stamps.some((srv: Stamp) => srv.facilityId === l.facilityId));
+        if (missing.length === 0) {
+          setStamps(server.stamps);
+          return;
+        }
+        for (const m of missing) {
+          await stampsApi.create({
+            facilityId: m.facilityId,
+            petIds: m.petIds,
+            // 옛 사진은 기기 로컬 uri라 대부분 못 올린다 — 사진 없이 이전한다
+            photoUri: null,
+            coords: null,
+            createdAt: m.createdAt,
+            verifiedOnSite: m.verifiedOnSite,
+          });
+        }
+        const merged = await stampsApi.list();
+        if (!alive) return;
+        setStamps(merged.stamps);
+        // 서버가 받았으니 기기 사본은 지운다(다음 로그인에 중복 업로드 방지)
+        await clearStamps();
+      } catch {
+        // 서버가 아직 불안정하면 기기 사본으로 계속 쓴다. 다음 실행에서 다시 시도한다
+        stampsSynced.current = false;
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [accessToken]);
+
   const [stampSaveFailed, setStampSaveFailed] = useState(false);
   useEffect(() => {
     if (!stampsLoaded.current) return;
@@ -2556,6 +2612,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       petIds: number[];
       photoUri: string | null;
       verifiedOnSite: boolean;
+      /** 현장 판정용 좌표. 서버가 다시 판정하고 저장하지 않는다 */
+      coords?: { latitude: number; longitude: number } | null;
     }): Stamp | null => {
       const region = matchRegion(input.address, stampRegions);
       // 지역을 모르면 안 찍는다. 잘못 찍힌 도장은 사용자가 지울 방법이 없다.
@@ -2574,6 +2632,36 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       };
 
+      /**
+       * 서버에도 남긴다(2026-09-20 API). 화면은 먼저 그리고 서버는 뒤따른다 —
+       * 도장을 찍은 직후가 가장 기분 좋은 순간이라 네트워크를 기다리게 하지 않는다.
+       * 실패해도 기기 사본이 남고, 다음 로그인 때 동기화가 다시 올린다.
+       * 현장 여부는 서버가 좌표로 다시 판정하므로 여기서 보낸 값은 참고용이다.
+       */
+      if (accessTokenRef.current) {
+        void stampsApi
+          .create({
+            facilityId: input.facilityId,
+            petIds: input.petIds,
+            photoUri: input.photoUri,
+            coords: input.coords ?? null,
+          })
+          .then((saved) => {
+            if (!saved) return;
+            // 서버가 정한 값(사진 URL·현장 판정)으로 맞춘다
+            setStamps((prev) =>
+              prev.map((s2) =>
+                s2.facilityId === saved.facilityId
+                  ? { ...s2, photoUri: saved.photoUri ?? s2.photoUri, verifiedOnSite: saved.verifiedOnSite }
+                  : s2,
+              ),
+            );
+          })
+          .catch(() => {
+            // 조용히 둔다 — 기기 사본이 있고 다음 로그인에 다시 올라간다
+          });
+      }
+
       setStamps((prev) => {
         // 이미 찍은 시설이면 새로 세지 않는다. 같은 곳을 반복해 세면 "정복"이 아니게 된다.
         const idx = prev.findIndex((s2) => s2.facilityId === input.facilityId);
@@ -2589,7 +2677,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       });
       return stamp;
     },
-    [stampRegions],
+    [stampRegions, accessTokenRef],
   );
 
   const value = useMemo(
