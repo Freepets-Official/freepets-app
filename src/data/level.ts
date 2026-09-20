@@ -85,8 +85,8 @@ export function tierLook(level: number): TierLook {
 
 /**
  * 만렙 40 — 색 7 × 투명도 5 = 35에 무지개 5단계를 더한 값.
- * ⚠️ 서버는 아직 70을 최대로 계산한다(`gamification.md`). 규칙 변경을 요청해 둔 상태라,
- * 그전까지 앱은 40으로 잘라 보여준다.
+ * 서버도 2026-09-20 배포로 40을 상한으로 계산한다(`gamification.md`, docs PR #52).
+ * 41~70이던 옛 계정은 서버 응답에서 이미 40으로 잘려 내려온다.
  */
 export const MAX_LEVEL = 40;
 
