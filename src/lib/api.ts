@@ -2297,25 +2297,29 @@ export const rankingApi = {
   overall: async (size = 20): Promise<OverallRanking> => {
     let r: Record<string, unknown>;
     try {
-      r = await request<Record<string, unknown>>('GET', `${RANKING_PATH}?size=${size}`, { auth: true });
+      r = await request<Record<string, unknown>>('GET', `${RANKING_PATH}?page=0&size=${size}`, { auth: true });
     } catch (e) {
       // 아직 배포 전이면 404가 온다. 오류 화면 대신 "준비 중"으로 안내한다
       if (e instanceof ApiError && (e.status === 404 || e.status === 405)) throw new NotDeployedError();
       throw e;
     }
+    /**
+     * `me`는 게스트면 키 자체가 없고, 참여자가 3명 미만이면 `ranked:false`와 함께 **`rank` 키가 빠진다**
+     * (ranking.md). rank 유무로만 판단하면 "아직 집계 전"이 "기록이 없어요"로 잘못 뜬다.
+     */
     const meRaw = r.me as Record<string, unknown> | null | undefined;
+    const hasMe = !!meRaw && (typeof meRaw.rank === 'number' || typeof meRaw.participantCount === 'number');
     return {
-      me:
-        meRaw && typeof meRaw.rank === 'number'
-          ? {
-              rank: rankInt(meRaw.rank, 0),
-              participantCount: Math.max(rankInt(meRaw.participantCount), 0),
-              xp: Math.max(rankInt(meRaw.xp), 0),
-              level: Math.max(rankInt(meRaw.level, 1), 1),
-              // 서버가 안 주면 "순위를 보여도 된다"로 본다 — 준 경우에만 감춘다
-              ranked: meRaw.ranked !== false,
-            }
-          : null,
+      me: hasMe
+        ? {
+            rank: rankInt(meRaw!.rank, 0),
+            participantCount: Math.max(rankInt(meRaw!.participantCount), 0),
+            xp: Math.max(rankInt(meRaw!.xp), 0),
+            level: Math.max(rankInt(meRaw!.level, 1), 1),
+            // 서버가 안 주면 "순위를 보여도 된다"로 본다 — 준 경우에만 감춘다
+            ranked: meRaw!.ranked !== false && typeof meRaw!.rank === 'number',
+          }
+        : null,
       items: (Array.isArray(r.items) ? r.items : []).map(toEntry).filter((x): x is RankingEntry => x !== null),
       total: Math.max(rankInt(r.total), 0),
       updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : null,

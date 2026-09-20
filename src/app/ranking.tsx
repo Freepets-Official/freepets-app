@@ -34,7 +34,7 @@ function updatedText(iso: string | null): string {
  */
 export default function RankingScreen() {
   const p = usePalette();
-  const { gamification } = useAppStore();
+  const { gamification, pets } = useAppStore();
   const [data, setData] = useState<OverallRanking | null>(null);
   const [state, setState] = useState<'loading' | 'ok' | 'failed' | 'not-deployed'>('loading');
   const [attempt, setAttempt] = useState(0);
@@ -62,6 +62,9 @@ export default function RankingScreen() {
   }, [attempt]);
 
   const me = data?.me ?? null;
+  /** "몽이 집사" — 아이가 여럿이면 첫 아이 + 외 N */
+  const myPetLabel =
+    pets.length === 0 ? null : pets.length === 1 ? `${pets[0].name} 집사` : `${pets[0].name} 외 ${pets.length - 1}마리의 집사`;
 
   return (
     <Screen hasNavHeader eyebrow="전체 랭킹" title="집사 랭킹" subtitle="판별·리뷰·제보로 쌓은 경험치로 줄 세운 순위예요.">
@@ -88,7 +91,7 @@ export default function RankingScreen() {
           <View style={[styles.meCard, CardShadow, { backgroundColor: p.card, borderColor: p.accent }]}>
             {me && me.ranked ? (
               <>
-                <Text style={[styles.meLabel, { color: p.muted }]}>전체에서 내 자리</Text>
+                <Text style={[styles.meLabel, { color: p.muted }]}>{myPetLabel ?? '전체'}, 지금 내 자리</Text>
                 <Text style={[styles.meRank, { color: p.ink }]}>
                   {me.participantCount.toLocaleString()}명 중 <Text style={{ color: p.accent }}>{me.rank.toLocaleString()}번째</Text>
                 </Text>
@@ -126,10 +129,21 @@ export default function RankingScreen() {
                   ]}>
                   <Text style={[styles.rank, { color: e.rank <= 3 ? p.accent : p.muted }]}>{e.rank}</Text>
                   <View style={[styles.dot, { backgroundColor: TIER_COLOR_HEX[e.tierColor] }]} />
-                  <Text style={[styles.nickname, { color: p.ink }]} numberOfLines={1}>
-                    {e.nickname}
-                    {e.isMe ? ' (나)' : ''}
-                  </Text>
+                  <View style={styles.who}>
+                    <Text style={[styles.nickname, { color: p.ink }]} numberOfLines={1}>
+                      {e.nickname}
+                      {e.isMe ? ' (나)' : ''}
+                    </Text>
+                    {/*
+                      내 줄에만 아이 이름을 얹는다 — 남의 아이 정보는 서버 응답에 없다
+                      (`items[].petName` 추가를 요청해 둔 상태다).
+                    */}
+                    {e.isMe && myPetLabel ? (
+                      <Text style={[styles.petLine, { color: p.muted }]} numberOfLines={1}>
+                        {myPetLabel}
+                      </Text>
+                    ) : null}
+                  </View>
                   <Text style={[styles.level, { color: p.muted }]}>Lv.{e.level}</Text>
                   <Text style={[styles.xp, { color: p.ink }]}>{e.xp.toLocaleString()}</Text>
                 </View>
@@ -157,7 +171,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: 11 },
   rank: { width: 24, fontSize: 13.5, fontWeight: '900', fontVariant: ['tabular-nums'] },
   dot: { width: 9, height: 9, borderRadius: 5 },
-  nickname: { flex: 1, fontSize: 13.5, fontWeight: '800' },
+  who: { flex: 1, gap: 1 },
+  nickname: { fontSize: 13.5, fontWeight: '800' },
+  petLine: { fontSize: 10.5, fontWeight: '700' },
   level: { fontSize: 12, fontWeight: '700' },
   xp: { width: 62, fontSize: 12.5, fontWeight: '800', textAlign: 'right', fontVariant: ['tabular-nums'] },
   note: { fontSize: 11.5, textAlign: 'center', marginTop: Spacing.sm },
