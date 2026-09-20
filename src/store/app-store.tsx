@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, cre
 import { Platform } from 'react-native';
 
 import { clearOwnerFacilitiesCache } from '@/hooks/use-owner-facilities';
+import { clearPetStatsCache } from '@/hooks/use-pet-stats';
 import { clearPushToken, loadPushToken, savePushToken } from '@/lib/push-token-store';
 import { clearSession, loadSession, saveSession, type LoginProvider } from '@/lib/token-store';
 import { clearStamps, loadStamps, saveStamps } from '@/lib/stamp-store';
@@ -1788,6 +1789,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     async (identity: BusinessIdentity, input: NewFacilityInput) => {
       const res = await businessApi.registerFacility(identity, input);
       clearOwnerFacilitiesCache();
+    clearPetStatsCache();
       void reloadMyClaims();
       return res;
     },

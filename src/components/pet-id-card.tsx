@@ -8,6 +8,7 @@ import { Text } from '@/components/text';
 import { TierPaw } from '@/components/tier-paw';
 import { Radius, Spacing } from '@/constants/theme';
 import { footprintsOf } from '@/data/footprints';
+import { usePetStats } from '@/hooks/use-pet-stats';
 import { levelProgress, tierName } from '@/data/level';
 import {
   BREED_SIZE_LABEL,
@@ -80,7 +81,10 @@ export function PetIdCard({ pet }: { pet: Pet }) {
    * 이 아이와 함께한 기록. **레벨이 아니다** — XP·레벨은 계정 하나뿐이고(보호자 칸),
    * 아이 쪽은 "얼마나 같이 다녔는지"를 상한 없이 세어 보여준다.
    */
-  const footprints = footprintsOf(pet.petId, { checks, stamps, satisfactions });
+  const localFootprints = footprintsOf(pet.petId, { checks, stamps, satisfactions });
+  // 서버 합계가 오면 그걸 쓴다 — 기기 기록은 기기를 바꾸면 줄어든다(2026-09-20 배포)
+  const serverStats = usePetStats(pet.petId);
+  const footprintTotal = serverStats?.total ?? localFootprints.total;
   const medal = ['🥇', '🥈', '🥉'];
   /** 발급번호 — 아이 등록 순서(petId)를 6자리로. 서식의 빈칸을 그럴듯한 값으로 채운다 */
   const serial = String(pet.petId).padStart(6, '0');
@@ -136,7 +140,7 @@ export function PetIdCard({ pet }: { pet: Pet }) {
           <View style={styles.footprints}>
             <Ionicons name="paw" size={12} color={CARD.gold} />
             <Text style={styles.footprintsText}>
-              {pet.name}와 함께한 발자국 <Text style={styles.footprintsCount}>{footprints.total.toLocaleString()}</Text>개
+              {pet.name}와 함께한 발자국 <Text style={styles.footprintsCount}>{footprintTotal.toLocaleString()}</Text>개
             </Text>
           </View>
         </View>
