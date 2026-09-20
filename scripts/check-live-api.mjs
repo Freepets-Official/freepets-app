@@ -21,6 +21,9 @@ const PATHS = [
   ['신규 매장 · 중복 확인', '/api/v1/business/facilities/duplicate-check'],
   ['신규 매장 · 등록', '/api/v1/business/facilities'],
   ['오늘의 퀘스트', '/api/v1/me/gamification/quests'],
+  ['전체 랭킹', '/api/v1/gamification/ranking'],
+  ['도장 저장·조회', '/api/v1/me/stamps'],
+  ['아이별 기록', '/api/v1/pets/{petId}/stats'],
   ['도움됐어요 취소(DELETE)', '/api/v1/reviews/{reviewId}/helpful'],
 ];
 
@@ -33,7 +36,9 @@ const FIELDS = [
   ['리뷰 목록 · 도움됐어요', 'ReviewDetail', 'helpfulCount'],
   ['리뷰 작성 응답 · 사진 URL', 'UpsertResult', 'photoUrl'],
   ['게이미피케이션 · 배지 진행도', 'MyStatus', 'progress'],
-  ['게이미피케이션 · 선명도', 'MyStatus', 'tierFinish'],
+  ['펫 · 성별', 'PetDetail', 'gender'],
+  ['펫 · 생년월일', 'PetDetail', 'birthDate'],
+  ['랭킹 · 대표 아이', 'RankingItem', 'petName'],
   ['내 신청 · 반려 사유', 'MyClaim', 'reviewReason'],
   ['캘린더 · 반복 시작일', 'EventOccurrence', 'startDate'],
 ];
