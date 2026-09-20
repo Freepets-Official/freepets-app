@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Ellipse, G, Path } from 'react-native-svg';
@@ -6,6 +7,7 @@ import { PetAvatar } from '@/components/pet-avatar';
 import { Text } from '@/components/text';
 import { TierPaw } from '@/components/tier-paw';
 import { Radius, Spacing } from '@/constants/theme';
+import { footprintsOf } from '@/data/footprints';
 import { levelProgress, tierName } from '@/data/level';
 import {
   BREED_SIZE_LABEL,
@@ -71,9 +73,14 @@ function Field({ label, en, value, strong }: { label: string; en: string; value:
 
 export function PetIdCard({ pet }: { pet: Pet }) {
   const router = useRouter();
-  const { topPlacesForPet, gamification, account, settings } = useAppStore();
+  const { topPlacesForPet, gamification, account, settings, checks, stamps, satisfactions } = useAppStore();
   const top = topPlacesForPet(pet.petId, 3);
   const progress = gamification ? levelProgress(gamification) : null;
+  /**
+   * 이 아이와 함께한 기록. **레벨이 아니다** — XP·레벨은 계정 하나뿐이고(보호자 칸),
+   * 아이 쪽은 "얼마나 같이 다녔는지"를 상한 없이 세어 보여준다.
+   */
+  const footprints = footprintsOf(pet.petId, { checks, stamps, satisfactions });
   const medal = ['🥇', '🥈', '🥉'];
   /** 발급번호 — 아이 등록 순서(petId)를 6자리로. 서식의 빈칸을 그럴듯한 값으로 채운다 */
   const serial = String(pet.petId).padStart(6, '0');
@@ -125,6 +132,12 @@ export function PetIdCard({ pet }: { pet: Pet }) {
           <View style={styles.fieldRow}>
             <Field label="생년월일" en="DATE OF BIRTH" value={birthText} />
             <Field label="예방접종" en="VACCINATION" value={vaccinationText} />
+          </View>
+          <View style={styles.footprints}>
+            <Ionicons name="paw" size={12} color={CARD.gold} />
+            <Text style={styles.footprintsText}>
+              {pet.name}와 함께한 발자국 <Text style={styles.footprintsCount}>{footprints.total.toLocaleString()}</Text>개
+            </Text>
           </View>
         </View>
       </View>
@@ -178,7 +191,7 @@ export function PetIdCard({ pet }: { pet: Pet }) {
             </Text>
           </View>
           <Text style={styles.guardianTier} numberOfLines={1}>
-            {tierName(gamification, settings.pawAnimal || gamification.tierAnimal)}
+            우리 가족 발바닥 · {tierName(gamification, settings.pawAnimal || gamification.tierAnimal).replace(/^.* 발바닥 /, '')}
           </Text>
         </View>
       )}
@@ -245,6 +258,9 @@ const styles = StyleSheet.create({
   guardianLevel: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   guardianLv: { fontSize: 13, fontWeight: '900', color: CARD.ink, fontVariant: ['tabular-nums'] },
   guardianTier: { fontSize: 10.5, fontWeight: '700', color: CARD.gold },
+  footprints: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
+  footprintsText: { fontSize: 11.5, fontWeight: '700', color: CARD.sub },
+  footprintsCount: { fontSize: 13, fontWeight: '900', color: CARD.ink },
   favBlock: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md, gap: 5 },
   favTitle: { fontSize: 10.5, fontWeight: '800', color: CARD.sub },
   favEmpty: { fontSize: 11.5, lineHeight: 17, color: CARD.sub },
