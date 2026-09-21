@@ -62,10 +62,17 @@ export function FacilityCard({ facility }: { facility: Facility }) {
 
 
       <View style={[styles.bottomRow, { borderTopColor: p.line }]}>
+        {/*
+          지역 목록(관광공사 실시간)은 좌표를 받지 않아 거리가 없다. 그 자리에 "거리 미상"을
+          쓰면 뭔가 고장 난 것처럼 보이므로, 대신 행정구역을 보여준다 — 지역을 훑어보는
+          맥락에서는 내 위치로부터의 거리보다 어느 시군구인지가 쓸모 있다.
+        */}
         <View style={styles.distance}>
-          <Ionicons name="location" size={13} color={p.muted} />
+          <Ionicons name={facility.distanceM == null ? 'map-outline' : 'location'} size={13} color={p.muted} />
           <Text style={[styles.distanceText, { color: p.muted }]}>
-            {formatDistance(facility.distanceM)}
+            {facility.distanceM == null
+              ? [facility.sido, facility.sigungu].filter(Boolean).join(' ') || '위치 정보 없음'
+              : formatDistance(facility.distanceM)}
           </Text>
         </View>
         {conditions.length > 0 && (
