@@ -744,6 +744,25 @@ const KNOWN_REQS: Requirement[] = [
 ];
 
 /** 서버 시설 → 앱 Facility. 검색 응답엔 없는 필드(원문·전화·신뢰도)는 기본값으로 채운다. */
+/**
+ * 시군구 목록(`GET /facilities`)의 한 줄. 거리 대신 **행정구역 이름**이 온다.
+ * 검색(1번)과 달리 `petScore`·`rating`·`reviewCnt`가 실제 값으로 채워진다.
+ */
+type ServerRegionFacility = Omit<ServerFacility, 'distanceM'> & {
+  sido: string | null;
+  sigungu: string | null;
+};
+
+/** 거리를 지어내지 않는다 — 이 API는 좌표를 안 받으므로 `distanceM`은 null이 맞다. */
+function toRegionFacility(s: ServerRegionFacility): Facility {
+  return {
+    ...toFacility({ ...s, distanceM: 0 }),
+    distanceM: null,
+    sido: s.sido ?? '',
+    sigungu: s.sigungu ?? '',
+  };
+}
+
 function toFacility(s: ServerFacility): Facility {
   return {
     facilityId: s.facilityId,
@@ -936,6 +955,39 @@ export const facilitiesApi = {
       { auth: true },
     );
     return { items: (r.items ?? []).map(toRankingItem), total: r.total ?? 0 };
+  },
+
+  /**
+   * 시군구 시설 목록 — **관광공사를 실시간으로 부른다**(`api-specs/facility.md` 5번).
+   *
+   * `search`(1번)와 데이터 출처가 다르다. 저쪽은 우리가 적재해둔 DB를 거리순으로 읽고,
+   * 이쪽은 요청할 때마다 관광공사에서 받아 서버가 거른 뒤 가나다순으로 준다. 그래서
+   * **첫 호출이 1초 안팎 느릴 수 있고, 거리(distanceM)가 없다**(좌표를 받지 않는다).
+   *
+   * **시도·시군구가 둘 다 필수다.** 관광공사에서 조건에 맞는 전량을 받아오는 구조라
+   * 범위를 좁히지 않으면 전국 49,679건이 한 요청에 딸려 온다. 시군구까지 좁히면 최대 736건이다.
+   * 그래서 '전국'과 '시도만' 상태는 이 API를 부르지 않고 `search`(DB)로 간다.
+   */
+  byRegion: async (params: {
+    sidoCode: string;
+    sigunguCode: string;
+    category?: Category;
+    petAllowed?: 'ALLOWED' | 'DENIED' | 'PENDING';
+    page?: number;
+    size?: number;
+  }): Promise<{ items: Facility[]; total: number }> => {
+    const q = new URLSearchParams({ sidoCode: params.sidoCode, sigunguCode: params.sigunguCode });
+    if (params.category) q.set('category', params.category);
+    if (params.petAllowed) q.set('petAllowed', params.petAllowed);
+    q.set('page', String(params.page ?? 0));
+    q.set('size', String(params.size ?? 30));
+
+    const r = await request<{ items: ServerRegionFacility[]; total: number }>(
+      'GET',
+      `/api/v1/facilities?${q.toString()}`,
+      { auth: true },
+    );
+    return { items: (r.items ?? []).map(toRegionFacility), total: r.total ?? 0 };
   },
 
   /**

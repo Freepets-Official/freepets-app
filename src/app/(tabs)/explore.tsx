@@ -7,6 +7,7 @@ import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
 import { FacilityCard } from '@/components/facility-card';
 import { RankingView } from '@/components/ranking-view';
+import { RegionChips } from '@/components/region-chips';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
 import { Radius, Spacing } from '@/constants/theme';
@@ -29,6 +30,29 @@ type Mode = 'nearby' | 'all' | 'ranking';
 // 백엔드가 반경을 최대 100km로 제한(200km↑는 400)하므로 그 상한을 쓴다. 진짜 전국(키워드 전역)
 // 검색은 반경 무제한/키워드 전역 API가 나오면 교체.
 const DEFAULT_CENTER = { latitude: 37.5665, longitude: 126.978 };
+
+/**
+ * 시군구 목록 캐시.
+ *
+ * 이 API는 **요청마다 관광공사를 실시간으로 부른다.** 칩을 왔다갔다 하면 그대로 호출이 쌓이고,
+ * 일일 한도를 넘기면 야간 적재 배치까지 같이 죽는다(배치는 DB 폴백이 없다). 같은 조건을
+ * 다시 고르면 네트워크를 타지 않게 앱 수명 동안 들고 있는다 — 시설 목록은 분 단위로 바뀌지 않는다.
+ */
+const regionCache = new Map<string, { items: Facility[]; total: number }>();
+
+async function regionList(params: {
+  sidoCode: string;
+  sigunguCode: string;
+  category?: Category;
+  petAllowed?: 'ALLOWED';
+}): Promise<{ items: Facility[]; total: number }> {
+  const key = `${params.sidoCode}/${params.sigunguCode}/${params.category ?? ''}/${params.petAllowed ?? ''}`;
+  const hit = regionCache.get(key);
+  if (hit) return hit;
+  const res = await facilitiesApi.byRegion({ ...params, size: 30 });
+  regionCache.set(key, res);
+  return res;
+}
 
 const HEADER: Record<Mode, { eyebrow: string; title: string; subtitle: string }> = {
   nearby: {
@@ -55,6 +79,9 @@ export default function ExploreScreen() {
   const [mode, setMode] = useState<Mode>('nearby');
   const [keyword, setKeyword] = useState('');
   const [category, setCategory] = useState<Category | null>(null);
+  // '전체' 모드의 지역 선택. 시군구까지 고르면 관광공사 실시간 목록으로 갈아탄다.
+  const [sidoCode, setSidoCode] = useState<string | null>(null);
+  const [sigunguCode, setSigunguCode] = useState<string | null>(null);
 
   // 실제 GPS로 내 위치를 잡고, 관광공사 시설을 거리순으로 검색한다.
   const [coords, setCoords] = useState<Coords | null>(null);
@@ -84,10 +111,21 @@ export default function ExploreScreen() {
 
   // 좌표·검색어·카테고리·반경·모드가 바뀌면 재검색(입력 타이핑은 400ms 디바운스).
   // 전체 모드는 위치 없이도 되도록 기본 중심을 쓰고 반경을 전국으로 넓힌다.
+  /**
+   * 시군구까지 고르면 **관광공사 실시간 목록**(`facilitiesApi.byRegion`)으로 간다.
+   *
+   * 시도만 고른 상태는 이 API를 부를 수 없다 — 시군구가 필수다. 그때는 목록을 그대로 두고
+   * 아래 안내 줄로 시군구를 고르라고 알린다. 시도 단위(경기도 9,438건)는 서버가 관광공사에서
+   * 전량을 받아 거르는 구조라 애초에 감당이 안 되기도 한다.
+   */
+  const byRegion = mode === 'all' && sidoCode !== null && sigunguCode !== null;
+  const regionPending = mode === 'all' && sidoCode !== null && sigunguCode === null;
+
   useEffect(() => {
     if (mode === 'ranking') return;
+    if (regionPending) return; // 시군구를 고를 때까지 직전 목록을 지우지 않는다
     const center = mode === 'all' ? coords ?? DEFAULT_CENTER : coords;
-    if (!center) return; // 내 주변인데 위치 권한이 없으면 검색하지 않는다
+    if (!byRegion && !center) return; // 내 주변인데 위치 권한이 없으면 검색하지 않는다
     // 디바운스 타이머만 취소하면 '이미 날아간' 요청은 못 막는다. 모드·검색어를 빠르게
     // 바꾸면 늦게 도착한 이전 응답이 현재 결과를 덮어쓸 수 있어, active 플래그로 무효화한다.
     let active = true;
@@ -95,24 +133,31 @@ export default function ExploreScreen() {
       setLoading(true);
       setFailed(false);
       try {
-        const res = await facilitiesApi.search({
-          latitude: center.latitude,
-          longitude: center.longitude,
-          keyword: keyword.trim() || undefined,
-          category: category ?? undefined,
-          /**
-           * **전체 모드는 반경을 보내지 않는다 — 생략이 곧 전국이다**(`api-specs/facility.md`).
-           *
-           * 예전엔 상한인 100km를 보냈는데, 기준점이 서울이라 전국 48,743곳 중 21,809곳만
-           * 잡혔다(2026-09-20 실측). "전체 시설"이라고 적어놓고 절반만 보여주던 셈이다.
-           * 반경을 빼면 서버가 전 건을 대상으로 거리순 정렬한다 — 응답도 더 빨랐다(0.15s vs 0.20s).
-           */
-          radiusM: mode === 'all' ? undefined : settings.searchRadiusKm * 1000,
-          // 클라이언트에서 거르지 않고 서버 필터를 쓴다 — 30건 받아와서 6건만 남기면
-          // 페이지네이션과 total이 어긋난다.
-          petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
-          size: 30,
-        });
+        const res = byRegion
+          ? await regionList({
+              sidoCode: sidoCode as string,
+              sigunguCode: sigunguCode as string,
+              category: category ?? undefined,
+              petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
+            })
+          : await facilitiesApi.search({
+              latitude: center!.latitude,
+              longitude: center!.longitude,
+              keyword: keyword.trim() || undefined,
+              category: category ?? undefined,
+              /**
+               * **전체 모드는 반경을 보내지 않는다 — 생략이 곧 전국이다**(`api-specs/facility.md`).
+               *
+               * 예전엔 상한인 100km를 보냈는데, 기준점이 서울이라 전국 48,743곳 중 21,809곳만
+               * 잡혔다(2026-09-20 실측). "전체 시설"이라고 적어놓고 절반만 보여주던 셈이다.
+               * 반경을 빼면 서버가 전 건을 대상으로 거리순 정렬한다 — 응답도 더 빨랐다(0.15s vs 0.20s).
+               */
+              radiusM: mode === 'all' ? undefined : settings.searchRadiusKm * 1000,
+              // 클라이언트에서 거르지 않고 서버 필터를 쓴다 — 30건 받아와서 6건만 남기면
+              // 페이지네이션과 total이 어긋난다.
+              petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
+              size: 30,
+            });
         if (!active) return; // 그 사이 모드/조건이 바뀌었으면 이 응답은 버린다
         setItems(res.items);
         setTotal(res.total);
@@ -130,7 +175,7 @@ export default function ExploreScreen() {
       active = false;
       clearTimeout(t);
     };
-  }, [mode, coords, keyword, category, settings.searchRadiusKm, settings.onlyPetInfo, retryKey, registerFacilities]);
+  }, [mode, coords, keyword, category, settings.searchRadiusKm, settings.onlyPetInfo, retryKey, registerFacilities, byRegion, regionPending, sidoCode, sigunguCode]);
 
   // 동반 불가 시설을 숨기지 않는다. 헛걸음 방지가 목적인 앱에서 '여긴 안 된다'는 가장 확실한
   // 정보라, 감추는 것보다 보여주는 쪽이 값어치가 있다(전국 5건뿐이라 목록을 어지럽히지도 않는다).
@@ -205,6 +250,28 @@ export default function ExploreScreen() {
             ))}
           </ScrollView>
 
+          {/* 지역 — '전체'에서만. 시군구까지 고르면 관광공사 실시간 목록으로 바뀐다 */}
+          {mode === 'all' && (
+            <RegionChips
+              sidoCode={sidoCode}
+              sigunguCode={sigunguCode}
+              onChange={({ sidoCode: sd, sigunguCode: sg }) => {
+                setSidoCode(sd);
+                setSigunguCode(sg);
+              }}
+            />
+          )}
+
+          {/* 시도만 고른 상태 — 목록은 그대로 두고 한 걸음 더 가라고 알린다 */}
+          {regionPending && (
+            <View style={[styles.regionHint, { borderColor: p.accent, backgroundColor: p.accentSoft }]}>
+              <Ionicons name="information-circle" size={15} color={p.accent} />
+              <Text style={[styles.regionHintText, { color: p.accent }]}>
+                시·군·구까지 고르면 그 지역을 관광공사에서 바로 불러와요
+              </Text>
+            </View>
+          )}
+
           {/* 여행 코스 판별 진입점 — 낱개 시설이 아니라 하루 동선 전체를 검증한다 */}
           <Pressable
             onPress={() => router.push('/course')}
@@ -227,11 +294,14 @@ export default function ExploreScreen() {
           <SectionTitle
             title={mode === 'all' ? '전체 시설' : '내 주변 시설'}
             caption={
-              mode === 'all'
-                ? `${total.toLocaleString()}곳 · 넓은 범위`
-                : locState === 'ok'
-                  ? `${total.toLocaleString()}곳 · 내 위치 기준`
-                  : '내 위치 기준'
+              // 지역 목록은 거리순이 아니라 가나다순이다. 왜 가까운 순이 아닌지 묻기 전에 밝힌다.
+              byRegion
+                ? `${total.toLocaleString()}곳 · 가나다순 · 관광공사 실시간`
+                : mode === 'all'
+                  ? `${total.toLocaleString()}곳 · 전국`
+                  : locState === 'ok'
+                    ? `${total.toLocaleString()}곳 · 내 위치 기준`
+                    : '내 위치 기준'
             }
           />
 
@@ -342,6 +412,16 @@ const styles = StyleSheet.create({
   courseText: { flex: 1, gap: 2 },
   courseTitle: { fontSize: 15, fontWeight: '800', letterSpacing: -0.3 },
   courseBody: { fontSize: 12, lineHeight: 17 },
+  regionHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 9,
+  },
+  regionHintText: { flex: 1, fontSize: 12.5, fontWeight: '700' },
   empty: { alignItems: 'center', gap: Spacing.md, paddingVertical: 56 },
   emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
   retry: {

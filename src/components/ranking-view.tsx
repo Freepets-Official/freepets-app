@@ -1,14 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
+import { RegionChips, useRegions } from '@/components/region-chips';
 import { PawBadge } from '@/components/paw-badge';
 import { CardShadow, Radius, Spacing } from '@/constants/theme';
 import { formatDistance } from '@/data/mock';
-import { CATEGORY_LABEL, type Category, type RankingItem, type Region } from '@/data/types';
+import { CATEGORY_LABEL, type Category, type RankingItem } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { facilitiesApi } from '@/lib/api';
 import type { Coords } from '@/lib/location';
@@ -36,7 +37,8 @@ export function RankingView({ coords }: { coords: Coords | null }) {
   const [customMode, setCustomMode] = useState(false);
   const [customRadius, setCustomRadius] = useState('');
 
-  const [regions, setRegions] = useState<Region[]>([]);
+  // 지역 목록은 `RegionChips`와 같은 캐시를 본다 — 토글을 오갈 때마다 다시 받지 않게
+  const regions = useRegions();
   const [items, setItems] = useState<RankingItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -48,19 +50,6 @@ export function RankingView({ coords }: { coords: Coords | null }) {
   // 설명하는 것보다 낫다.
   const distanceLocked = sidoCode !== null;
   const selectedSido = regions.find((r) => r.sidoCode === sidoCode) ?? null;
-
-  // 지역 목록은 필터와 무관하므로 한 번만 받는다. 비어 있으면 연동 실패가 아니라 서버의 지역
-  // 테이블 적재 전이다(랭킹의 리뷰 집계 백필과는 별개 조건).
-  useEffect(() => {
-    let active = true;
-    facilitiesApi
-      .regions()
-      .then((r) => active && setRegions(r))
-      .catch(() => active && setRegions([]));
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -129,35 +118,18 @@ export function RankingView({ coords }: { coords: Coords | null }) {
 
       {/* 지역 — 시도 → 시군구. 목록도 코드도 서버가 준다(지명이 바뀌어도 어긋나지 않는다) */}
       <Text style={[styles.filterLabel, { color: p.muted }]}>지역</Text>
-      <ScrollView
-        automaticallyAdjustKeyboardInsets
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        <Chip label="전국" selected={sidoCode === null} onPress={clearRegion} />
-        {regions.map((r) => (
-          <Chip
-            key={r.sidoCode}
-            label={r.sido}
-            selected={sidoCode === r.sidoCode}
-            onPress={() => {
-              setSidoCode(sidoCode === r.sidoCode ? null : r.sidoCode);
-              setSigunguCode(null);
-            }}
-          />
-        ))}
-      </ScrollView>
-      {selectedSido && selectedSido.sigungus.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          <Chip label="전체" selected={sigunguCode === null} onPress={() => setSigunguCode(null)} />
-          {selectedSido.sigungus.map((sg) => (
-            <Chip
-              key={sg.sigunguCode}
-              label={sg.sigungu}
-              selected={sigunguCode === sg.sigunguCode}
-              onPress={() => setSigunguCode(sigunguCode === sg.sigunguCode ? null : sg.sigunguCode)}
-            />
-          ))}
-        </ScrollView>
-      )}
+      <RegionChips
+        sidoCode={sidoCode}
+        sigunguCode={sigunguCode}
+        onChange={({ sidoCode: sd, sigunguCode: sg }) => {
+          // '전국'으로 되돌아오면 잠겨 있던 거리 필터도 같이 푼다
+          if (sd === null) clearRegion();
+          else {
+            setSidoCode(sd);
+            setSigunguCode(sg);
+          }
+        }}
+      />
 
       {/* 거리 — 지역을 고르면 잠긴다(위 distanceLocked 주석 참조) */}
       <View style={styles.filterHead}>
