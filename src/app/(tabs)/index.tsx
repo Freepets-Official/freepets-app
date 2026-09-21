@@ -397,10 +397,24 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.xl,
     borderWidth: 1,
+    /**
+     * **색을 반드시 적는다.** 안 적으면 React Native가 검정을 기본값으로 쓴다 —
+     * 실기기 캡처를 픽셀로 보니 크림색 명함 둘레에 순수 검정 테두리가 둘려 있었다(2026-09-21).
+     * 명함 안쪽 구분선과 같은 따뜻한 갈색을 써서 종이 카드의 가장자리처럼 보이게 한다
+     * (`pet-id-card.tsx`의 `CARD.line`과 같은 값).
+     */
+    borderColor: 'rgba(120,101,66,0.32)',
     overflow: 'hidden',
-    // 깊고 부드러운 플로팅 그림자(살짝 핑크 톤) — 카드가 떠 있는 입체감
-    shadowColor: '#E86397',
-    shadowOpacity: 0.16,
+    /**
+     * 카드가 떠 있어 보이게 하는 그림자.
+     *
+     * 예전엔 앱 강조색인 로즈핑크(`#E86397`)를 썼다. 명함이 분홍 계열이던 시절엔 어울렸는데,
+     * 지금은 종이 질감의 주민등록증(크림색 바탕 + 짙은 갈색 하단 띠)이라 카드 둘레에
+     * **분홍 테가 둘린 것처럼 보였다.** 특히 아래쪽에서 짙은 띠와 맞닿아 대비가 커진다.
+     * 카드 자체의 먹색(`pet-id-card.tsx`의 `CARD.strip`)을 써서 종이에 진 그림자로 보이게 한다.
+     */
+    shadowColor: '#3A332A',
+    shadowOpacity: 0.14,
     shadowRadius: 26,
     shadowOffset: { width: 0, height: 16 },
     elevation: 12,
