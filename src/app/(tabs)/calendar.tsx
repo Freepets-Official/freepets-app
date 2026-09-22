@@ -121,7 +121,7 @@ export default function CalendarScreen() {
             key={w}
             style={[
               styles.weekday,
-              { color: i === 0 ? p.danger : i === 6 ? '#4C8DF5' : p.muted },
+              { color: i === 0 ? p.danger : i === 6 ? p.saturday : p.muted },
             ]}>
             {w}
           </Text>
@@ -161,7 +161,7 @@ export default function CalendarScreen() {
                           : wd === 0
                             ? p.danger
                             : wd === 6
-                              ? '#4C8DF5'
+                              ? p.saturday
                               : p.ink,
                     },
                   ]}>

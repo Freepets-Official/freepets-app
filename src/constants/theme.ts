@@ -29,6 +29,8 @@ export const Palette = {
     dangerSoft: '#FCE7E6',
     unknown: '#8C8591',
     unknownSoft: '#F3EEF1',
+    // 달력의 토요일. 일요일은 danger(빨강)를 쓰는데 토요일만 팔레트 밖 값이 박혀 있었다
+    saturday: '#4C8DF5',
   },
   // 다크 테마 — 웜 다크(살짝 보라·핑크 기운) 그라운드에 같은 로즈핑크 액센트.
   // 의미색은 어두운 배경에서 읽히도록 톤을 올렸다.
@@ -52,6 +54,8 @@ export const Palette = {
     dangerSoft: '#3A1D1C',
     unknown: '#9C94A4',
     unknownSoft: '#29232F',
+    // 라이트보다 밝게 — danger가 다크에서 밝아지는 것과 짝을 맞춘다
+    saturday: '#6FA3F7',
   },
 } as const;
 

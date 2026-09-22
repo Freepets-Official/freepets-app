@@ -481,7 +481,7 @@ export default function SettingsScreen() {
                 }
               }}
               style={[styles.withdrawBtn, { backgroundColor: confirm?.danger ? p.danger : p.accent }]}>
-              <Text style={[styles.withdrawBtnText, { color: '#FFFFFF' }]}>
+              <Text style={[styles.withdrawBtnText, { color: p.onAccent }]}>
                 {confirmBusy ? '처리 중…' : confirm?.action}
               </Text>
             </Pressable>

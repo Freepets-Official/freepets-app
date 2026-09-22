@@ -64,7 +64,7 @@ function NotificationBell({
       <Ionicons name="notifications-outline" size={22} color={p.ink} />
       {count > 0 && (
         <View style={[styles.bellBadge, { backgroundColor: urgent ? p.danger : p.accent, borderColor: p.bg }]}>
-          <Text style={styles.bellBadgeText}>{count > 9 ? '9+' : count}</Text>
+          <Text style={[styles.bellBadgeText, { color: p.onAccent }]}>{count > 9 ? '9+' : count}</Text>
         </View>
       )}
     </Pressable>
@@ -210,8 +210,8 @@ export default function HomeScreen() {
                     <Pressable
                       onPress={() => hideCheck(c.checkId)}
                       style={[styles.histDelete, { backgroundColor: p.danger }]}>
-                      <Ionicons name="trash" size={18} color="#FFFFFF" />
-                      <Text style={styles.histDeleteText}>삭제</Text>
+                      <Ionicons name="trash" size={18} color={p.onAccent} />
+                      <Text style={[styles.histDeleteText, { color: p.onAccent }]}>삭제</Text>
                     </Pressable>
                   )}>
                   <Pressable
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  bellBadgeText: { fontSize: Type.micro, fontWeight: '900', color: '#FFFFFF' },
+  bellBadgeText: { fontSize: Type.micro, fontWeight: '900' },
   // 프리미엄 수집형 카드 — 그라디언트 네임플레이트 + 얇은 테두리 + 깊은 플로팅 그림자
   card: {
     borderRadius: Radius.xl,
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', gap: 2,
     width: 76, marginLeft: 8, borderRadius: Radius.md,
   },
-  histDeleteText: { color: '#FFFFFF', fontSize: Type.caption, fontWeight: '800' },
+  histDeleteText: { fontSize: Type.caption, fontWeight: '800' },
   stampEntry: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, marginTop: 4,

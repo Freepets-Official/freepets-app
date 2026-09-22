@@ -59,7 +59,7 @@ export function BadgeWall() {
                           ? { backgroundColor: t.color, borderColor: t.color }
                           : { backgroundColor: p.surface, borderColor: p.line },
                       ]}>
-                      <Ionicons name={on ? 'ribbon' : 'lock-closed-outline'} size={13} color={on ? '#FFFFFF' : p.muted} />
+                      <Ionicons name={on ? 'ribbon' : 'lock-closed-outline'} size={13} color={on ? p.onAccent : p.muted} />
                     </View>
                     <Text style={[styles.tierLabel, { color: on ? p.ink : p.muted }]}>{t.label}</Text>
                   </View>

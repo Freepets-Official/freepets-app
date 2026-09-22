@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   error: { fontSize: Type.body, fontWeight: '700' },
-  existingPhoto: { height: 140, borderRadius: 12, overflow: 'hidden' },
+  existingPhoto: { height: 140, borderRadius: Radius.sm, overflow: 'hidden' },
   existingImage: { width: '100%', height: '100%' },
   submit: {
     flexDirection: 'row',

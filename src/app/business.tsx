@@ -427,9 +427,9 @@ function StepLabel({ n, label, done }: { n: number; label: string; done: boolean
     <View style={styles.stepLabel}>
       <View style={[styles.stepNum, { backgroundColor: done ? p.success : p.accent }]}>
         {done ? (
-          <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+          <Ionicons name="checkmark" size={13} color={p.onAccent} />
         ) : (
-          <Text style={styles.stepNumText}>{n}</Text>
+          <Text style={[styles.stepNumText, { color: p.onAccent }]}>{n}</Text>
         )}
       </View>
       <Text style={[styles.stepText, { color: p.ink }]}>{label}</Text>
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
   stepBlock: { gap: Spacing.sm },
   stepLabel: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
   stepNum: { width: 22, height: 22, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
-  stepNumText: { fontSize: Type.footnote, fontWeight: '900', color: '#FFFFFF' },
+  stepNumText: { fontSize: Type.footnote, fontWeight: '900' },
   stepText: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
 
   inputRow: {

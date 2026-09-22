@@ -421,7 +421,7 @@ function StepTitle({ p, n, label, facility }: { p: any; n: number; label: string
     <View style={{ gap: 2 }}>
       <View style={styles.stepTitleRow}>
         <View style={[styles.stepNum, { backgroundColor: p.accent }]}>
-          <Text style={styles.stepNumText}>{n}</Text>
+          <Text style={[styles.stepNumText, { color: p.onAccent }]}>{n}</Text>
         </View>
         <Text style={[styles.stepTitleText, { color: p.ink }]}>{label}</Text>
       </View>
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
 
   stepTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   stepNum: { width: 22, height: 22, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
-  stepNumText: { fontSize: Type.footnote, fontWeight: '900', color: '#FFFFFF' },
+  stepNumText: { fontSize: Type.footnote, fontWeight: '900' },
   stepTitleText: { fontSize: Type.sheetTitle, fontWeight: '900', letterSpacing: -0.5 },
   stepFacility: { fontSize: Type.footnote, marginLeft: 30 },
 

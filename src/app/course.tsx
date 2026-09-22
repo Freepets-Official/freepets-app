@@ -1879,7 +1879,7 @@ const styles = StyleSheet.create({
    * 글씨 크기 설정을 키우면 더 어긋난다 — 글자만 커지고 원은 고정이라서다.
    */
   presetOrder: {
-    width: 22, height: 22, borderRadius: 999,
+    width: 22, height: 22, borderRadius: Radius.full,
     alignItems: 'center', justifyContent: 'center',
   },
   presetOrderNum: { fontSize: Type.caption, fontWeight: '800' },

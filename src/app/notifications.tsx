@@ -56,7 +56,7 @@ export default function NotificationsScreen() {
                 { backgroundColor: p.danger, opacity: pressed ? 0.92 : 1 },
               ]}>
               <View style={styles.bell}>
-                <Ionicons name="notifications" size={18} color="#FFFFFF" />
+                <Ionicons name="notifications" size={18} color={p.onAccent} />
               </View>
               <View style={styles.cardText}>
                 <View style={styles.denialTitleRow}>
@@ -68,7 +68,7 @@ export default function NotificationsScreen() {
                   {report.reason ? ` · ${DENIAL_REASON_LABEL[report.reason]}` : ''} — 방문 전 확인하세요
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+              <Ionicons name="chevron-forward" size={20} color={p.onAccent} />
             </Pressable>
           ))}
 
@@ -133,6 +133,12 @@ const styles = StyleSheet.create({
   },
   cardText: { flex: 1, gap: 3 },
   denialTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  /**
+   * 아래 흰색 세 줄은 팔레트 토큰을 쓰지 않는다.
+   *
+   * 거부 알림 카드는 dangerSolid로 꽉 채운 면이라 글씨가 양 테마에서 늘 흰색이고,
+   * 0.25·0.92 알파 변형이 같이 쓰인다. 알파까지 토큰으로 만들 수는 없어 한 벌로 둔다.
+   */
   denialLabel: {
     fontSize: Type.micro,
     fontWeight: '900',

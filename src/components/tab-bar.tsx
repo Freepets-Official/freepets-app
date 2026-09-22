@@ -15,7 +15,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
-import { Type } from '@/constants/theme';
+import { Radius, Type } from '@/constants/theme';
 import { Text } from '@/components/text';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 
@@ -165,13 +165,13 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     bottom: Platform.select({ ios: 26, default: 16 }),
-    borderRadius: 999,
+    borderRadius: Radius.full,
     // 핑크 기운의 소프트 섀도우로 떠 있는 유리 느낌
     boxShadow: '0 10px 30px rgba(42, 37, 48, 0.14)',
   },
   bar: {
     flexDirection: 'row',
-    borderRadius: 999,
+    borderRadius: Radius.full,
     borderWidth: 1,
     paddingVertical: 10,
     paddingHorizontal: 6,
