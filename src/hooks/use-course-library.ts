@@ -20,6 +20,36 @@ import type { CourseStop, PublicCourse, SavedCourse } from '@/data/types';
  * 반대로 **추천·빌더·판별과는 깨끗하게 갈린다** — 그쪽은 `saveCourse()` 하나만 부른다.
  * 그 선을 따라 잘랐다.
  */
+/**
+ * 두 코스가 같은 동선인가.
+ *
+ * 순서까지 같아야 같은 코스로 본다 — A→B→C와 C→B→A는 하루가 완전히 다르다.
+ * 이름은 보지 않는다. 담을 때 `(닉네임)`이 붙어 원본과 달라지기 때문이다.
+ */
+function sameStops(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
+/**
+ * 담을 때 붙일 이름.
+ *
+ * 서버 추천 제목을 그대로 쓰면 내 코스 목록이 이상해진다 — 취향 데이터가 모자라면 서버가
+ * **인기 코스로 자동 전환**하면서 `"지금 인기 있는 곳"`을 제목으로 준다(`isPersonalized: false`).
+ * 그게 코스 이름이 되면 목록에 "지금 인기 있는 곳"만 쌓이고, 열어보기 전에는 어디를 도는
+ * 코스인지 알 수 없다.
+ *
+ * 그래서 **어디를 도는지**로 짓는다. 이름이 코스 내용을 말하면 서버 제목이 무엇이든 상관없고,
+ * 같은 날 여러 번 담아도 서로 구분된다. 날짜는 같은 곳을 다시 담았을 때를 위해 남긴다.
+ */
+function courseName(serverTitle: string, stops: Pick<CourseStop, 'facilityId'>[]): string {
+  const d = new Date();
+  const date = `${d.getMonth() + 1}/${d.getDate()}`;
+  const first = (stops[0] as Partial<CourseStop>)?.name?.trim();
+  // 첫 스톱 이름을 모르면(빌더에서 담을 때는 안다) 서버 제목으로 떨어진다
+  if (!first) return `${serverTitle} · ${date}`;
+  return stops.length > 1 ? `${first} 외 ${stops.length - 1}곳 · ${date}` : `${first} · ${date}`;
+}
+
 export function useCourseLibrary() {
   const router = useRouter();
   const { session, restoring, refreshGamification } = useAppStore();
@@ -61,9 +91,17 @@ export function useCourseLibrary() {
   const otherCourses = useMemo(() => {
     if (publicCourses === null) return null;
     const mine = new Set(savedCourses.map((c) => c.courseId));
-    // 담은 코스는 **새 코스 ID**로 저장된다. 원본 ID와 겹치지 않으므로 `mine`만으로는
-    // 걸러지지 않고, 같은 행을 다시 누르면 같은 동선이 또 저장된다. 원본 ID를 따로 센다.
-    return publicCourses.filter((c) => !mine.has(c.courseId) && !copiedIds.has(c.courseId));
+    /**
+     * 담은 코스는 **새 courseId로** 저장되므로 `mine`(내 코스 ID)만으로는 걸러지지 않는다.
+     * `copiedIds`는 이번 실행에 담은 것만 알아서, 앱을 껐다 켜면 같은 코스가 다시 나타나고
+     * 또 담겼다 — 실기기에서 확인된 문제다. **스톱 구성이 같으면 이미 담은 것**으로 본다.
+     */
+    return publicCourses.filter(
+      (c) =>
+        !mine.has(c.courseId) &&
+        !copiedIds.has(c.courseId) &&
+        !savedCourses.some((s2) => sameStops(s2.stopIds, c.stopIds)),
+    );
   }, [publicCourses, savedCourses, copiedIds]);
 
 
@@ -135,18 +173,24 @@ export function useCourseLibrary() {
     };
   }, []);
 
-  const saveCourse = async (key: string, name: string, stops: CourseStop[]) => {
-    if (stops.length === 0) return;
+  /**
+   * 코스를 내 것으로 담는다. `stops`에서 쓰는 것은 `facilityId`뿐이다 — 서버가 그것만 받는다.
+   *
+   * 저장에 성공하면 새 `courseId`를 돌려준다. 빌더에서 짠 스톱별 시간을 그 코스로 옮기려면
+   * 호출하는 쪽이 이 값을 알아야 한다(시간은 서버에 없어 기기에 코스별로 남는다).
+   */
+  const saveCourse = async (
+    key: string,
+    name: string,
+    stops: Pick<CourseStop, 'facilityId'>[],
+  ): Promise<number | null> => {
+    if (stops.length === 0) return null;
     setSavingKey(key);
     setSaveMessage(null);
     try {
-      // 서버는 1~10개만 받는다. 추천 stops의 facilityId를 순서 그대로 넣으면 내 코스가 된다.
-      //
-      // 담은 날짜를 이름에 남긴다. 서버 추천 제목은 그날그날 같은 문구가 오기 때문에
-      // ("지금 인기 있는 곳" 등) 여러 번 담으면 목록에 같은 이름만 쌓여 구분이 안 된다.
-      const stamp = new Date();
+      // 서버는 1~10개만 받는다. stops의 facilityId를 순서 그대로 넣으면 내 코스가 된다.
       const created = await coursesApi.create({
-        name: `${name} · ${stamp.getMonth() + 1}/${stamp.getDate()}`,
+        name: courseName(name, stops),
         stopIds: stops.slice(0, 10).map((st) => st.facilityId),
       });
       // 저장 결과로 목록을 먼저 갱신한다. 목록 재조회가 실패해도 방금 담은 코스는 보여야 한다 —
@@ -155,8 +199,10 @@ export function useCourseLibrary() {
       setSaveMessage({ text: `'${name}'을(를) 내 코스에 담았어요`, failed: false });
       // 서버가 매긴 순서·필드로 맞춰두되, 실패는 저장 성공을 덮지 않는다
       reloadSaved().catch(() => {});
+      return created.courseId;
     } catch (e) {
       setSaveMessage({ text: e instanceof Error ? e.message : '코스를 저장하지 못했어요', failed: true });
+      return null;
     } finally {
       setSavingKey(null);
     }
@@ -186,6 +232,20 @@ export function useCourseLibrary() {
    */
   const [copyingId, setCopyingId] = useState<number | null>(null);
   const copyPublicCourse = async (course: PublicCourse) => {
+    /**
+     * 이미 담은 코스면 또 담지 않는다.
+     *
+     * `copiedIds`는 이번 실행 중에 담은 것만 안다 — 앱을 껐다 켜면 같은 코스가 둘러보기에
+     * 다시 나타나고, 누르면 같은 동선이 하나 더 저장됐다(실기기에서 확인된 문제).
+     * 그래서 기억이 아니라 **실제 내 코스의 스톱 구성**으로 판단한다. 담은 코스는 새
+     * courseId를 받으므로 ID로는 영영 못 찾는다.
+     */
+    const already = savedCourses.find((c) => sameStops(c.stopIds, course.stopIds));
+    if (already) {
+      setCopiedIds((prev) => new Set(prev).add(course.courseId));
+      setSaveMessage({ text: `이미 담은 코스예요 — 내 코스의 '${already.name}'`, failed: false });
+      return;
+    }
     setCopyingId(course.courseId);
     setSaveMessage(null);
     try {

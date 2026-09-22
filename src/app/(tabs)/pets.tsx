@@ -59,7 +59,7 @@ export default function PetsScreen() {
   const [species, setSpecies] = useState('');
   const [weight, setWeight] = useState('');
   const [breedSize, setBreedSize] = useState<BreedSize>('SMALL');
-  // 성별·생년월일은 선택 — 반려동물 주민등록증(홈 카드)의 성별·나이·생년월일 칸을 채운다
+  // 성별·생년월일은 선택 — 반려동물 여권(홈 카드)의 성별·나이·생년월일 칸을 채운다
   const [gender, setGender] = useState<PetGender | null>(null);
   const [birth, setBirth] = useState('');
   // 개·고양이는 체중·체급으로 판별되지만, 그 외 종은 그 값이 무의미하다

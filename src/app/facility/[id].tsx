@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Stack, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -48,47 +48,12 @@ const EMPTY_GRADE: PawGrade = { level: null, label: null, score: null, count: 0,
 /** 대안 시설을 찾을 반경. 가려던 곳에서 걸어서·잠깐 차로 갈 만한 거리. */
 const ALT_RADIUS_M = 10_000;
 
-/**
- * 여행 코스에서 들어왔을 때의 뒤로가기.
- *
- * 스택이 `[탭, 코스, 시설]`이면 기본 뒤로가기로 코스에 그대로 돌아온다. 그런데 실기기에서
- * **코스가 아니라 탐색 탭으로 한 번에 튀어나가는** 일이 보고됐다. 시설 상세에 머무는 동안
- * 세션 재확인 같은 이유로 스택이 `replace`로 갈아끼워지면 코스 항목이 사라지고, 그러면
- * 뒤로가기는 남아 있는 탭으로 갈 수밖에 없다(히스토리가 아예 없을 때 뜨는 홈 버튼도
- * `/`로 보내서 같은 증상이 된다).
- *
- * 코스에서 왔다는 사실은 파라미터로 알고 있으니 목적지를 우리가 정한다.
- * 스택이 온전하면 그냥 pop해서 판별 결과를 살려두고, 코스가 사라졌으면 코스로 되돌린다.
- */
-function CourseBack() {
-  const p = usePalette();
-  const router = useRouter();
-  const navigation = useNavigation();
-  return (
-    <Pressable
-      onPress={() => {
-        const state = navigation.getState?.();
-        const prev = state ? state.routes[state.index - 1]?.name : undefined;
-        if (prev === 'course') router.back();
-        else router.replace('/course');
-      }}
-      hitSlop={10}
-      accessibilityRole="button"
-      accessibilityLabel="여행 코스로"
-      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, paddingRight: 8 })}>
-      <Ionicons name="chevron-back" size={26} color={p.accent} />
-    </Pressable>
-  );
-}
-
-/** 렌더마다 새 객체를 넘기면 setOptions가 매 렌더 다시 돈다 — 모듈 상수로 고정 */
-const COURSE_BACK_OPTIONS = { headerLeft: () => <CourseBack /> };
 
 export default function FacilityDetailScreen() {
   const p = usePalette();
   const router = useRouter();
   const callFacility = useCallFacility();
-  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const {
     session,
     pets,
@@ -199,13 +164,9 @@ export default function FacilityDetailScreen() {
   const reviewData = facility ? reviewDataOf(facility.facilityId) : undefined;
   const reviewError = facility ? reviewErrorOf(facility.facilityId) : false;
 
-  /** 코스에서 들어왔으면 뒤로가기를 코스로 고정한다 — CourseBack 주석 참고 */
-  const backToCourse = from === 'course' ? <Stack.Screen options={COURSE_BACK_OPTIONS} /> : null;
-
   if (!facility) {
     return (
       <Screen hasNavHeader>
-        {backToCourse}
         <Text style={{ color: p.muted, textAlign: 'center', paddingVertical: 48 }}>
           시설을 찾을 수 없어요.
         </Text>
@@ -313,7 +274,6 @@ export default function FacilityDetailScreen() {
 
   return (
     <Screen hasNavHeader>
-      {backToCourse}
       <View style={styles.header}>
         <View style={styles.headerTop}>
           {/* 카드에서 이어지는 shared element — 카테고리·이름·발자국 3개가 함께 흐른다 */}
