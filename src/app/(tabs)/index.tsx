@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { PetIdCard } from '@/components/pet-id-card';
+import { StampMark } from '@/components/stamp-mark';
 import { QuestScrollIcon } from '@/components/quest-scroll-icon';
 import { Text } from '@/components/text';
 import { ResultBadge } from '@/components/badge';
@@ -71,6 +72,15 @@ function NotificationBell({
     </Pressable>
   );
 }
+
+/**
+ * 도장 잉크의 빨강.
+ *
+ * 팔레트의 `danger`를 쓰지 않는다 — 그 색은 이 앱에서 "동반 불가"를 뜻해서, 도장에 쓰면
+ * 모을수록 나쁜 것처럼 읽힌다. 실제 여권 도장에 가까운 주홍 계열을 따로 둔다.
+ * 흰 바탕 위에만 얹으므로 양 테마에서 같은 값을 쓴다.
+ */
+const STAMP_INK = '#C0392B';
 
 export default function HomeScreen() {
   const p = usePalette();
@@ -176,8 +186,9 @@ export default function HomeScreen() {
           styles.stampEntry,
           { borderColor: p.line, backgroundColor: p.card, opacity: pressed ? 0.92 : 1 },
         ]}>
-        <View style={[styles.stampEntryIcon, { backgroundColor: p.accentSoft }]}>
-          <Ionicons name="footsteps" size={18} color={p.accent} />
+        {/* 실제 여권 도장처럼 — 흰 바탕에 빨간 테두리, 가운데는 강아지 발자국 */}
+        <View style={styles.stampEntryIcon}>
+          <StampMark size={36} color={STAMP_INK} background="#FFFFFF" />
         </View>
         <View style={styles.stampEntryTexts}>
           <Text style={[styles.stampEntryTitle, { color: p.ink }]}>여권 도장첩</Text>
@@ -244,7 +255,8 @@ export default function HomeScreen() {
 }
 
 /** 거부 알림의 통통 뛰는 벨 — 시선을 끈다 */
-const STACK_CARD_H = 392;
+/** 스택 카드 높이. 여권 카드가 잘리지 않게 여유를 둔다 — 남는 자리는 종이색으로 덮인다 */
+const STACK_CARD_H = 408;
 const STACK_PEEK = 72;
 const STACK_SPRING = { damping: 16, stiffness: 180, mass: 0.7 };
 // 틸트가 원위치로 돌아올 때의 스프링 — 살짝 출렁이며 손을 떼는 느낌
@@ -405,12 +417,20 @@ const styles = StyleSheet.create({
      * (`pet-id-card.tsx`의 `CARD.line`과 같은 값).
      */
     borderColor: 'rgba(120,101,66,0.32)',
+    /**
+     * 여권과 같은 종이색을 깐다.
+     *
+     * 여러 마리일 때 이 래퍼는 고정 높이(`stackCard`)를 쓰는데, 안의 여권 카드는 아이마다
+     * 내용 길이가 달라 높이가 조금씩 다르다. 배경이 없으면 남는 자리에 화면 바탕이 비쳐
+     * 카드 안에 구멍이 뚫린 것처럼 보인다(`pet-id-card.tsx`의 `CARD.paper`와 같은 값).
+     */
+    backgroundColor: '#F6F0E2',
     overflow: 'hidden',
     /**
      * 카드가 떠 있어 보이게 하는 그림자.
      *
      * 예전엔 앱 강조색인 로즈핑크(`#E86397`)를 썼다. 명함이 분홍 계열이던 시절엔 어울렸는데,
-     * 지금은 종이 질감의 주민등록증(크림색 바탕 + 짙은 갈색 하단 띠)이라 카드 둘레에
+     * 지금은 종이 질감의 여권(크림색 바탕 + 짙은 발급 띠)이라 카드 둘레에
      * **분홍 테가 둘린 것처럼 보였다.** 특히 아래쪽에서 짙은 띠와 맞닿아 대비가 커진다.
      * 카드 자체의 먹색(`pet-id-card.tsx`의 `CARD.strip`)을 써서 종이에 진 그림자로 보이게 한다.
      */
@@ -431,10 +451,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 12,
     borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, marginTop: 4,
   },
-  stampEntryIcon: {
-    width: 36, height: 36, borderRadius: Radius.sm,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  stampEntryIcon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   stampEntryTexts: { flexShrink: 1, gap: 2 },
   stampEntryTitle: { fontSize: Type.body, fontWeight: '800' },
   stampEntryBody: { fontSize: Type.caption },

@@ -516,10 +516,10 @@ export default function CourseScreen() {
    */
   const saveBuilderCourse = async () => {
     if (stopFacilities.length === 0) return;
-    const base = openedCourse ? openedCourse.name.replace(/\s·\s\d+\/\d+$/, '') : '내가 만든 코스';
+    // 이름은 `saveCourse`가 스톱 내용으로 짓는다 — 아래 값은 스톱 이름을 모를 때의 대비책이다
     // 지금 보고 있는 일정의 키를 먼저 잡아둔다 — 아래에서 openedCourse를 비우면 키가 바뀐다
     const fromKey = planKey;
-    const newId = await saveCourse(BUILDER_PLAN_KEY, base, stopFacilities);
+    const newId = await saveCourse(BUILDER_PLAN_KEY, '내가 만든 코스', stopFacilities);
     if (newId === null) return;
     adoptPlan(fromKey, newId);
     setOpenedCourse(null);
@@ -1053,7 +1053,7 @@ export default function CourseScreen() {
                       onPress={() =>
                         router.push({
                           pathname: '/facility/[id]',
-                          params: { id: String(f.facilityId), from: 'course' },
+                          params: { id: String(f.facilityId) },
                         })
                       }
                       // 꾹 누르면 순서 바꾸기로 간다. 목록이 세로 스크롤 안에 있어 여기서 바로

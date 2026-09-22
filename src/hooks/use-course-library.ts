@@ -30,6 +30,26 @@ function sameStops(a: number[], b: number[]): boolean {
   return a.length === b.length && a.every((id, i) => id === b[i]);
 }
 
+/**
+ * 담을 때 붙일 이름.
+ *
+ * 서버 추천 제목을 그대로 쓰면 내 코스 목록이 이상해진다 — 취향 데이터가 모자라면 서버가
+ * **인기 코스로 자동 전환**하면서 `"지금 인기 있는 곳"`을 제목으로 준다(`isPersonalized: false`).
+ * 그게 코스 이름이 되면 목록에 "지금 인기 있는 곳"만 쌓이고, 열어보기 전에는 어디를 도는
+ * 코스인지 알 수 없다.
+ *
+ * 그래서 **어디를 도는지**로 짓는다. 이름이 코스 내용을 말하면 서버 제목이 무엇이든 상관없고,
+ * 같은 날 여러 번 담아도 서로 구분된다. 날짜는 같은 곳을 다시 담았을 때를 위해 남긴다.
+ */
+function courseName(serverTitle: string, stops: Pick<CourseStop, 'facilityId'>[]): string {
+  const d = new Date();
+  const date = `${d.getMonth() + 1}/${d.getDate()}`;
+  const first = (stops[0] as Partial<CourseStop>)?.name?.trim();
+  // 첫 스톱 이름을 모르면(빌더에서 담을 때는 안다) 서버 제목으로 떨어진다
+  if (!first) return `${serverTitle} · ${date}`;
+  return stops.length > 1 ? `${first} 외 ${stops.length - 1}곳 · ${date}` : `${first} · ${date}`;
+}
+
 export function useCourseLibrary() {
   const router = useRouter();
   const { session, restoring, refreshGamification } = useAppStore();
@@ -168,13 +188,9 @@ export function useCourseLibrary() {
     setSavingKey(key);
     setSaveMessage(null);
     try {
-      // 서버는 1~10개만 받는다. 추천 stops의 facilityId를 순서 그대로 넣으면 내 코스가 된다.
-      //
-      // 담은 날짜를 이름에 남긴다. 서버 추천 제목은 그날그날 같은 문구가 오기 때문에
-      // ("지금 인기 있는 곳" 등) 여러 번 담으면 목록에 같은 이름만 쌓여 구분이 안 된다.
-      const stamp = new Date();
+      // 서버는 1~10개만 받는다. stops의 facilityId를 순서 그대로 넣으면 내 코스가 된다.
       const created = await coursesApi.create({
-        name: `${name} · ${stamp.getMonth() + 1}/${stamp.getDate()}`,
+        name: courseName(name, stops),
         stopIds: stops.slice(0, 10).map((st) => st.facilityId),
       });
       // 저장 결과로 목록을 먼저 갱신한다. 목록 재조회가 실패해도 방금 담은 코스는 보여야 한다 —
