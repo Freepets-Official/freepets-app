@@ -39,6 +39,8 @@ import {
   type ServerDenialReport,
   stampsApi,
 } from '@/lib/api';
+import { resetDailyQuests } from '@/hooks/use-daily-quests';
+import { resetAdminProbe } from '@/hooks/use-is-admin';
 import { DEV_TOKEN } from '@/lib/config';
 import {
   loadCalendarEvents,
@@ -2226,6 +2228,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     void clearStamps();
     setGamification(null);
     setLevelUp(null);
+    // 다음 계정에 앞 계정의 오늘 진행률이 남으면 안 된다
+    resetDailyQuests();
+    // 다음 계정이 앞 계정의 운영자 판정을 물려받으면 안 된다
+    resetAdminProbe();
   }, []);
   useLayoutEffect(() => {
     clearAccountStateRef.current = clearAccountState;

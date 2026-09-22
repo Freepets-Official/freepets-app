@@ -2227,6 +2227,130 @@ export const businessApi = {
   },
 };
 
+// ─────────────────────────── 운영자(매장 소유권 심사) ───────────────────────────
+// GET  /admin/business/claims                  — 신청 목록(상태별·페이지)
+// POST /admin/business/claims/{id}/approve     — 승인
+// POST /admin/business/claims/{id}/reject      — 반려(사유)
+// POST /admin/business/claims/{id}/revoke      — 승인 취소(사유)
+//
+// **앱은 누가 운영자인지 알 수 없다.** 계정 응답의 `profiles`는 `CONSUMER`·`OWNER` 둘뿐이고
+// 운영자 값이 없다(라이브 Swagger 2026-09-22 확인). 권한은 서버만 알고, 일반 계정으로 부르면
+// 403이 온다. 그래서 화면은 **목록 조회를 한 번 해보고** 통하면 열고 아니면 감춘다.
+
+/** 서버가 쓰는 동반 가능 여부 코드. 앱 내부의 `boolean | null`과 달리 '미확인'을 구분한다 */
+export type ServerPetAllowed = 'ALLOWED' | 'DENIED' | 'PENDING';
+
+/** 운영자 화면에 필요한 신청 한 건. 사용자용 `MyClaim`보다 훨씬 많은 정보가 온다 */
+export type AdminClaim = {
+  claimId: number;
+  facilityId: number;
+  facilityName: string;
+  facilityAddress: string | null;
+  applicantUserId: number | null;
+  applicantNickname: string;
+  /** 서버가 가린 사업자등록번호. 원본은 앱에 내려오지 않는다 */
+  maskedBusinessNumber: string | null;
+  /** 국세청 진위확인을 통과한 시각. null이면 확인 절차를 안 거쳤다는 뜻 */
+  verifiedAt: string | null;
+  requestedPetAllowed: ServerPetAllowed | null;
+  requestedMaxWeight: number | null;
+  requestedMaxWeightInclusive: boolean | null;
+  requestedRequirements: string[];
+  requestedConditionRaw: string | null;
+  registrationCertificateUrl: string | null;
+  status: ClaimStatus;
+  appliedAt: string;
+  reviewedAt: string | null;
+  reviewReason: string | null;
+  /**
+   * 이 시설에 **이미 승인된 사장님이 있는가.**
+   *
+   * true인데 또 승인하면 한 시설에 주인이 둘이 된다. 목록에서 눈에 띄게 알려야 한다 —
+   * 신청서만 보면 알 수 없는 정보다.
+   */
+  hasApprovedOwner: boolean;
+};
+
+export type AdminClaimPage = {
+  claims: AdminClaim[];
+  page: number;
+  totalElements: number;
+  hasNext: boolean;
+};
+
+type ServerAdminClaim = Partial<Omit<AdminClaim, 'requestedRequirements'>> & {
+  requestedRequirements?: unknown;
+};
+
+function toAdminClaim(c: ServerAdminClaim): AdminClaim | null {
+  if (typeof c?.claimId !== 'number' || typeof c?.facilityId !== 'number') return null;
+  return {
+    claimId: c.claimId,
+    facilityId: c.facilityId,
+    facilityName: c.facilityName ?? '이름 없는 시설',
+    facilityAddress: c.facilityAddress ?? null,
+    applicantUserId: c.applicantUserId ?? null,
+    applicantNickname: c.applicantNickname ?? '(닉네임 없음)',
+    maskedBusinessNumber: c.maskedBusinessNumber ?? null,
+    verifiedAt: c.verifiedAt ?? null,
+    requestedPetAllowed: (c.requestedPetAllowed as ServerPetAllowed) ?? null,
+    requestedMaxWeight: typeof c.requestedMaxWeight === 'number' ? c.requestedMaxWeight : null,
+    requestedMaxWeightInclusive: c.requestedMaxWeightInclusive ?? null,
+    // 서버가 배열이 아닌 것을 주면 화면이 .map에서 죽는다. 운영자 화면은 특히 조용히 실패하면 안 된다
+    requestedRequirements: Array.isArray(c.requestedRequirements)
+      ? c.requestedRequirements.filter((x): x is string => typeof x === 'string')
+      : [],
+    requestedConditionRaw: c.requestedConditionRaw ?? null,
+    registrationCertificateUrl: c.registrationCertificateUrl ?? null,
+    status: (c.status as ClaimStatus) ?? 'PENDING',
+    appliedAt: c.appliedAt ?? '',
+    reviewedAt: c.reviewedAt ?? null,
+    reviewReason: c.reviewReason ?? null,
+    hasApprovedOwner: c.hasApprovedOwner === true,
+  };
+}
+
+export const adminApi = {
+  claims: async (params: { status?: ClaimStatus; page?: number; size?: number } = {}): Promise<AdminClaimPage> => {
+    const q = new URLSearchParams();
+    if (params.status) q.set('status', params.status);
+    q.set('page', String(params.page ?? 0));
+    q.set('size', String(params.size ?? 20));
+    const r = await request<{ claims?: ServerAdminClaim[]; pageInfo?: { page?: number; totalElements?: number; hasNext?: boolean } }>(
+      'GET',
+      `/api/v1/admin/business/claims?${q.toString()}`,
+      { auth: true },
+    );
+    return {
+      claims: (r.claims ?? []).map(toAdminClaim).filter((c): c is AdminClaim => c !== null),
+      page: r.pageInfo?.page ?? params.page ?? 0,
+      totalElements: r.pageInfo?.totalElements ?? 0,
+      hasNext: r.pageInfo?.hasNext === true,
+    };
+  },
+
+  approve: async (claimId: number): Promise<ClaimStatus> => {
+    const r = await request<{ status?: ClaimStatus }>('POST', `/api/v1/admin/business/claims/${claimId}/approve`, { auth: true });
+    return r.status ?? 'APPROVED';
+  },
+
+  reject: async (claimId: number, reason: string): Promise<ClaimStatus> => {
+    const r = await request<{ status?: ClaimStatus }>('POST', `/api/v1/admin/business/claims/${claimId}/reject`, {
+      body: { reason },
+      auth: true,
+    });
+    return r.status ?? 'REJECTED';
+  },
+
+  revoke: async (claimId: number, reason: string): Promise<ClaimStatus> => {
+    const r = await request<{ status?: ClaimStatus }>('POST', `/api/v1/admin/business/claims/${claimId}/revoke`, {
+      body: { reason },
+      auth: true,
+    });
+    return r.status ?? 'REVOKED';
+  },
+};
+
 // ─────────────────────────── 게이미피케이션(집사 레벨·발바닥 티어) ───────────────────────────
 // GET   /me/gamification               — 레벨·누적 XP·발바닥 티어·받은 배지
 // PATCH /me/gamification/notification  — 레벨업 알림 on/off
