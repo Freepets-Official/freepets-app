@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
-import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { noticesApi, type Notice } from '@/lib/api';
 
@@ -93,8 +93,8 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: 6 },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   tag: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 3 },
-  tagText: { fontSize: 11, fontWeight: '800' },
-  date: { fontSize: 11.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  title: { fontSize: 15.5, fontWeight: '800', letterSpacing: -0.3 },
-  body: { fontSize: 13, lineHeight: 20 },
+  tagText: { fontSize: Type.caption, fontWeight: '800' },
+  date: { fontSize: Type.caption, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  title: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
+  body: { fontSize: Type.body, lineHeight: 20 },
 });

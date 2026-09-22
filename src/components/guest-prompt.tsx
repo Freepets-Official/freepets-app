@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
 import { Screen } from '@/components/screen';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 
 /**
@@ -57,9 +57,9 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.xl, alignItems: 'center', gap: 8 },
   compact: { padding: Spacing.lg },
   icon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  title: { fontSize: 16.5, lineHeight: 23, fontWeight: '900', letterSpacing: -0.4, textAlign: 'center' },
-  body: { fontSize: 13.5, lineHeight: 20, textAlign: 'center' },
+  title: { fontSize: Type.cardTitle, lineHeight: 23, fontWeight: '900', letterSpacing: -0.4, textAlign: 'center' },
+  body: { fontSize: Type.body, lineHeight: 20, textAlign: 'center' },
   primary: { alignSelf: 'stretch', alignItems: 'center', borderRadius: Radius.full, paddingVertical: 13, marginTop: 8 },
-  primaryText: { fontSize: 15, fontWeight: '800' },
-  secondary: { fontSize: 13, fontWeight: '700', marginTop: 4 },
+  primaryText: { fontSize: Type.callout, fontWeight: '800' },
+  secondary: { fontSize: Type.body, fontWeight: '700', marginTop: 4 },
 });

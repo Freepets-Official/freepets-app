@@ -6,7 +6,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { PawChooser } from '@/components/paw-chooser';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
 import { TIER_ANIMAL_LABEL } from '@/data/level';
 import { usePalette } from '@/hooks/use-theme';
 import { questsApi, type DailyQuests, type QuestSource } from '@/lib/api';
@@ -199,24 +199,24 @@ export default function QuestsScreen() {
 
 const styles = StyleSheet.create({
   state: { alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: Radius.lg, paddingVertical: 28, paddingHorizontal: Spacing.xl },
-  stateText: { fontSize: 13.5, lineHeight: 20, textAlign: 'center' },
+  stateText: { fontSize: Type.body, lineHeight: 20, textAlign: 'center' },
   summary: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: Radius.lg, paddingVertical: Spacing.lg },
   summaryItem: { flex: 1, alignItems: 'center', gap: 3 },
   summaryDivider: { width: 1, alignSelf: 'stretch', marginVertical: 4 },
-  summaryValue: { fontSize: 22, fontWeight: '900', letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
-  summaryUnit: { fontSize: 13, fontWeight: '800' },
-  summaryLabel: { fontSize: 11.5, fontWeight: '700' },
+  summaryValue: { fontSize: Type.headline, fontWeight: '900', letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
+  summaryUnit: { fontSize: Type.body, fontWeight: '800' },
+  summaryLabel: { fontSize: Type.caption, fontWeight: '700' },
   list: { gap: Spacing.sm, marginTop: Spacing.lg },
   quest: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg },
   questIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   questBody: { flex: 1, gap: 5 },
   questTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  questLabel: { flex: 1, fontSize: 14, fontWeight: '800' },
-  questXp: { fontSize: 11.5, fontWeight: '800' },
-  questCount: { fontSize: 12.5, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  questLabel: { flex: 1, fontSize: Type.bodyLg, fontWeight: '800' },
+  questXp: { fontSize: Type.caption, fontWeight: '800' },
+  questCount: { fontSize: Type.footnote, fontWeight: '800', fontVariant: ['tabular-nums'] },
   track: { height: 6, borderRadius: 3, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 3 },
-  questHint: { fontSize: 11.5 },
+  questHint: { fontSize: Type.caption },
   pawRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -227,11 +227,11 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     marginTop: Spacing.lg,
   },
-  pawRowText: { flex: 1, fontSize: 13.5, fontWeight: '800' },
-  pawRowAction: { fontSize: 13, fontWeight: '800' },
+  pawRowText: { flex: 1, fontSize: Type.body, fontWeight: '800' },
+  pawRowAction: { fontSize: Type.body, fontWeight: '800' },
   howCard: { gap: 7, borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, marginTop: Spacing.lg },
-  howTitle: { fontSize: 14, fontWeight: '800' },
-  howBody: { fontSize: 12.5, lineHeight: 19 },
+  howTitle: { fontSize: Type.bodyLg, fontWeight: '800' },
+  howBody: { fontSize: Type.footnote, lineHeight: 19 },
   howLink: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingTop: 2 },
-  howLinkText: { fontSize: 12.5, fontWeight: '800' },
+  howLinkText: { fontSize: Type.footnote, fontWeight: '800' },
 });

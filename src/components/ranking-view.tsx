@@ -7,7 +7,7 @@ import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
 import { RegionChips, useRegions } from '@/components/region-chips';
 import { PawBadge } from '@/components/paw-badge';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
 import { formatDistance } from '@/data/mock';
 import { CATEGORY_LABEL, type Category, type RankingItem } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
@@ -276,11 +276,11 @@ export function RankingView({ coords }: { coords: Coords | null }) {
 const styles = StyleSheet.create({
   legend: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.lg, gap: 6 },
   legendTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendTitle: { fontSize: 13.5, fontWeight: '800' },
-  legendBody: { fontSize: 12.5, lineHeight: 19 },
+  legendTitle: { fontSize: Type.body, fontWeight: '800' },
+  legendBody: { fontSize: Type.footnote, lineHeight: 19 },
   filterHead: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.sm },
-  filterLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3, marginTop: 2 },
-  filterNote: { fontSize: 11.5, fontWeight: '600' },
+  filterLabel: { fontSize: Type.footnote, fontWeight: '800', letterSpacing: 0.3, marginTop: 2 },
+  filterNote: { fontSize: Type.caption, fontWeight: '600' },
   chips: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.xl },
   customRow: {
     flexDirection: 'row',
@@ -290,12 +290,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 10,
   },
-  customInput: { flex: 1, fontSize: 14.5, padding: 0 },
-  customUnit: { fontSize: 13, fontWeight: '700' },
-  count: { fontSize: 12.5, fontWeight: '700', marginTop: 2 },
+  customInput: { flex: 1, fontSize: Type.bodyLg, padding: 0 },
+  customUnit: { fontSize: Type.body, fontWeight: '700' },
+  count: { fontSize: Type.footnote, fontWeight: '700', marginTop: 2 },
   list: { gap: Spacing.md },
   state: { alignItems: 'center', gap: Spacing.md, paddingVertical: 48 },
-  stateText: { fontSize: 13.5 },
+  stateText: { fontSize: Type.body },
   stateCard: {
     alignItems: 'center',
     gap: 8,
@@ -304,8 +304,8 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     paddingHorizontal: Spacing.lg,
   },
-  stateTitle: { fontSize: 15, fontWeight: '800' },
-  stateSub: { fontSize: 12.5 },
+  stateTitle: { fontSize: Type.callout, fontWeight: '800' },
+  stateSub: { fontSize: Type.footnote },
   retry: {
     marginTop: 6,
     borderWidth: 1,
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 8,
   },
-  retryText: { fontSize: 13, fontWeight: '800' },
+  retryText: { fontSize: Type.body, fontWeight: '800' },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
   },
   rank: {
-    fontSize: 20,
+    fontSize: Type.sectionTitle,
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
     width: 26,
@@ -331,8 +331,8 @@ const styles = StyleSheet.create({
   },
   info: { flex: 1, gap: 5 },
   nameRow: { flexDirection: 'row', alignItems: 'baseline', gap: 7 },
-  name: { fontSize: 16, fontWeight: '800', letterSpacing: -0.4, flexShrink: 1 },
-  cat: { fontSize: 11.5, fontWeight: '600' },
-  meta: { fontSize: 11.5, fontVariant: ['tabular-nums'] },
-  empty: { fontSize: 14, textAlign: 'center', lineHeight: 21, paddingVertical: 56 },
+  name: { fontSize: Type.cardTitle, fontWeight: '800', letterSpacing: -0.4, flexShrink: 1 },
+  cat: { fontSize: Type.caption, fontWeight: '600' },
+  meta: { fontSize: Type.caption, fontVariant: ['tabular-nums'] },
+  empty: { fontSize: Type.bodyLg, textAlign: 'center', lineHeight: 21, paddingVertical: 56 },
 });

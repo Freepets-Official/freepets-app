@@ -11,7 +11,7 @@ import { Badge } from '@/components/badge';
 import { Chip } from '@/components/chip';
 import { PetAvatar } from '@/components/pet-avatar';
 import { Screen } from '@/components/screen';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
 import {
   AI_JUDGEABLE_KINDS,
   BREED_SIZE_LABEL,
@@ -505,13 +505,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photoLabel: { fontSize: 13, fontWeight: '800' },
+  photoLabel: { fontSize: Type.body, fontWeight: '800' },
   info: { flex: 1, gap: 2 },
-  name: { fontSize: 18, fontWeight: '800', letterSpacing: -0.4 },
-  detail: { fontSize: 13 },
+  name: { fontSize: Type.sheetTitle, fontWeight: '800', letterSpacing: -0.4 },
+  detail: { fontSize: Type.body },
   badges: { flexDirection: 'row', gap: 6, marginTop: 6 },
   vaxRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
-  vaxText: { fontSize: 11.5, fontWeight: '600', flexShrink: 1, fontVariant: ['tabular-nums'] },
+  vaxText: { fontSize: Type.caption, fontWeight: '600', flexShrink: 1, fontVariant: ['tabular-nums'] },
   vaxBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  vaxBtnText: { fontSize: 11, fontWeight: '800' },
+  vaxBtnText: { fontSize: Type.caption, fontWeight: '800' },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -531,22 +531,22 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     paddingVertical: 16,
   },
-  addLabel: { fontSize: 14.5, fontWeight: '800' },
+  addLabel: { fontSize: Type.bodyLg, fontWeight: '800' },
   form: {
     borderRadius: Radius.lg,
     borderWidth: 1,
     padding: Spacing.xl,
     gap: Spacing.md,
   },
-  formTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.4, marginBottom: 2 },
+  formTitle: { fontSize: Type.sheetTitle, fontWeight: '800', letterSpacing: -0.4, marginBottom: 2 },
   input: {
     borderWidth: 1,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.lg,
     paddingVertical: 12,
-    fontSize: 14.5,
+    fontSize: Type.bodyLg,
   },
-  label: { fontSize: 13, fontWeight: '700' },
+  label: { fontSize: Type.body, fontWeight: '700' },
   sizeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   kindGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   kindChip: {
@@ -558,8 +558,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingVertical: 9,
   },
-  kindChipText: { fontSize: 13, fontWeight: '700' },
-  kindHint: { fontSize: 12, lineHeight: 17, marginTop: -4 },
+  kindChipText: { fontSize: Type.body, fontWeight: '700' },
+  kindHint: { fontSize: Type.footnote, lineHeight: 17, marginTop: -4 },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.lg,
     marginTop: 4,
   },
-  error: { fontSize: 13, fontWeight: '700' },
+  error: { fontSize: Type.body, fontWeight: '700' },
   formActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: 4 },
   button: {
     flex: 1,
@@ -576,5 +576,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     paddingVertical: 14,
   },
-  buttonLabel: { fontSize: 14.5, fontWeight: '800' },
+  buttonLabel: { fontSize: Type.bodyLg, fontWeight: '800' },
 });

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { AppState, Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -90,8 +90,8 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
   },
   sheet: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.xl, gap: 10 },
-  title: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
-  body: { fontSize: 13.5, lineHeight: 20 },
+  title: { fontSize: Type.sheetTitle, fontWeight: '800', letterSpacing: -0.3 },
+  body: { fontSize: Type.body, lineHeight: 20 },
   actions: { flexDirection: 'row', gap: Spacing.sm, marginTop: 8 },
   btn: {
     flex: 1,
@@ -101,5 +101,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primary: { borderWidth: 0 },
-  btnText: { fontSize: 14.5, fontWeight: '800' },
+  btnText: { fontSize: Type.bodyLg, fontWeight: '800' },
 });

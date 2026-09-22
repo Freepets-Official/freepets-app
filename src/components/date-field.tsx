@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 
 /**
@@ -165,8 +165,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderRadius: Radius.md,
     paddingHorizontal: Spacing.lg, paddingVertical: 13,
   },
-  value: { fontSize: 14.5, flex: 1 },
+  value: { fontSize: Type.bodyLg, flex: 1 },
   picker: { borderWidth: 1, borderRadius: Radius.md, overflow: 'hidden' },
   done: { alignItems: 'center', paddingVertical: 11, borderTopWidth: 1 },
-  doneText: { fontSize: 14, fontWeight: '800' },
+  doneText: { fontSize: Type.bodyLg, fontWeight: '800' },
 });

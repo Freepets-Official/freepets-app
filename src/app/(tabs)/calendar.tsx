@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
 import { useTabChrome } from '@/components/tab-bar';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
 import {
   CAL_EVENT_META,
   CAL_REPEAT_LABEL,
@@ -364,11 +364,11 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.xl,
     paddingBottom: Spacing.sm,
   },
-  eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  month: { fontSize: 26, lineHeight: 35, fontWeight: '900', letterSpacing: -0.8 },
+  eyebrow: { fontSize: Type.footnote, fontWeight: '800', letterSpacing: 0.5 },
+  month: { fontSize: Type.screenTitle, lineHeight: 34, fontWeight: '900', letterSpacing: -0.8 },
   navBtns: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   todayBtn: { borderRadius: Radius.full, paddingHorizontal: 12, paddingVertical: 7, marginRight: 2 },
-  todayText: { fontSize: 12.5, fontWeight: '800' },
+  todayText: { fontSize: Type.footnote, fontWeight: '800' },
   arrow: {
     width: 34,
     height: 34,
@@ -386,9 +386,9 @@ const styles = StyleSheet.create({
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 11.5, fontWeight: '700' },
+  legendText: { fontSize: Type.caption, fontWeight: '700' },
   weekRow: { flexDirection: 'row', paddingHorizontal: Spacing.xs },
-  weekday: { flex: 1, textAlign: 'center', fontSize: 11.5, fontWeight: '800', paddingVertical: 4 },
+  weekday: { flex: 1, textAlign: 'center', fontSize: Type.caption, fontWeight: '800', paddingVertical: 4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: Spacing.xs },
   cell: { width: `${100 / 7}%`, height: 52, alignItems: 'center', paddingTop: 4, gap: 3 },
   dayNumWrap: {
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dayNum: { fontSize: 13.5, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  dayNum: { fontSize: Type.body, fontWeight: '700', fontVariant: ['tabular-nums'] },
   spanWrap: { width: '100%', gap: 2, marginBottom: 2 },
   span: { height: 4 },
   dots: { flexDirection: 'row', gap: 3, height: 6 },
@@ -411,8 +411,8 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
     paddingBottom: 6,
   },
-  panelTitle: { fontSize: 16, fontWeight: '800', letterSpacing: -0.3 },
-  panelCount: { fontSize: 12.5, fontWeight: '700' },
+  panelTitle: { fontSize: Type.cardTitle, fontWeight: '800', letterSpacing: -0.3 },
+  panelCount: { fontSize: Type.footnote, fontWeight: '700' },
   panel: { flex: 1 },
   panelContent: { paddingHorizontal: Spacing.lg, paddingBottom: 120, gap: Spacing.sm },
   row: {
@@ -431,11 +431,11 @@ const styles = StyleSheet.create({
   },
   rowBody: { flex: 1, gap: 3 },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  rowTitle: { fontSize: 14.5, fontWeight: '800', flexShrink: 1 },
+  rowTitle: { fontSize: Type.bodyLg, fontWeight: '800', flexShrink: 1 },
   typeTag: { borderRadius: Radius.full, paddingHorizontal: 7, paddingVertical: 2 },
-  typeTagText: { fontSize: 10, fontWeight: '800' },
-  rowSub: { fontSize: 12, fontVariant: ['tabular-nums'] },
-  rowNotes: { fontSize: 11.5, lineHeight: 16 },
+  typeTagText: { fontSize: Type.micro, fontWeight: '800' },
+  rowSub: { fontSize: Type.footnote, fontVariant: ['tabular-nums'] },
+  rowNotes: { fontSize: Type.caption, lineHeight: 16 },
   takenBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -447,10 +447,10 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginTop: 4,
   },
-  takenText: { fontSize: 11.5, fontWeight: '800' },
+  takenText: { fontSize: Type.caption, fontWeight: '800' },
   rowActions: { alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2, gap: 10 },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 36 },
-  emptyText: { fontSize: 13.5 },
+  emptyText: { fontSize: Type.body },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -460,5 +460,5 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     marginTop: 6,
   },
-  addText: { fontSize: 15, fontWeight: '800' },
+  addText: { fontSize: Type.callout, fontWeight: '800' },
 });

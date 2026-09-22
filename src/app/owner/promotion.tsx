@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { OwnerLoadState } from '@/components/owner-load-state';
 import { Text } from '@/components/text';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { useOwnerFacilities } from '@/hooks/use-owner-facilities';
 import { usePalette } from '@/hooks/use-theme';
 import { OWNER_AMENITY_LABEL, type OwnerAmenity } from '@/data/types';
@@ -110,18 +110,18 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 64 },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.xl, paddingTop: Spacing.sm },
   head: { gap: 4 },
-  eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  title: { fontSize: 26, fontWeight: '900', letterSpacing: -1, lineHeight: 33 },
-  sub: { fontSize: 13, lineHeight: 20, marginTop: 4 },
+  eyebrow: { fontSize: Type.footnote, fontWeight: '800', letterSpacing: 0.5 },
+  title: { fontSize: Type.screenTitle, fontWeight: '900', letterSpacing: -1, lineHeight: 34 },
+  sub: { fontSize: Type.body, lineHeight: 20, marginTop: 4 },
   field: { gap: 8 },
-  label: { fontSize: 14.5, fontWeight: '800' },
-  hint: { fontSize: 11.5, lineHeight: 17 },
-  err: { fontSize: 12.5, lineHeight: 18, fontWeight: '600' },
-  textarea: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, fontSize: 14.5, minHeight: 96, textAlignVertical: 'top' },
+  label: { fontSize: Type.bodyLg, fontWeight: '800' },
+  hint: { fontSize: Type.caption, lineHeight: 17 },
+  err: { fontSize: Type.footnote, lineHeight: 18, fontWeight: '600' },
+  textarea: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, fontSize: Type.bodyLg, minHeight: 96, textAlignVertical: 'top' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1.5, borderRadius: Radius.full, paddingHorizontal: 13, paddingVertical: 8 },
-  chipText: { fontSize: 13, fontWeight: '700' },
+  chipText: { fontSize: Type.body, fontWeight: '700' },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: Radius.full, paddingVertical: 15 },
-  saveText: { fontSize: 15, fontWeight: '800' },
-  empty: { fontSize: 14, textAlign: 'center', padding: 40 },
+  saveText: { fontSize: Type.callout, fontWeight: '800' },
+  empty: { fontSize: Type.bodyLg, textAlign: 'center', padding: 40 },
 });

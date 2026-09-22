@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
-import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { sinceText } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { DENIAL_REASON_LABEL, useAppStore } from '@/store/app-store';
@@ -111,10 +111,10 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 48 },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.md, paddingTop: Spacing.sm },
   head: { gap: 4, paddingBottom: Spacing.xs },
-  title: { fontSize: 26, lineHeight: 35, fontWeight: '900', letterSpacing: -1 },
-  sub: { fontSize: 13.5, lineHeight: 20 },
+  title: { fontSize: Type.screenTitle, lineHeight: 34, fontWeight: '900', letterSpacing: -1 },
+  sub: { fontSize: Type.body, lineHeight: 20 },
   empty: { alignItems: 'center', gap: Spacing.md, paddingVertical: 72 },
-  emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  emptyText: { fontSize: Type.bodyLg, textAlign: 'center', lineHeight: 21 },
 
   denialCard: {
     flexDirection: 'row',
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   cardText: { flex: 1, gap: 3 },
   denialTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   denialLabel: {
-    fontSize: 10.5,
+    fontSize: Type.micro,
     fontWeight: '900',
     color: '#FFFFFF',
     backgroundColor: 'rgba(255,255,255,0.25)',
@@ -143,8 +143,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     overflow: 'hidden',
   },
-  denialTitle: { fontSize: 14.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
-  denialBody: { fontSize: 12.5, lineHeight: 18, color: 'rgba(255,255,255,0.92)' },
+  denialTitle: { fontSize: Type.bodyLg, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
+  denialBody: { fontSize: Type.footnote, lineHeight: 18, color: 'rgba(255,255,255,0.92)' },
 
   alertCard: {
     flexDirection: 'row',
@@ -161,6 +161,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  alertTitle: { fontSize: 14.5, fontWeight: '800', letterSpacing: -0.3 },
-  alertBody: { fontSize: 12.5, lineHeight: 18 },
+  alertTitle: { fontSize: Type.bodyLg, fontWeight: '800', letterSpacing: -0.3 },
+  alertBody: { fontSize: Type.footnote, lineHeight: 18 },
 });

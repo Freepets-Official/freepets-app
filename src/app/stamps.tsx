@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/text';
 import { LevelCard } from '@/components/level-card';
 import { BadgeWall, QuestList } from '@/components/badge-wall';
-import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import {
   CONQUEROR_BADGES,
   badgeState,
@@ -320,8 +320,8 @@ const styles = StyleSheet.create({
   },
   summaryCell: { flex: 1, alignItems: 'center', gap: 2 },
   summaryDivider: { width: 1, alignSelf: 'stretch', marginVertical: 6 },
-  summaryNum: { fontSize: 22, fontWeight: '800' },
-  summaryLabel: { fontSize: 11.5 },
+  summaryNum: { fontSize: Type.headline, fontWeight: '800' },
+  summaryLabel: { fontSize: Type.caption },
 
   questsEntry: {
     flexDirection: 'row',
@@ -334,36 +334,36 @@ const styles = StyleSheet.create({
   },
   questsEntryIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   questsEntryTexts: { flex: 1, gap: 2 },
-  questsEntryTitle: { fontSize: 14.5, fontWeight: '800' },
-  questsEntryBody: { fontSize: 12, lineHeight: 17 },
-  sectionTitle: { fontSize: 13.5, fontWeight: '800', marginTop: 10 },
-  hint: { fontSize: 11.5, marginTop: -2 },
+  questsEntryTitle: { fontSize: Type.bodyLg, fontWeight: '800' },
+  questsEntryBody: { fontSize: Type.footnote, lineHeight: 17 },
+  sectionTitle: { fontSize: Type.body, fontWeight: '800', marginTop: 10 },
+  hint: { fontSize: Type.caption, marginTop: -2 },
 
   badgeRow: { flexDirection: 'row', gap: 8 },
   badge: {
     flex: 1, alignItems: 'center', gap: 3,
     borderWidth: 1, borderRadius: Radius.md, paddingVertical: 12, ...CardShadow,
   },
-  badgeEmoji: { fontSize: 22 },
+  badgeEmoji: { fontSize: Type.headline },
   // 못 받은 뱃지는 지우지 않고 흐리게 둔다 — 무엇을 향해 가는지 보여야 한다
   badgeLocked: { opacity: 0.25 },
-  badgeLabel: { fontSize: 12, fontWeight: '700' },
-  badgeNeed: { fontSize: 10.5 },
+  badgeLabel: { fontSize: Type.footnote, fontWeight: '700' },
+  badgeNeed: { fontSize: Type.micro },
 
   regionCard: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, gap: 8 },
   regionHead: { flexDirection: 'row', alignItems: 'center' },
-  regionName: { fontSize: 13.5, fontWeight: '800' },
+  regionName: { fontSize: Type.body, fontWeight: '800' },
   regionCode: {
-    fontSize: 10, fontWeight: '700', marginLeft: 6,
+    fontSize: Type.micro, fontWeight: '700', marginLeft: 6,
     borderWidth: 1, borderRadius: Radius.sm, paddingHorizontal: 5, paddingVertical: 1,
   },
-  source: { fontSize: 11, marginTop: 2 },
-  regionCount: { fontSize: 11.5, marginLeft: 'auto' },
+  source: { fontSize: Type.caption, marginTop: 2 },
+  regionCount: { fontSize: Type.caption, marginLeft: 'auto' },
   barTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 3 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { borderWidth: 1, borderRadius: Radius.sm, paddingHorizontal: 8, paddingVertical: 3 },
-  chipText: { fontSize: 11.5, fontWeight: '700' },
+  chipText: { fontSize: Type.caption, fontWeight: '700' },
 
   empty: {
     alignItems: 'center', gap: 6,
@@ -373,9 +373,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8,
     borderWidth: 1, borderRadius: Radius.md, paddingVertical: 10, paddingHorizontal: Spacing.lg,
   },
-  retryText: { fontSize: 11.5, flexShrink: 1 },
-  emptyTitle: { fontSize: 13.5, fontWeight: '800' },
-  emptyBody: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
+  retryText: { fontSize: Type.caption, flexShrink: 1 },
+  emptyTitle: { fontSize: Type.body, fontWeight: '800' },
+  emptyBody: { fontSize: Type.footnote, textAlign: 'center', lineHeight: 18 },
 
   stampRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
   thumbEmpty: { alignItems: 'center', justifyContent: 'center' },
   stampTexts: { flexShrink: 1, gap: 2 },
   onSiteBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, marginLeft: 'auto' },
-  onSiteText: { fontSize: 10.5, fontWeight: '800' },
-  stampName: { fontSize: 13, fontWeight: '700' },
-  stampMeta: { fontSize: 11.5 },
+  onSiteText: { fontSize: Type.micro, fontWeight: '800' },
+  stampName: { fontSize: Type.body, fontWeight: '700' },
+  stampMeta: { fontSize: Type.caption },
 });

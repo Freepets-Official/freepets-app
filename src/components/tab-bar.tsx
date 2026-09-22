@@ -15,6 +15,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
+import { Type } from '@/constants/theme';
 import { Text } from '@/components/text';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 
@@ -177,5 +178,5 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   item: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 0 },
-  label: { fontSize: 10, fontWeight: '800' },
+  label: { fontSize: Type.micro, fontWeight: '800' },
 });

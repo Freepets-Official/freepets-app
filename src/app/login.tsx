@@ -9,7 +9,7 @@ import { AppLogo } from '@/components/app-logo';
 import { LoginScene } from '@/components/login-scene';
 import { SocialButtons } from '@/components/social-buttons';
 import { useSocialLogin } from '@/hooks/use-social-login';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { ApiError, authApi } from '@/lib/api';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
@@ -170,8 +170,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // 워드마크는 UI 글씨가 아니라 브랜드 타이포라 Type 사다리를 따르지 않는다
   wordmark: { fontSize: 28, lineHeight: 38, fontWeight: '900', letterSpacing: -1 },
-  tagline: { fontSize: 13.5, textAlign: 'center', lineHeight: 20, paddingHorizontal: 20 },
+  tagline: { fontSize: Type.body, textAlign: 'center', lineHeight: 20, paddingHorizontal: 20 },
   form: { gap: 10 },
   field: {
     flexDirection: 'row',
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: Spacing.lg,
   },
-  input: { flex: 1, fontSize: 15, padding: 0 },
+  input: { flex: 1, fontSize: Type.callout, padding: 0 },
   primary: {
     height: 52,
     borderRadius: Radius.md,
@@ -190,16 +191,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 4,
   },
-  primaryLabel: { fontSize: 16, fontWeight: '800' },
-  error: { fontSize: 13, fontWeight: '600', textAlign: 'center', marginBottom: 2 },
+  primaryLabel: { fontSize: Type.cardTitle, fontWeight: '800' },
+  error: { fontSize: Type.body, fontWeight: '600', textAlign: 'center', marginBottom: 2 },
   forgot: { alignItems: 'center', paddingVertical: 4 },
-  forgotText: { fontSize: 13, fontWeight: '600' },
+  forgotText: { fontSize: Type.body, fontWeight: '600' },
   divider: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   line: { flex: 1, height: 1 },
-  dividerText: { fontSize: 12, fontWeight: '700' },
+  dividerText: { fontSize: Type.footnote, fontWeight: '700' },
   bottom: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
-  bottomText: { fontSize: 13.5 },
-  bottomLink: { fontSize: 13.5, fontWeight: '800' },
+  bottomText: { fontSize: Type.body },
+  bottomLink: { fontSize: Type.body, fontWeight: '800' },
   guest: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2, marginTop: 14 },
-  guestText: { fontSize: 13.5, fontWeight: '700', textDecorationLine: 'underline' },
+  guestText: { fontSize: Type.body, fontWeight: '700', textDecorationLine: 'underline' },
 });

@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
+import { Type } from '@/constants/theme';
 import { Text } from '@/components/text';
 import { usePalette } from '@/hooks/use-theme';
 
@@ -26,6 +27,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 4,
   },
-  title: { fontSize: 19, fontWeight: '800', letterSpacing: -0.5 },
-  caption: { fontSize: 12.5, fontWeight: '600' },
+  title: { fontSize: Type.sectionTitle, fontWeight: '800', letterSpacing: -0.5 },
+  caption: { fontSize: Type.footnote, fontWeight: '600' },
 });

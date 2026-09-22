@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { ApiError, businessApi, type BusinessIdentity } from '@/lib/api';
 
@@ -161,8 +161,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 13,
   },
-  input: { flex: 1, fontSize: 15, padding: 0 },
-  err: { fontSize: 12.5, lineHeight: 18, fontWeight: '600' },
+  input: { flex: 1, fontSize: Type.callout, padding: 0 },
+  err: { fontSize: Type.footnote, lineHeight: 18, fontWeight: '600' },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -172,6 +172,6 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     marginTop: 2,
   },
-  actionBtnText: { fontSize: 15, fontWeight: '800' },
-  hint: { fontSize: 12, lineHeight: 17 },
+  actionBtnText: { fontSize: Type.callout, fontWeight: '800' },
+  hint: { fontSize: Type.footnote, lineHeight: 17 },
 });

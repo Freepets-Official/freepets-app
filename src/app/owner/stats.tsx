@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { OwnerLoadState } from '@/components/owner-load-state';
 import { Text } from '@/components/text';
 import { CountUp } from '@/components/count-up';
-import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { useOwnerFacilities } from '@/hooks/use-owner-facilities';
 import { usePalette } from '@/hooks/use-theme';
 import { ownerApi, type OwnerReviewStats } from '@/lib/api';
@@ -155,27 +155,27 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 64 },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.lg, paddingTop: Spacing.sm },
   head: { gap: 4 },
-  eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  title: { fontSize: 26, lineHeight: 35, fontWeight: '900', letterSpacing: -1 },
+  eyebrow: { fontSize: Type.footnote, fontWeight: '800', letterSpacing: 0.5 },
+  title: { fontSize: Type.screenTitle, lineHeight: 34, fontWeight: '900', letterSpacing: -1 },
   kpis: { flexDirection: 'row', gap: Spacing.sm },
   kpi: { flex: 1, alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: Radius.md, paddingVertical: Spacing.lg },
-  kpiLabel: { fontSize: 11, fontWeight: '700' },
-  kpiValue: { fontSize: 16, fontWeight: '800' },
-  note: { fontSize: 11.5, marginTop: -8 },
+  kpiLabel: { fontSize: Type.caption, fontWeight: '700' },
+  kpiValue: { fontSize: Type.cardTitle, fontWeight: '800' },
+  note: { fontSize: Type.caption, marginTop: -8 },
   card: { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: Spacing.md },
-  cardTitle: { fontSize: 15, fontWeight: '800' },
-  noReview: { fontSize: 13, lineHeight: 20 },
+  cardTitle: { fontSize: Type.callout, fontWeight: '800' },
+  noReview: { fontSize: Type.body, lineHeight: 20 },
   barRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  barLabel: { width: 78, fontSize: 13, fontWeight: '700' },
+  barLabel: { width: 78, fontSize: Type.body, fontWeight: '700' },
   barTrack: { flex: 1, height: 8, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 4 },
-  barValue: { width: 30, fontSize: 12.5, fontWeight: '800', textAlign: 'right', fontVariant: ['tabular-nums'] },
+  barValue: { width: 30, fontSize: Type.footnote, fontWeight: '800', textAlign: 'right', fontVariant: ['tabular-nums'] },
   trend: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, height: 96 },
   trendCol: { flex: 1, alignItems: 'center', gap: 3 },
   trendTrack: { width: '100%', height: 76, borderRadius: 4, justifyContent: 'flex-end', overflow: 'hidden' },
   trendFill: { width: '100%', borderRadius: 4 },
-  trendDay: { fontSize: 9.5, fontVariant: ['tabular-nums'] },
+  trendDay: { fontSize: Type.micro, fontVariant: ['tabular-nums'] },
   tip: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: Radius.md, padding: Spacing.md },
-  tipText: { flex: 1, fontSize: 13, lineHeight: 19 },
-  empty: { fontSize: 14, textAlign: 'center', padding: 40 },
+  tipText: { flex: 1, fontSize: Type.body, lineHeight: 19 },
+  empty: { fontSize: Type.bodyLg, textAlign: 'center', padding: 40 },
 });

@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
 import { SUPPORT_EMAIL, SUPPORT_MAIL_SUBJECT } from '@/constants/contact';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 
 /**
@@ -179,12 +179,12 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 48 },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.xl, paddingTop: Spacing.md },
-  updated: { fontSize: 12, fontWeight: '600' },
+  updated: { fontSize: Type.footnote, fontWeight: '600' },
   section: { gap: Spacing.sm },
-  sectionTitle: { fontSize: 20, lineHeight: 27, fontWeight: '900', letterSpacing: -0.6, marginBottom: 2 },
+  sectionTitle: { fontSize: Type.sectionTitle, lineHeight: 27, fontWeight: '900', letterSpacing: -0.6, marginBottom: 2 },
   clause: { borderRadius: Radius.md, paddingVertical: 6, paddingHorizontal: 4, gap: 3 },
-  clauseTitle: { fontSize: 13.5, fontWeight: '800' },
-  clauseBody: { fontSize: 13, lineHeight: 20 },
+  clauseTitle: { fontSize: Type.body, fontWeight: '800' },
+  clauseBody: { fontSize: Type.body, lineHeight: 20 },
   switchLink: {
     alignSelf: 'flex-start',
     borderWidth: 1,
@@ -192,6 +192,6 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 14,
   },
-  switchText: { fontSize: 13, lineHeight: 18, fontWeight: '800' },
-  footer: { fontSize: 11.5, lineHeight: 17 },
+  switchText: { fontSize: Type.body, lineHeight: 18, fontWeight: '800' },
+  footer: { fontSize: Type.caption, lineHeight: 17 },
 });

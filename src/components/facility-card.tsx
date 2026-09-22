@@ -8,7 +8,7 @@ import { PetAllowedBadge } from '@/components/badge';
 import { PressableScale } from '@/components/pressable-scale';
 import { DenialAlert } from '@/components/denial-alert';
 import { PawBadge } from '@/components/paw-badge';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
 import { formatDistance } from '@/data/mock';
 import { CATEGORY_LABEL, REQUIREMENT_LABEL, pawGradeOf, type Facility } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
@@ -100,15 +100,15 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   category: {
-    fontSize: 11.5,
+    fontSize: Type.caption,
     fontWeight: '800',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  name: { fontSize: 18, fontWeight: '800', letterSpacing: -0.4 },
+  name: { fontSize: Type.sheetTitle, fontWeight: '800', letterSpacing: -0.4 },
   pawRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, marginBottom: 1 },
-  pawLabel: { fontSize: 11.5, fontWeight: '700' },
-  address: { fontSize: 13 },
+  pawLabel: { fontSize: Type.caption, fontWeight: '700' },
+  address: { fontSize: Type.body },
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -119,6 +119,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   distance: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  distanceText: { fontSize: 12.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  conditions: { fontSize: 12.5, fontWeight: '700', flexShrink: 1 },
+  distanceText: { fontSize: Type.footnote, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  conditions: { fontSize: Type.footnote, fontWeight: '700', flexShrink: 1 },
 });

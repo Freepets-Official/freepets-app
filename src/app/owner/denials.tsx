@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
-import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { sinceText } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { ownerApi, type OwnerDenialAlert } from '@/lib/api';
@@ -83,12 +83,12 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, paddingBottom: 48 },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.md },
-  lead: { fontSize: 13, lineHeight: 20 },
+  lead: { fontSize: Type.body, lineHeight: 20 },
   card: { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: 8 },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   tag: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 3 },
-  tagText: { fontSize: 11.5, fontWeight: '800' },
-  when: { fontSize: 11.5 },
-  body: { fontSize: 14, lineHeight: 21 },
-  empty: { fontSize: 13.5, textAlign: 'center', paddingVertical: 32 },
+  tagText: { fontSize: Type.caption, fontWeight: '800' },
+  when: { fontSize: Type.caption },
+  body: { fontSize: Type.bodyLg, lineHeight: 21 },
+  empty: { fontSize: Type.body, textAlign: 'center', paddingVertical: 32 },
 });

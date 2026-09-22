@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
 import { SectionTitle } from '@/components/section-title';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { OWNER_AMENITY_LABEL, type Facility } from '@/data/types';
 
@@ -67,7 +67,7 @@ export function OwnerPromotionSection({ facility }: { facility: Facility }) {
 
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: Spacing.md },
-  intro: { fontSize: 14, lineHeight: 21 },
+  intro: { fontSize: Type.bodyLg, lineHeight: 21 },
   amenities: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   amenity: {
     flexDirection: 'row',
@@ -78,11 +78,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  amenityText: { fontSize: 12.5, fontWeight: '700' },
+  amenityText: { fontSize: Type.footnote, fontWeight: '700' },
   benefitBox: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.md, gap: 8 },
   benefitHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  benefitHeadText: { fontSize: 12.5, fontWeight: '800' },
+  benefitHeadText: { fontSize: Type.footnote, fontWeight: '800' },
   benefitRow: { gap: 2 },
-  benefitTitle: { fontSize: 13.5, fontWeight: '800' },
-  benefitDetail: { fontSize: 12, lineHeight: 17 },
+  benefitTitle: { fontSize: Type.body, fontWeight: '800' },
+  benefitDetail: { fontSize: Type.footnote, lineHeight: 17 },
 });

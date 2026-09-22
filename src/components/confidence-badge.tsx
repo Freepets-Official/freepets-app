@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius } from '@/constants/theme';
+import { Radius, Type } from '@/constants/theme';
 import { CONFIDENCE_LABEL, type Confidence } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 
@@ -51,6 +51,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   badgeSm: { paddingHorizontal: 7, paddingVertical: 2, gap: 3 },
-  label: { fontSize: 12, fontWeight: '800' },
-  labelSm: { fontSize: 10.5 },
+  label: { fontSize: Type.footnote, fontWeight: '800' },
+  labelSm: { fontSize: Type.micro },
 });

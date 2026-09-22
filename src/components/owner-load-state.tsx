@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import type { OwnerFacility } from '@/lib/api';
 
@@ -26,5 +26,5 @@ export function OwnerLoadState({ facilities, failed, refresh }: { facilities: Ow
 
 const styles = StyleSheet.create({
   box: { margin: Spacing.xl, alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.xl },
-  text: { fontSize: 13.5, lineHeight: 20, textAlign: 'center' },
+  text: { fontSize: Type.body, lineHeight: 20, textAlign: 'center' },
 });

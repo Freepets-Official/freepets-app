@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius } from '@/constants/theme';
+import { Radius, Type } from '@/constants/theme';
 import { RESULT_LABEL, type CheckResult } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   label: {
-    fontSize: 12,
+    fontSize: Type.footnote,
     fontWeight: '800',
   },
 });
