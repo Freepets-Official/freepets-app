@@ -2,16 +2,27 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, TextInput, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
 import { ResultBadge } from '@/components/badge';
 import { Chip } from '@/components/chip';
+import {
+  CoursePickCard,
+  LikedCourseCard,
+  PresetCourseCard,
+  SimilarCourseCard,
+} from '@/components/course/course-cards';
+import {
+  CourseCheckAction,
+  CourseCheckPanel,
+  CourseResultView,
+  SaveCourseAction,
+} from '@/components/course/course-check';
 import { courseShareUrl } from '@/constants/links';
 import { copyText } from '@/lib/clipboard';
 import { confirmDialog, promptText } from '@/lib/notify';
-import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import {
   PRESET_COURSES,
   recommendCourse,
@@ -25,7 +36,6 @@ import { facilitiesApi } from '@/lib/api';
 import { getCurrentLocation, type Coords } from '@/lib/location';
 import {
   CATEGORY_LABEL,
-  RESULT_LABEL,
   type CourseDistanceOption,
   type CourseRegion,
   type CourseCheckResult,
@@ -1422,400 +1432,6 @@ export default function CourseScreen() {
  */
 /** 서버 코스를 그대로 일괄 판별에 넘기는 버튼. 아이를 안 고르면 판별할 대상이 없다. */
 /** 추천 코스를 내 코스로 담는다. 서버는 stopIds만 저장한다. */
-function SaveCourseAction({ running, onPress }: { running: boolean; onPress: () => void }) {
-  const p = usePalette();
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={running}
-      style={({ pressed }) => [
-        styles.saveBtn,
-        { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
-      ]}>
-      {running ? (
-        <ActivityIndicator color={p.muted} size="small" />
-      ) : (
-        <>
-          <Ionicons name="bookmark-outline" size={15} color={p.muted} />
-          <Text style={[styles.saveBtnText, { color: p.muted }]}>내 코스에 담기</Text>
-        </>
-      )}
-    </Pressable>
-  );
-}
-
-function CourseCheckAction({
-  label,
-  disabled,
-  running,
-  onPress,
-  error,
-}: {
-  label: string;
-  disabled: boolean;
-  running: boolean;
-  onPress: () => void;
-  /** 이 버튼으로 낸 판별이 실패했을 때의 문구. 버튼 바로 아래에 붙어야 사용자가 본다. */
-  error?: string | null;
-}) {
-  const p = usePalette();
-  return (
-    <>
-    <Pressable
-      onPress={onPress}
-      disabled={disabled || running}
-      style={({ pressed }) => [
-        styles.courseCheckBtn,
-        {
-          borderColor: disabled ? p.line : p.accent,
-          backgroundColor: pressed && !disabled ? p.accentSoft : 'transparent',
-        },
-      ]}>
-      {running ? (
-        <ActivityIndicator color={p.accent} size="small" />
-      ) : (
-        <Text style={[styles.courseCheckBtnText, { color: disabled ? p.muted : p.accent }]}>
-          {disabled ? '데려갈 아이를 골라 주세요' : label}
-        </Text>
-      )}
-    </Pressable>
-    {error && <Text style={[styles.courseCheckError, { color: p.muted }]}>{error}</Text>}
-    </>
-  );
-}
-
-function CourseCheckPanel({ result }: { result: CourseCheckResult }) {
-  const p = usePalette();
-  const router = useRouter();
-  /**
-   * 스톱을 누르면 시설 상세로 간다.
-   *
-   * 「조건부」가 왜 조건부인지 확인하려면 시설이 게시한 원문을 봐야 하는데, 코스 판별
-   * 응답에는 원문이 없다(FacilitySummary는 id·이름·카테고리뿐). 그래서 지금까지는
-   * 코스를 벗어나 시설을 다시 검색해 들어갔다가 돌아와야 했다. 뒤로가기로 코스에
-   * 그대로 돌아오므로 판별 결과도 남는다.
-   *
-   * `from: 'course'`는 시설 상세의 뒤로가기가 **반드시 코스로 돌아오게** 하는 표시다
-   * (시설 상세의 CourseBack 주석 참고).
-   */
-  const openFacility = (facilityId: number) =>
-    router.push({
-      pathname: '/facility/[id]',
-      params: { id: String(facilityId), from: 'course' },
-    });
-  const tone =
-    result.overall === 'DENIED' ? p.danger : result.overall === 'CONDITIONAL' ? p.warn : p.success;
-  return (
-    <View style={[styles.checkPanel, { borderColor: p.line, backgroundColor: p.surface }]}>
-      <View style={styles.checkHead}>
-        <Text style={[styles.checkOverall, { color: tone }]}>{RESULT_LABEL[result.overall]}</Text>
-        {result.blockedCount > 0 && (
-          <Text style={[styles.checkSub, { color: p.muted }]}>
-            못 가는 곳 {result.blockedCount}곳
-          </Text>
-        )}
-        <Text style={[styles.checkSub, { color: p.muted, marginLeft: 'auto' }]}>
-          시간은 예상(참고용)
-        </Text>
-      </View>
-
-      {result.stops.map((st) => (
-        <Pressable
-          key={st.facility.facilityId}
-          onPress={() => openFacility(st.facility.facilityId)}
-          style={({ pressed }) => [styles.checkStop, { opacity: pressed ? 0.6 : 1 }]}>
-          <Text style={[styles.checkTime, { color: p.muted }]}>{st.time}</Text>
-          <View style={styles.checkStopBody}>
-            <View style={styles.checkStopHead}>
-              <Text style={[styles.checkStopName, { color: p.ink }]} numberOfLines={1}>
-                {st.facility.name}
-              </Text>
-              <ResultBadge result={st.overall} />
-              <Ionicons name="chevron-forward" size={15} color={p.muted} />
-            </View>
-            {st.verdicts.map((v) => (
-              <Text key={v.petId} style={[styles.checkReason, { color: p.muted }]}>
-                {v.petName ? `${v.petName} · ` : ''}
-                {v.reason}
-              </Text>
-            ))}
-            {st.overall === 'DENIED' &&
-              (st.alternative ? (
-                <Text style={[styles.checkAlt, { color: p.accent }]}>
-                  대신 {st.alternative.name} ({st.alternative.distanceKm.toFixed(1)}km)
-                </Text>
-              ) : (
-                <Text style={[styles.checkAlt, { color: p.muted }]}>
-                  가까운 곳 중엔 대체할 만한 시설을 찾지 못했어요. 이 스톱은 빼는 걸 권해요.
-                </Text>
-              ))}
-            <Text style={[styles.checkOpen, { color: p.accent }]}>눌러서 시설 조건 원문 보기</Text>
-          </View>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
-function LikedCourseCard({ course }: { course: LikedCourse }) {
-  const p = usePalette();
-  return (
-    <View style={[styles.presetCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
-      <Text style={[styles.presetTitle, { color: p.ink }]}>{course.title}</Text>
-      {course.stops.map((st, i) => (
-        <View key={st.facilityId} style={styles.presetStopBlock}>
-          <View style={styles.presetStop}>
-            <View style={[styles.presetOrder, { backgroundColor: p.accentSoft }]}>
-              <Text style={[styles.presetOrderNum, { color: p.accent }]}>{i + 1}</Text>
-            </View>
-            <Text style={[styles.presetStopName, { color: p.ink }]} numberOfLines={1}>
-              {st.name}
-            </Text>
-            {st.isMealStop && (
-              <Text style={[styles.mealTag, { backgroundColor: p.surface, color: p.muted }]}>식사</Text>
-            )}
-            <Text style={[styles.presetStopMeta, { color: p.muted, marginLeft: 'auto' }]}>
-              {CATEGORY_LABEL[st.category]}
-            </Text>
-          </View>
-          {!st.isMealStop && st.reasonPets.length > 0 && (
-            <Text style={[styles.stopReason, { color: p.muted }]}>
-              {st.reasonPets.map((rp) => `${rp.petName} ${rp.score.toFixed(1)}점`).join(' · ')}
-            </Text>
-          )}
-        </View>
-      ))}
-    </View>
-  );
-}
-
-/**
- * 취향 비슷한 새곳 카드.
- *
- * `isPersonalized: false`면 취향 매치가 아니라 **리뷰 평점 기준 인기 코스**로 자동 전환된
- * 결과다. 그대로 "취향 기반"이라고 보여주면 사용자를 속이는 것이라, 제목 아래에 무엇을
- * 근거로 뽑았는지 밝힌다. 스톱별 `reason`은 서버 문구를 그대로 쓴다(재조합 금지).
- */
-function SimilarCourseCard({ course }: { course: SimilarCourse }) {
-  const p = usePalette();
-  return (
-    <View style={[styles.presetCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
-      <Text style={[styles.presetTitle, { color: p.ink }]}>{course.title}</Text>
-      {!course.isPersonalized && (
-        <Text style={[styles.coldStart, { color: p.muted }]}>
-          아직 취향 데이터가 없어 평점이 좋은 곳으로 보여드려요.
-        </Text>
-      )}
-      {course.stops.map((st, i) => (
-        <View key={st.facilityId} style={styles.presetStopBlock}>
-          <View style={styles.presetStop}>
-            <View style={[styles.presetOrder, { backgroundColor: p.accentSoft }]}>
-              <Text style={[styles.presetOrderNum, { color: p.accent }]}>{i + 1}</Text>
-            </View>
-            <Text style={[styles.presetStopName, { color: p.ink }]} numberOfLines={1}>
-              {st.name}
-            </Text>
-            {st.isMealStop && (
-              <Text style={[styles.mealTag, { backgroundColor: p.surface, color: p.muted }]}>식사</Text>
-            )}
-          </View>
-          {!!st.reason && <Text style={[styles.stopReason, { color: p.muted }]}>{st.reason}</Text>}
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function PresetCourseCard({ course }: { course: PresetCourse }) {
-  const p = usePalette();
-  return (
-    <View style={[styles.presetCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
-      <Text style={[styles.presetTitle, { color: p.ink }]}>{course.title}</Text>
-      {course.stops.map((st, i) => (
-        <View key={st.facilityId} style={styles.presetStop}>
-          <View style={[styles.presetOrder, { backgroundColor: p.accentSoft }]}>
-            <Text style={[styles.presetOrderNum, { color: p.accent }]}>{i + 1}</Text>
-          </View>
-          <Text style={[styles.presetStopName, { color: p.ink }]} numberOfLines={1}>
-            {st.name}
-          </Text>
-          {st.isMealStop && (
-            <Text style={[styles.mealTag, { backgroundColor: p.surface, color: p.muted }]}>식사</Text>
-          )}
-          <Text style={[styles.presetStopMeta, { color: p.muted, marginLeft: 'auto' }]}>
-            {CATEGORY_LABEL[st.category]}
-            {i > 0 ? ` · ${formatDistance(st.distanceM)}` : ''}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function CoursePickCard({
-  course,
-  highlight,
-  onPress,
-}: {
-  course: Course;
-  highlight?: boolean;
-  onPress: () => void;
-}) {
-  const p = usePalette();
-  const { facilityById } = useAppStore();
-  const stops = course.stopIds.map((id) => facilityById(id)?.name).filter(Boolean);
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.pickCard,
-        CardShadow,
-        {
-          backgroundColor: highlight ? p.accentSoft : p.card,
-          borderColor: highlight ? p.accent : p.line,
-          opacity: pressed ? 0.92 : 1,
-        },
-      ]}>
-      <View style={styles.pickCardTop}>
-        <Ionicons
-          name={course.source === 'RECOMMENDED' ? 'heart' : 'map'}
-          size={15}
-          color={p.accent}
-        />
-        <Text style={[styles.pickCardName, { color: p.ink }]}>{course.name}</Text>
-      </View>
-      {course.description && (
-        <Text style={[styles.pickCardDesc, { color: p.muted }]}>{course.description}</Text>
-      )}
-      <Text style={[styles.pickCardStops, { color: p.accent }]} numberOfLines={1}>
-        {stops.join(' → ')}
-      </Text>
-    </Pressable>
-  );
-}
-
-function CourseResultView({
-  result,
-  petCount,
-  onSwap,
-}: {
-  result: ReturnType<typeof validateCourse>;
-  petCount: number;
-  onSwap: (fromId: number, toId: number) => void;
-}) {
-  const p = usePalette();
-
-  const tone = {
-    ALLOWED: { color: p.success, soft: p.successSoft },
-    CONDITIONAL: { color: p.warn, soft: p.warnSoft },
-    DENIED: { color: p.danger, soft: p.dangerSoft },
-  }[result.overall];
-
-  const summary =
-    result.overall === 'ALLOWED'
-      ? petCount > 1
-        ? '모든 스톱에 다 함께 갈 수 있어요'
-        : '모든 스톱에 갈 수 있어요'
-      : result.overall === 'CONDITIONAL'
-        ? '조건만 지키면 코스 전체를 돌 수 있어요'
-        : `${result.blockedCount}곳에서 막혀요 — 아래 대체를 확인하세요`;
-
-  return (
-    <Animated.View entering={FadeInDown.duration(320)} style={styles.resultWrap}>
-      <View style={[styles.resultBanner, { backgroundColor: tone.soft, borderColor: tone.color }]}>
-        <Text style={[styles.resultTitle, { color: tone.color }]}>{summary}</Text>
-        <ResultBadge result={result.overall} />
-      </View>
-
-      {result.stops.map((s, i) => (
-        <StopResultCard key={s.facility.facilityId} stop={s} index={i} onSwap={onSwap} />
-      ))}
-    </Animated.View>
-  );
-}
-
-function StopResultCard({
-  stop,
-  index,
-  onSwap,
-}: {
-  stop: StopResult;
-  index: number;
-  onSwap: (fromId: number, toId: number) => void;
-}) {
-  const p = usePalette();
-  const denied = stop.group.overall === 'DENIED';
-  const tone = {
-    ALLOWED: p.success,
-    CONDITIONAL: p.warn,
-    DENIED: p.danger,
-  }[stop.group.overall];
-
-  return (
-    <View style={[styles.resCard, CardShadow, { backgroundColor: p.card, borderColor: denied ? p.danger : p.line }]}>
-      <View style={styles.resTop}>
-        <View style={styles.resTime}>
-          <Ionicons name="time-outline" size={13} color={p.muted} />
-          <Text style={[styles.resTimeText, { color: p.muted }]}>{stop.time}</Text>
-        </View>
-        <ResultBadge result={stop.group.overall} />
-      </View>
-      <Text style={[styles.resName, { color: p.ink }]}>
-        {index + 1}. {stop.facility.name}
-      </Text>
-
-      {/* 아이별 결과 */}
-      <View style={styles.resVerdicts}>
-        {stop.group.verdicts.map((v) => {
-          const vTone = { ALLOWED: p.success, CONDITIONAL: p.warn, DENIED: p.danger }[v.result];
-          return (
-            <View key={v.petId} style={styles.resVerdictRow}>
-              <Ionicons
-                name={
-                  v.result === 'ALLOWED'
-                    ? 'checkmark-circle'
-                    : v.result === 'CONDITIONAL'
-                      ? 'alert-circle'
-                      : 'close-circle'
-                }
-                size={15}
-                color={vTone}
-              />
-              <Text style={[styles.resReason, { color: p.ink }]}>{v.reason}</Text>
-            </View>
-          );
-        })}
-      </View>
-
-      {/* 막힌 스톱의 대체 제안 */}
-      {denied && stop.alternative && (
-        <View style={[styles.altBox, { backgroundColor: p.successSoft, borderColor: p.success }]}>
-          <View style={styles.altHead}>
-            <Ionicons name="swap-horizontal" size={15} color={p.success} />
-            <Text style={[styles.altLabel, { color: p.success }]}>이렇게 바꾸면 다 함께 갈 수 있어요</Text>
-          </View>
-          <Text style={[styles.altName, { color: p.ink }]}>{stop.alternative.name}</Text>
-          <Text style={[styles.altMeta, { color: p.muted }]}>
-            {CATEGORY_LABEL[stop.alternative.category]} · {formatDistance(stop.alternative.distanceM)}
-          </Text>
-          <Pressable
-            onPress={() => onSwap(stop.facility.facilityId, stop.alternative!.facilityId)}
-            style={({ pressed }) => [
-              styles.altBtn,
-              { backgroundColor: pressed ? p.successSoft : p.card, borderColor: p.success },
-            ]}>
-            <Text style={[styles.altBtnText, { color: p.success }]}>이 곳으로 바꾸기</Text>
-          </Pressable>
-        </View>
-      )}
-      {denied && !stop.alternative && (
-        <Text style={[styles.noAlt, { color: p.muted }]}>
-          같은 성격의 대체 시설을 찾지 못했어요. 이 스톱은 빼는 것을 권장해요.
-        </Text>
-      )}
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   saveNotice: {
@@ -1833,15 +1449,6 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.xl },
   presetState: { alignItems: 'center', gap: 8, paddingVertical: 20 },
   presetStateText: { fontSize: Type.body, textAlign: 'center', lineHeight: 19 },
-  presetCard: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.lg, gap: 10 },
-  presetTitle: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
-  presetStop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  presetStopBlock: { gap: 3 },
-  saveBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    borderWidth: 1, borderRadius: Radius.md, paddingVertical: 9, marginTop: 4,
-  },
-  saveBtnText: { fontSize: Type.footnote, fontWeight: '700' },
   savedRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     borderWidth: 1, borderRadius: Radius.md, paddingVertical: 11, paddingHorizontal: Spacing.lg,
@@ -1855,26 +1462,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8,
     borderWidth: 1, borderRadius: Radius.md, paddingVertical: 10, paddingHorizontal: Spacing.lg,
   },
-  courseCheckBtn: {
-    borderWidth: 1, borderRadius: Radius.md,
-    paddingVertical: 9, alignItems: 'center', marginTop: 4,
-  },
-  courseCheckBtnText: { fontSize: Type.body, fontWeight: '800' },
   courseCheckError: { fontSize: Type.footnote, marginTop: 4, paddingHorizontal: 2 },
-  checkPanel: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, gap: 10, marginTop: 6 },
-  checkHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  checkOverall: { fontSize: Type.bodyLg, fontWeight: '800' },
-  checkSub: { fontSize: Type.caption },
-  checkStop: { flexDirection: 'row', gap: 10 },
-  checkTime: { fontSize: Type.caption, fontWeight: '700', width: 42, fontVariant: ['tabular-nums'] },
-  checkStopBody: { flex: 1, gap: 3 },
-  checkStopHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  checkStopName: { fontSize: Type.body, fontWeight: '700', flexShrink: 1 },
-  checkReason: { fontSize: Type.caption, lineHeight: 17 },
-  checkOpen: { fontSize: Type.footnote, fontWeight: '700', marginTop: 4 },
-  checkAlt: { fontSize: Type.caption, lineHeight: 17, fontWeight: '600' },
-  stopReason: { fontSize: Type.caption, lineHeight: 17, paddingLeft: 30 },
-  coldStart: { fontSize: Type.footnote, lineHeight: 18 },
   /**
    * 순서 배지. **원은 View, 숫자는 Text**로 나눈다.
    *
@@ -1882,17 +1470,6 @@ const styles = StyleSheet.create({
    * `alignItems`·`justifyContent`가 먹지 않는다. 그래서 숫자가 원 안에서 한쪽으로 쏠렸다.
    * 글씨 크기 설정을 키우면 더 어긋난다 — 글자만 커지고 원은 고정이라서다.
    */
-  presetOrder: {
-    width: 22, height: 22, borderRadius: Radius.full,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  presetOrderNum: { fontSize: Type.caption, fontWeight: '800' },
-  presetStopName: { fontSize: Type.bodyLg, fontWeight: '700', flexShrink: 1 },
-  presetStopMeta: { fontSize: Type.caption, fontVariant: ['tabular-nums'] },
-  mealTag: {
-    fontSize: Type.micro, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 2,
-    borderRadius: Radius.sm, overflow: 'hidden',
-  },
   safe: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 64, alignItems: 'center' },
   inner: { width: '100%', maxWidth: MaxContentWidth, gap: Spacing.lg, paddingTop: Spacing.sm },
@@ -1916,11 +1493,6 @@ const styles = StyleSheet.create({
 
   presetWrap: { gap: Spacing.sm },
   blockLabel: { fontSize: Type.callout, fontWeight: '800' },
-  pickCard: { borderRadius: Radius.lg, borderWidth: 1.5, padding: Spacing.lg, gap: 5 },
-  pickCardTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  pickCardName: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3, flexShrink: 1 },
-  pickCardDesc: { fontSize: Type.footnote, lineHeight: 18 },
-  pickCardStops: { fontSize: Type.footnote, fontWeight: '700' },
   buildBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2000,37 +1572,4 @@ const styles = StyleSheet.create({
   },
   checkLabel: { fontSize: Type.callout, fontWeight: '800' },
 
-  resultWrap: { gap: Spacing.md },
-  resultBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
-    borderWidth: 1.5,
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-  },
-  resultTitle: { fontSize: Type.cardTitle, fontWeight: '900', letterSpacing: -0.4, flexShrink: 1 },
-  resCard: { borderRadius: Radius.lg, borderWidth: 1.5, padding: Spacing.lg, gap: 7 },
-  resTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  resTime: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  resTimeText: { fontSize: Type.footnote, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  resName: { fontSize: Type.cardTitle, fontWeight: '800', letterSpacing: -0.4 },
-  resVerdicts: { gap: 5, marginTop: 2 },
-  resVerdictRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  resReason: { fontSize: Type.footnote, lineHeight: 18, flexShrink: 1 },
-  altBox: { borderRadius: Radius.md, borderWidth: 1, padding: Spacing.md, gap: 3, marginTop: 4 },
-  altHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  altLabel: { fontSize: Type.footnote, fontWeight: '800' },
-  altName: { fontSize: Type.bodyLg, fontWeight: '800', marginTop: 2 },
-  altMeta: { fontSize: Type.footnote },
-  altBtn: {
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderRadius: Radius.full,
-    paddingVertical: 10,
-    marginTop: 6,
-  },
-  altBtnText: { fontSize: Type.body, fontWeight: '800' },
-  noAlt: { fontSize: Type.footnote, lineHeight: 18, marginTop: 4 },
 });
