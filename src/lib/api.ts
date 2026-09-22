@@ -994,8 +994,15 @@ export const facilitiesApi = {
    * 지역 칩 목록. 결과가 비어 있으면 연동 실패가 아니라 **서버의 지역 테이블 적재 전**이다
    * (랭킹의 리뷰 집계 백필과는 별개 조건이다).
    */
+  /**
+   * 지역 목록. **인증이 필요 없다**(라이브 Swagger에서 security 없음, 토큰 없이 200 확인).
+   *
+   * 예전에는 `auth: true`였다. 헤더만 빠질 뿐이라 게스트도 받아지긴 했지만, 그 플래그가
+   * 세션 세대 검사를 켜서 **로그인·로그아웃이 조회 중에 일어나면 SESSION_CHANGED로 던졌다.**
+   * 지역 목록은 누가 보든 같은 값이라 검사할 이유가 없다.
+   */
   regions: async (): Promise<Region[]> => {
-    const r = await request<Region[]>('GET', '/api/v1/facilities/regions', { auth: true });
+    const r = await request<Region[]>('GET', '/api/v1/facilities/regions');
     return r ?? [];
   },
 };

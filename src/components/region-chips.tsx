@@ -55,6 +55,38 @@ export function useRegions(): Region[] {
   return regions;
 }
 
+/**
+ * 「수원시」와 「수원시 장안구」가 **같은 목록에 나란히** 들어 있다.
+ *
+ * 서버 지역 목록은 평평하다. 그래서 이름이 `"{상위} "`로 시작하는 항목을 하위 구로 본다 —
+ * 코드로는(110 vs 111) 부모 자식을 알 수 없고, 앱에 지명을 박으면 행정구역 개편에 깨진다.
+ */
+function childrenOf(all: Region['sigungus'], parent: string) {
+  return all.filter((s) => s.sigungu.startsWith(`${parent} `));
+}
+
+/** 다른 항목의 하위가 아닌 것 — 칩 두 번째 줄에 놓을 것들 */
+function topLevel(all: Region['sigungus']) {
+  return all.filter((s) => !all.some((o) => o !== s && s.sigungu.startsWith(`${o.sigungu} `)));
+}
+
+/**
+ * 고른 시군구가 구를 가진 「시」인지 알려준다.
+ *
+ * 탐색 화면이 "결과 0건"을 만났을 때 쓴다 — 수원시·성남시·고양시 등 일곱 곳은 상위 시 코드로
+ * 물으면 0건인데 구로 물으면 수백 곳이 나온다(2026-09-22 실측: 수원 704, 고양 704, 용인 656).
+ * 그냥 "시설이 없어요"로 끝내면 사용자는 그 도시에 정말 없는 줄 안다.
+ *
+ * 규칙으로 못 박지 않고 화면이 실제 결과를 보고 판단하게 두는 이유는 **화성시가 반대**이기
+ * 때문이다 — 구가 2026년에 신설돼 데이터 대부분(304건)이 아직 시 단위에 남아 있고 구는 78건뿐이다.
+ */
+export function sigunguHasDistricts(regions: Region[], sidoCode: string | null, sigunguCode: string | null) {
+  if (!sidoCode || !sigunguCode) return false;
+  const sido = regions.find((r) => r.sidoCode === sidoCode);
+  const picked = sido?.sigungus.find((s) => s.sigunguCode === sigunguCode);
+  return !!sido && !!picked && childrenOf(sido.sigungus, picked.sigungu).length > 0;
+}
+
 export function RegionChips({
   sidoCode,
   sigunguCode,
@@ -68,6 +100,17 @@ export function RegionChips({
 }) {
   const regions = useRegions();
   const selectedSido = regions.find((r) => r.sidoCode === sidoCode) ?? null;
+  const tops = selectedSido ? topLevel(selectedSido.sigungus) : [];
+  // 고른 것이 구면 그 부모 시를, 시면 자기 자신을 두 번째 줄의 선택으로 본다
+  const selectedTop =
+    selectedSido && sigunguCode
+      ? tops.find(
+          (t) =>
+            t.sigunguCode === sigunguCode ||
+            childrenOf(selectedSido.sigungus, t.sigungu).some((c) => c.sigunguCode === sigunguCode),
+        ) ?? null
+      : null;
+  const districts = selectedSido && selectedTop ? childrenOf(selectedSido.sigungus, selectedTop.sigungu) : [];
 
   return (
     <>
@@ -95,22 +138,54 @@ export function RegionChips({
         ))}
       </ScrollView>
 
-      {selectedSido && selectedSido.sigungus.length > 0 && (
+      {selectedSido && tops.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           <Chip
             label="전체"
             selected={sigunguCode === null}
             onPress={() => onChange({ sidoCode, sigunguCode: null })}
           />
-          {selectedSido.sigungus.map((sg) => (
+          {tops.map((sg) => (
             <Chip
               key={sg.sigunguCode}
               label={sg.sigungu}
-              selected={sigunguCode === sg.sigunguCode}
+              // 구를 고른 상태여도 부모 시가 눌린 것으로 보인다 — 그래야 지금 어디를 보고 있는지 읽힌다
+              selected={selectedTop?.sigunguCode === sg.sigunguCode}
               onPress={() =>
                 onChange({
                   sidoCode,
-                  sigunguCode: sigunguCode === sg.sigunguCode ? null : sg.sigunguCode,
+                  sigunguCode: selectedTop?.sigunguCode === sg.sigunguCode ? null : sg.sigunguCode,
+                })
+              }
+            />
+          ))}
+        </ScrollView>
+      )}
+
+      {/*
+        구가 있는 시를 고르면 세 번째 줄이 열린다.
+
+        「수원시」 칩만 있고 구 칩이 없으면, 사용자는 수원시를 누르고 "시설이 없어요"를 본 뒤
+        그대로 떠난다 — 실제로는 구 단위에 704곳이 있다. 구를 바로 보여줘 그 벽을 없앤다.
+        「시 전체」를 남겨 두는 이유는 화성시처럼 시 단위에 데이터가 몰린 곳이 있어서다.
+      */}
+      {districts.length > 0 && selectedTop && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <Chip
+            label={`${selectedTop.sigungu} 전체`}
+            selected={sigunguCode === selectedTop.sigunguCode}
+            onPress={() => onChange({ sidoCode, sigunguCode: selectedTop.sigunguCode })}
+          />
+          {districts.map((d) => (
+            <Chip
+              key={d.sigunguCode}
+              // 「수원시 장안구」에서 앞의 시 이름은 위 줄이 이미 말하고 있다. 「장안구」만 적는다
+              label={d.sigungu.slice(selectedTop.sigungu.length + 1)}
+              selected={sigunguCode === d.sigunguCode}
+              onPress={() =>
+                onChange({
+                  sidoCode,
+                  sigunguCode: sigunguCode === d.sigunguCode ? selectedTop.sigunguCode : d.sigunguCode,
                 })
               }
             />
