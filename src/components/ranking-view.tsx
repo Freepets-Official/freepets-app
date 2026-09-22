@@ -9,7 +9,7 @@ import { Chip } from '@/components/chip';
 import { RegionChips, useRegions } from '@/components/region-chips';
 import { PawBadge } from '@/components/paw-badge';
 import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
-import { formatDistance } from '@/data/mock';
+import { formatDistance } from '@/lib/format';
 import { CATEGORY_LABEL, type Category, type RankingItem } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { facilitiesApi } from '@/lib/api';

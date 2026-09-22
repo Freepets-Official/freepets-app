@@ -29,7 +29,8 @@ import {
   type Course,
   type StopResult,
 } from '@/data/course';
-import { formatDistance, isMockFacilityId } from '@/data/mock';
+import { isMockFacilityId } from '@/data/facility-id';
+import { formatDistance } from '@/lib/format';
 import { facilitiesApi } from '@/lib/api';
 import { getCurrentLocation, type Coords } from '@/lib/location';
 import {
