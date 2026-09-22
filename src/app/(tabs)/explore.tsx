@@ -8,7 +8,7 @@ import { Chip } from '@/components/chip';
 import { FacilityCard } from '@/components/facility-card';
 import { LoadState } from '@/components/load-state';
 import { RankingView } from '@/components/ranking-view';
-import { RegionChips } from '@/components/region-chips';
+import { RegionChips, sigunguHasDistricts, useRegions } from '@/components/region-chips';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
 import { Radius, Spacing, Type } from '@/constants/theme';
@@ -81,6 +81,8 @@ export default function ExploreScreen() {
   const [keyword, setKeyword] = useState('');
   const [category, setCategory] = useState<Category | null>(null);
   // '전체' 모드의 지역 선택. 시군구까지 고르면 관광공사 실시간 목록으로 갈아탄다.
+  // 지역 목록은 모듈 캐시라 RegionChips와 같은 값을 공유한다 — 여기서 부른다고 더 받지 않는다
+  const regions = useRegions();
   const [sidoCode, setSidoCode] = useState<string | null>(null);
   const [sigunguCode, setSigunguCode] = useState<string | null>(null);
 
@@ -121,6 +123,13 @@ export default function ExploreScreen() {
    */
   const byRegion = mode === 'all' && sidoCode !== null && sigunguCode !== null;
   const regionPending = mode === 'all' && sidoCode !== null && sigunguCode === null;
+  /**
+   * 「구가 있는 시」를 골랐는데 0건인 경우.
+   *
+   * 규칙으로 못 박지 않고 **실제 결과가 0일 때만** 켠다 — 화성시는 구가 2026년에 신설돼
+   * 자료가 아직 시 단위에 남아 있다(시 304건, 구 합계 78건). 같은 모양인데 반대로 동작한다.
+   */
+  const districtHint = byRegion && sigunguHasDistricts(regions, sidoCode, sigunguCode);
 
   useEffect(() => {
     if (mode === 'ranking') return;
@@ -327,6 +336,17 @@ export default function ExploreScreen() {
                     kind="failed"
                     message={'시설 정보를 불러오지 못했어요.\n네트워크 상태를 확인하고 다시 시도해 주세요.'}
                     onRetry={() => setRetryKey((k) => k + 1)}
+                  />
+                ) : districtHint ? (
+                  /*
+                    구가 있는 시를 상위 코드로 물으면 0건이 온다 — 관광공사가 자료를 구 단위로
+                    넣어 뒀기 때문이다. 그냥 "시설이 없어요"로 끝내면 사용자는 그 도시에 정말
+                    없는 줄 안다(수원 704곳, 고양 704곳, 용인 656곳이 구에 있다).
+                  */
+                  <LoadState
+                    kind="empty"
+                    icon="git-branch-outline"
+                    message={'이 시는 자료가 구 단위로 들어 있어요.\n위에서 구를 골라 주세요.'}
                   />
                 ) : (
                   <LoadState
