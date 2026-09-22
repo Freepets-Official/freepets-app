@@ -8,6 +8,7 @@ import { PawChooser } from '@/components/paw-chooser';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
+import { BADGE_DOMAINS, tiersOf } from '@/data/badges';
 import { TIER_ANIMAL_LABEL } from '@/data/level';
 import { usePalette } from '@/hooks/use-theme';
 import { questsApi, type DailyQuests, type QuestSource } from '@/lib/api';
@@ -22,6 +23,57 @@ const QUEST_META: Record<QuestSource, { icon: keyof typeof Ionicons.glyphMap; hi
   COURSE_PUBLISHED: { icon: 'earth', hint: '내가 만든 코스를 공개해요', route: '/course', xp: 20 },
   COURSE_SHARED_COPY: { icon: 'share-social', hint: '내 공유 코스를 다른 집사가 담으면 올라가요', route: '/course', xp: 15 },
 };
+
+/**
+ * 지금 가장 가까운 배지 하나.
+ *
+ * 배지 벽(도장첩)은 아홉 줄을 한꺼번에 보여준다 — 전체를 훑기엔 좋지만 "그래서 지금 뭘 하면
+ * 되는지"가 묻힌다. 퀘스트 화면은 **오늘 할 일**을 보는 곳이라, 가장 적게 남은 것 하나만
+ * 골라 붙인다.
+ *
+ * 서버가 누적 횟수(`progress[]`)를 줘야 "몇 번 더"를 셀 수 있다. 안 주는 옛 서버에서는
+ * 아무것도 그리지 않는다 — 기준 횟수만 적으면 이미 채운 사람에게도 남은 것처럼 보인다.
+ */
+function NextBadgeLine() {
+  const p = usePalette();
+  const router = useRouter();
+  const { gamification } = useAppStore();
+  if (!gamification || gamification.progress.length === 0) return null;
+
+  const earned = new Set(gamification.badges.map((b) => b.code));
+  const countOf = new Map(gamification.progress.map((g) => [g.family, g.count] as const));
+
+  let best: { label: string; unit: string; left: number; tierLabel: string } | null = null;
+  for (const d of BADGE_DOMAINS) {
+    const count = countOf.get(d.prefix);
+    if (count === undefined) continue;
+    const next = tiersOf(d).find((t) => !earned.has(`${d.prefix}_${t.tier}`));
+    if (!next) continue;
+    const left = Math.max(0, next.threshold - count);
+    // 이미 조건을 채웠는데 아직 안 들어온 배지는 건너뛴다 — "0번 더"는 할 일이 아니다
+    if (left === 0) continue;
+    if (!best || left < best.left) {
+      best = { label: d.label, unit: d.unit, left, tierLabel: next.label };
+    }
+  }
+  if (!best) return null;
+
+  return (
+    <Pressable
+      onPress={() => router.push('/stamps')}
+      style={({ pressed }) => [
+        styles.nextBadge,
+        { borderColor: p.line, backgroundColor: pressed ? p.surface : p.card },
+      ]}>
+      <Ionicons name="ribbon" size={16} color={p.accent} />
+      <Text style={[styles.nextBadgeText, { color: p.ink }]} numberOfLines={1}>
+        다음 배지 · <Text style={{ fontWeight: '900' }}>{best.label} {best.tierLabel}</Text>까지{' '}
+        {best.left}{best.unit} 더
+      </Text>
+      <Ionicons name="chevron-forward" size={15} color={p.muted} />
+    </Pressable>
+  );
+}
 
 /** "3시간 뒤 초기화" — 자정까지 남은 시간. 날짜만 알려주면 언제 리셋인지 계산을 사용자가 한다 */
 function resetHint(resetsAt: string | null): string {
@@ -125,6 +177,8 @@ export default function QuestsScreen() {
             </View>
           </View>
 
+          <NextBadgeLine />
+
           <View style={styles.list}>
             {quests.map((q) => {
               const meta = QUEST_META[q.sourceType];
@@ -203,6 +257,16 @@ const styles = StyleSheet.create({
   summaryUnit: { fontSize: Type.body, fontWeight: '800' },
   summaryLabel: { fontSize: Type.caption, fontWeight: '700' },
   list: { gap: Spacing.sm, marginTop: Spacing.lg },
+  nextBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 12,
+  },
+  nextBadgeText: { flex: 1, fontSize: Type.footnote, fontWeight: '700' },
   quest: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg },
   questIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   questBody: { flex: 1, gap: 5 },

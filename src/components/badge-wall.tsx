@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
 import { Radius, Type } from '@/constants/theme';
-import { BADGE_DOMAINS, BADGE_TIERS, parseBadgeCode } from '@/data/badges';
+import { BADGE_DOMAINS, parseBadgeCode, tiersOf } from '@/data/badges';
 import { XP_RULES } from '@/data/level';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
@@ -12,8 +12,10 @@ import { useAppStore } from '@/store/app-store';
 /**
  * 배지 벽 — 도메인마다 6단계를 한 줄로, 받은 것은 색을 켜고 못 받은 것은 흐리게.
  *
- * 다음 목표가 보여야 다음 행동을 한다. 서버가 누적 횟수를 주지 않아 "몇 번 더"는 못 적고,
- * 다음 단계의 기준 횟수만 적는다. 서버가 모르는 접두사를 새로 보내면 "그 외" 줄에 모은다.
+ * 다음 목표가 보여야 다음 행동을 한다. 서버가 누적 횟수를 주면(`progress[]`) "몇 번 더"까지
+ * 적고, 옛 서버면 다음 단계의 기준 횟수만 적는다. 모르는 접두사를 새로 보내면 "그 외" 줄에 모은다.
+ *
+ * 단계 수는 도메인마다 다를 수 있다 — 정복자만 4단계다(`tiersOf`).
  */
 export function BadgeWall() {
   const p = usePalette();
@@ -34,8 +36,10 @@ export function BadgeWall() {
   return (
     <View style={styles.wall}>
       {BADGE_DOMAINS.map((d) => {
-        const got = BADGE_TIERS.filter((t) => earned.has(`${d.prefix}_${t.tier}`));
-        const next = BADGE_TIERS.find((t) => !earned.has(`${d.prefix}_${t.tier}`));
+        // 정복자만 4단계라 도메인별 단계를 쓴다 — 공통 6단계로 그리면 못 받을 칸이 둘 생긴다
+        const tiers = tiersOf(d);
+        const got = tiers.filter((t) => earned.has(`${d.prefix}_${t.tier}`));
+        const next = tiers.find((t) => !earned.has(`${d.prefix}_${t.tier}`));
         const count = countOf.get(d.prefix);
         const ratio = next && count !== undefined ? Math.min(1, count / next.threshold) : null;
         return (
@@ -44,11 +48,11 @@ export function BadgeWall() {
               <Ionicons name={d.icon as never} size={15} color={got.length ? p.accent : p.muted} />
               <Text style={[styles.rowTitle, { color: p.ink }]}>{d.label}</Text>
               <Text style={[styles.rowCount, { color: p.muted }]}>
-                {got.length}/{BADGE_TIERS.length}
+                {got.length}/{tiers.length}
               </Text>
             </View>
             <View style={styles.tiers}>
-              {BADGE_TIERS.map((t) => {
+              {tiers.map((t) => {
                 const on = earned.has(`${d.prefix}_${t.tier}`);
                 return (
                   <View key={t.tier} style={styles.tier}>
