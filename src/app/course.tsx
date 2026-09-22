@@ -8,6 +8,9 @@ import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
 import { ResultBadge } from '@/components/badge';
 import { Chip } from '@/components/chip';
+import { CourseActionNotice } from '@/components/course/action-notice';
+import { StopReorderSheet } from '@/components/course/stop-reorder-sheet';
+import { StopTimeField } from '@/components/course/stop-time-field';
 import {
   CoursePickCard,
   LikedCourseCard,
@@ -21,6 +24,7 @@ import {
   SaveCourseAction,
 } from '@/components/course/course-check';
 import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
+import { BUILDER_PLAN_KEY, outOfOrderStops } from '@/data/course-plan';
 import {
   PRESET_COURSES,
   recommendCourse,
@@ -48,6 +52,7 @@ import {
 } from '@/data/types';
 import { ApiError, aiApi, coursesApi } from '@/lib/api';
 import { useCourseLibrary } from '@/hooks/use-course-library';
+import { useCoursePlan } from '@/hooks/use-course-plan';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -430,6 +435,28 @@ export default function CourseScreen() {
    * 것처럼 보이던 원인이다. 상세를 미리 받아 캐시를 채운 뒤 스톱을 세운다.
    */
   const [openingCourseId, setOpeningCourseId] = useState<number | null>(null);
+  /**
+   * 지금 빌더에 올라와 있는 저장 코스. 두 가지에 쓴다.
+   *
+   * ① 빌더 머리에 "무엇을 보고 있는지"를 적는다 — 예전에는 코스를 눌러도 화면이 그대로인 것
+   *    처럼 보였다. 스톱은 실제로 바뀌는데 빌더가 한참 아래에 있어 눈에 안 띄었기 때문이다.
+   * ② 스톱별 시간을 어느 코스 것으로 저장할지 가른다(저장 전 빌더는 `BUILDER_PLAN_KEY`).
+   */
+  const [openedCourse, setOpenedCourse] = useState<SavedCourse | null>(null);
+  /** 순서 바꾸기 시트가 열렸는가 */
+  const [reordering, setReordering] = useState(false);
+
+  /**
+   * 스톱별 방문 시각. **서버에 시간 필드가 없어 기기에 남는다**(`data/course-plan.ts`).
+   * 저장 전 빌더와 저장된 코스를 다른 키로 나눈다 — 저장하면 빌더 일정이 그 코스로 옮겨간다.
+   */
+  const { planOf, setStopTime, adoptPlan } = useCoursePlan();
+  const planKey = openedCourse ? String(openedCourse.courseId) : BUILDER_PLAN_KEY;
+  const plan = planOf(planKey);
+  const scrollRef = useRef<ScrollView>(null);
+  /** 빌더 블록의 y 좌표. 코스를 열면 그 자리로 데려간다 */
+  const builderY = useRef(0);
+
   const openSavedCourse = async (course: SavedCourse) => {
     setOpeningCourseId(course.courseId);
     try {
@@ -439,7 +466,10 @@ export default function CourseScreen() {
       setOpeningCourseId(null);
     }
     setStopIds(course.stopIds);
+    setOpenedCourse(course);
     setPicking(false);
+    // 바뀐 것을 보게 한다. 레이아웃이 자리를 잡은 뒤에 움직여야 엉뚱한 곳으로 가지 않는다
+    setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(builderY.current - 12, 0), animated: true }), 60);
   };
 
   /**
@@ -449,6 +479,21 @@ export default function CourseScreen() {
    * 판별되지도 않았는데 결과가 "코스 전체"로 표시됐다 — 가장 위험한 종류의 거짓이다.
    * 담는 단계에서 막고 이유를 알린다.
    */
+  /**
+   * 빌더 코스를 담는다. 담은 뒤 **빌더에 짜둔 시간을 새 코스로 옮긴다** —
+   * 옮기지 않으면 저장하는 순간 시간이 사라진 것처럼 보인다(키가 코스 ID로 바뀌므로).
+   */
+  const saveBuilderCourse = async () => {
+    if (stopFacilities.length === 0) return;
+    const base = openedCourse ? openedCourse.name.replace(/\s·\s\d+\/\d+$/, '') : '내가 만든 코스';
+    // 지금 보고 있는 일정의 키를 먼저 잡아둔다 — 아래에서 openedCourse를 비우면 키가 바뀐다
+    const fromKey = planKey;
+    const newId = await saveCourse(BUILDER_PLAN_KEY, base, stopFacilities);
+    if (newId === null) return;
+    adoptPlan(fromKey, newId);
+    setOpenedCourse(null);
+  };
+
   const MAX_STOPS = 10;
   const addStop = (facilityId: number) => {
     setStopIds((prev) => {
@@ -500,6 +545,9 @@ export default function CourseScreen() {
   };
 
   // 스토어 캐시에서 찾는다 — 서버 시설과 목 시설을 모두 아는 건 여기뿐이다
+  /** 앞 스톱보다 이른 시각인 곳. 막지 않고 표시만 한다 */
+  const outOfOrder = useMemo(() => outOfOrderStops(stopIds, plan), [stopIds, plan]);
+
   const stopFacilities = stopIds
     .map((id) => facilityById(id))
     .filter((f): f is NonNullable<typeof f> => !!f);
@@ -522,7 +570,7 @@ export default function CourseScreen() {
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
       <Stack.Screen options={{ title: '여행 코스', headerBackButtonDisplayMode: 'minimal'}} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           <View style={styles.head}>
             <Text style={[styles.eyebrow, { color: p.accent }]}>여행 코스 판별</Text>
@@ -738,28 +786,6 @@ export default function CourseScreen() {
                 )}
               </View>
 
-              {saveMessage && (
-                <View
-                  style={[
-                    styles.saveNotice,
-                    saveMessage.failed
-                      ? { backgroundColor: p.dangerSoft, borderColor: p.danger }
-                      : { backgroundColor: p.successSoft, borderColor: p.success },
-                  ]}>
-                  <Ionicons
-                    name={saveMessage.failed ? 'alert-circle' : 'checkmark-circle'}
-                    size={16}
-                    color={saveMessage.failed ? p.danger : p.success}
-                  />
-                  <Text
-                    style={[
-                      styles.saveNoticeText,
-                      { color: saveMessage.failed ? p.danger : p.ink },
-                    ]}>
-                    {saveMessage.text}
-                  </Text>
-                </View>
-              )}
 
               {/*
                 둘러보기 — 다른 사람이 공개한 코스. 못 불러온 것과 아직 없는 것을 나눠서 안내한다.
@@ -944,13 +970,36 @@ export default function CourseScreen() {
 
           {/* 코스 빌더 — 스톱 목록 */}
           {stopFacilities.length > 0 && (
-            <View style={styles.builder}>
+            <View style={styles.builder} onLayout={(e) => { builderY.current = e.nativeEvent.layout.y; }}>
               <View style={styles.builderHead}>
-                <Text style={[styles.blockLabel, { color: p.ink }]}>내 코스 · {stopFacilities.length}곳</Text>
-                <Pressable onPress={() => { setStopIds([]); setCourseCheck(null); setCourseCheckError(null); }}>
+                <View style={styles.builderTitle}>
+                  <Text style={[styles.blockLabel, { color: p.ink }]}>
+                    {openedCourse ? openedCourse.name : '내 코스'} · {stopFacilities.length}곳
+                  </Text>
+                  {openedCourse && (
+                    <Text style={[styles.builderSub, { color: p.muted }]} numberOfLines={1}>
+                      담아둔 코스를 열었어요 · 고치면 「이 코스로 저장」으로 새로 담겨요
+                    </Text>
+                  )}
+                </View>
+                <Pressable
+                  onPress={() => { setStopIds([]); setOpenedCourse(null); setCourseCheck(null); setCourseCheckError(null); }}>
                   <Text style={[styles.clear, { color: p.muted }]}>비우기</Text>
                 </Pressable>
               </View>
+
+              {/* 순서를 손가락으로 바꾸는 길. 행마다 있는 화살표는 한 칸씩 옮길 때 그대로 쓴다 */}
+              {stopFacilities.length > 1 && (
+                <Pressable
+                  onPress={() => setReordering(true)}
+                  style={({ pressed }) => [
+                    styles.reorderBtn,
+                    { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
+                  ]}>
+                  <Ionicons name="reorder-three" size={16} color={p.accent} />
+                  <Text style={[styles.reorderBtnText, { color: p.accent }]}>순서 바꾸기</Text>
+                </Pressable>
+              )}
 
               {stopFacilities.map((f, i) => {
                 const stopResult =
@@ -976,6 +1025,10 @@ export default function CourseScreen() {
                           params: { id: String(f.facilityId), from: 'course' },
                         })
                       }
+                      // 꾹 누르면 순서 바꾸기로 간다. 목록이 세로 스크롤 안에 있어 여기서 바로
+                      // 끌게 하면 스크롤과 다투므로, 끌기 전용 시트를 여는 것까지만 한다
+                      onLongPress={stopFacilities.length > 1 ? () => setReordering(true) : undefined}
+                      delayLongPress={280}
                       style={({ pressed }) => [styles.stopBody, { opacity: pressed ? 0.6 : 1 }]}>
                       <View style={styles.stopTop}>
                         <Text style={[styles.stopCat, { color: p.accent }]}>
@@ -988,6 +1041,18 @@ export default function CourseScreen() {
                         {formatDistance(f.distanceM)}
                       </Text>
                     </Pressable>
+
+                    {/*
+                      방문 시각. 시설 이름을 누르면 상세로 가므로 **Pressable 바깥**에 둔다 —
+                      안에 넣으면 시간을 고치려다 화면이 넘어간다.
+                    */}
+                    <View style={styles.stopTime}>
+                      <StopTimeField
+                        value={plan[String(f.facilityId)]}
+                        outOfOrder={outOfOrder.has(f.facilityId)}
+                        onChange={(t) => setStopTime(planKey, f.facilityId, t)}
+                      />
+                    </View>
 
                     <View style={styles.stopActions}>
                       <Pressable
@@ -1023,6 +1088,34 @@ export default function CourseScreen() {
                 <Ionicons name={picking ? 'remove' : 'add'} size={17} color={p.accent} />
                 <Text style={[styles.addStopText, { color: p.accent }]}>
                   {picking ? '닫기' : '스톱 추가'}
+                </Text>
+              </Pressable>
+
+              {/*
+                빌더로 짠 코스를 담는다. 예전에는 추천 카드에만 저장 버튼이 있어서, 직접
+                고른 코스는 화면을 떠나는 순간 사라졌다 — 스톱 순서와 시간까지 정해 놓고도.
+
+                담은 코스를 열어 고친 경우에도 **새 코스로** 담긴다. 서버의 덮어쓰기
+                (`PUT /courses/{id}`)는 스톱을 전부 다시 실어야 하는데, 원본을 바꿔버리면
+                남이 담아간 코스와 어긋난다. 원본은 두고 새로 담는 쪽이 덜 놀랍다.
+              */}
+              <Pressable
+                onPress={() => void saveBuilderCourse()}
+                disabled={savingKey === BUILDER_PLAN_KEY}
+                style={({ pressed }) => [
+                  styles.saveCourseBtn,
+                  {
+                    borderColor: p.accent,
+                    backgroundColor: pressed || savingKey === BUILDER_PLAN_KEY ? p.accentSoft : 'transparent',
+                  },
+                ]}>
+                {savingKey === BUILDER_PLAN_KEY ? (
+                  <ActivityIndicator color={p.accent} size="small" />
+                ) : (
+                  <Ionicons name="bookmark-outline" size={16} color={p.accent} />
+                )}
+                <Text style={[styles.saveCourseText, { color: p.accent }]}>
+                  {openedCourse ? '고친 대로 새로 담기' : '이 코스로 저장'}
                 </Text>
               </Pressable>
             </View>
@@ -1111,6 +1204,21 @@ export default function CourseScreen() {
           )}
         </View>
       </ScrollView>
+      {/* 어디서 눌렀든 보이게 화면 아래에 띄운다 — 배너를 블록 안에 두면 담기 버튼에서 멀다 */}
+      <CourseActionNotice message={saveMessage} onDismiss={() => setSaveMessage(null)} />
+
+      <StopReorderSheet
+        visible={reordering}
+        stops={stopFacilities}
+        onClose={() => setReordering(false)}
+        onConfirm={(ids) => {
+          setStopIds(ids);
+          setReordering(false);
+          // 순서가 바뀌면 이전 판별 결과는 더 이상 이 코스의 답이 아니다
+          setCourseCheck(null);
+          setCourseCheckError(null);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1140,16 +1248,6 @@ export default function CourseScreen() {
 /** 추천 코스를 내 코스로 담는다. 서버는 stopIds만 저장한다. */
 
 const styles = StyleSheet.create({
-  saveNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    paddingVertical: 11,
-    paddingHorizontal: Spacing.lg,
-  },
-  saveNoticeText: { flex: 1, fontSize: Type.body, lineHeight: 19, fontWeight: '600' },
   presetBlock: { gap: 10, marginTop: 4 },
   filterLabel: { fontSize: Type.footnote, fontWeight: '800', letterSpacing: 0.3 },
   chips: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.xl },
@@ -1210,6 +1308,19 @@ const styles = StyleSheet.create({
   buildText: { fontSize: Type.bodyLg, fontWeight: '800' },
 
   builder: { gap: Spacing.sm },
+  builderTitle: { flex: 1, gap: 2 },
+  builderSub: { fontSize: Type.caption },
+  reorderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: Radius.full,
+    paddingVertical: 8,
+    marginBottom: 2,
+  },
+  reorderBtnText: { fontSize: Type.footnote, fontWeight: '800' },
   builderHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   clear: { fontSize: Type.footnote, fontWeight: '700' },
   stopRow: { flexDirection: 'row', gap: Spacing.md, borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.md },
@@ -1222,6 +1333,17 @@ const styles = StyleSheet.create({
   stopCat: { fontSize: Type.micro, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' },
   stopName: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
   stopMeta: { fontSize: Type.footnote },
+  saveCourseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: Radius.full,
+    paddingVertical: 11,
+  },
+  saveCourseText: { fontSize: Type.callout, fontWeight: '800' },
+  stopTime: { justifyContent: 'center' },
   stopActions: { flexDirection: 'row', alignItems: 'center' },
   iconBtn: { padding: 4 },
   addStopBtn: {
