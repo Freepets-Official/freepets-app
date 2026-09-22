@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, View, type GestureResponderEvent, type LayoutChangeEvent } from 'react-native';
 
+import { Radius } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 
 /**
@@ -46,8 +47,8 @@ export function ScoreSlider({
 
 const styles = StyleSheet.create({
   hit: { height: 32, justifyContent: 'center' },
-  track: { height: 8, borderRadius: 999, overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: 999 },
+  track: { height: 8, borderRadius: Radius.full, overflow: 'hidden' },
+  fill: { height: '100%', borderRadius: Radius.full },
   thumb: {
     position: 'absolute',
     width: 22,

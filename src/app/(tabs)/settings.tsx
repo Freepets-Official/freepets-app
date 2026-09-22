@@ -9,7 +9,7 @@ import { Chip } from '@/components/chip';
 import { Screen } from '@/components/screen';
 import { SUPPORT_EMAIL, SUPPORT_MAIL_SUBJECT } from '@/constants/contact';
 import { openStoreReview } from '@/lib/app-review';
-import { CardShadow, Radius, Spacing, type ThemeMode } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type, type ThemeMode } from '@/constants/theme';
 import { FONT_SIZE_LABEL, type FontSizeMode } from '@/data/types';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { ApiError, accountApi } from '@/lib/api';
@@ -481,7 +481,7 @@ export default function SettingsScreen() {
                 }
               }}
               style={[styles.withdrawBtn, { backgroundColor: confirm?.danger ? p.danger : p.accent }]}>
-              <Text style={[styles.withdrawBtnText, { color: '#FFFFFF' }]}>
+              <Text style={[styles.withdrawBtnText, { color: p.onAccent }]}>
                 {confirmBusy ? '처리 중…' : confirm?.action}
               </Text>
             </Pressable>
@@ -640,9 +640,9 @@ function ToggleRow({
 const styles = StyleSheet.create({
   group: { gap: Spacing.sm },
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 4 },
-  groupTitle: { fontSize: 12.5, fontWeight: '800', letterSpacing: 0.3 },
+  groupTitle: { fontSize: Type.footnote, fontWeight: '800', letterSpacing: 0.3 },
   groupTag: { borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 2 },
-  groupTagText: { fontSize: 10, fontWeight: '800' },
+  groupTagText: { fontSize: Type.micro, fontWeight: '800' },
   groupCard: { borderRadius: Radius.lg, borderWidth: 1, overflow: 'hidden' },
   row: {
     flexDirection: 'row',
@@ -652,14 +652,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   rowText: { flex: 1, gap: 1 },
-  rowLabel: { fontSize: 14.5, fontWeight: '700' },
-  rowSub: { fontSize: 12 },
+  rowLabel: { fontSize: Type.bodyLg, fontWeight: '700' },
+  rowSub: { fontSize: Type.footnote },
   block: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, gap: 8 },
-  blockLabel: { fontSize: 14.5, fontWeight: '700' },
-  blockHint: { fontSize: 12, marginTop: -4 },
-  blockDivider: { height: 1 },
+  blockLabel: { fontSize: Type.bodyLg, fontWeight: '700' },
+  blockHint: { fontSize: Type.footnote, marginTop: -4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 2 },
-  footer: { fontSize: 11.5, textAlign: 'center', paddingTop: Spacing.sm },
+  footer: { fontSize: Type.caption, textAlign: 'center', paddingTop: Spacing.sm },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: Radius.xl,
@@ -668,19 +667,19 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xxl,
     gap: Spacing.sm,
   },
-  sheetTitle: { fontSize: 18, fontWeight: '900', letterSpacing: -0.4 },
+  sheetTitle: { fontSize: Type.sheetTitle, fontWeight: '900', letterSpacing: -0.4 },
   pwInput: {
     borderWidth: 1, borderRadius: Radius.md,
     paddingHorizontal: Spacing.lg, paddingVertical: 12,
-    fontSize: 15, marginTop: Spacing.md,
+    fontSize: Type.callout, marginTop: Spacing.md,
   },
-  pwHint: { fontSize: 12.5, marginTop: 6 },
-  pwError: { fontSize: 13, fontWeight: '600', marginTop: 10 },
-  sheetBody: { fontSize: 13, lineHeight: 20, marginBottom: Spacing.sm },
+  pwHint: { fontSize: Type.footnote, marginTop: 6 },
+  pwError: { fontSize: Type.body, fontWeight: '600', marginTop: 10 },
+  sheetBody: { fontSize: Type.body, lineHeight: 20, marginBottom: Spacing.sm },
   withdrawBtn: { alignItems: 'center', borderRadius: Radius.md, paddingVertical: 15 },
-  withdrawBtnText: { fontSize: 15, fontWeight: '800' },
+  withdrawBtnText: { fontSize: Type.callout, fontWeight: '800' },
   cancelBtn: { alignItems: 'center', paddingVertical: Spacing.md },
-  cancelBtnText: { fontSize: 14, fontWeight: '700' },
+  cancelBtnText: { fontSize: Type.bodyLg, fontWeight: '700' },
   themeOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -692,6 +691,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   themeOptionText: { flex: 1, gap: 1 },
-  themeOptionLabel: { fontSize: 15, fontWeight: '800' },
-  themeOptionDesc: { fontSize: 12, fontWeight: '600' },
+  themeOptionLabel: { fontSize: Type.callout, fontWeight: '800' },
+  themeOptionDesc: { fontSize: Type.footnote, fontWeight: '600' },
 });

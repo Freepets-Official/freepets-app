@@ -19,7 +19,7 @@ import Animated, {
 
 import { Text } from '@/components/text';
 import { PawGlyph } from '@/components/tier-paw';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { TIER_ANIMAL_LABEL, TIER_COLOR_HEX, type TierAnimal } from '@/data/level';
 import { haptic } from '@/lib/haptics';
 import { usePalette } from '@/hooks/use-theme';
@@ -169,7 +169,7 @@ function ChoiceCard({
         <Text style={[styles.cardCaption, { color: p.muted }]}>{choice.caption}</Text>
         {picked && (
           <View style={[styles.pickedMark, { backgroundColor: choice.color }]}>
-            <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+            <Ionicons name="checkmark" size={13} color={p.onAccent} />
           </View>
         )}
       </Pressable>
@@ -236,8 +236,8 @@ export function PawChooser({ onPick, onSkip }: { onPick: (animal: TierAnimal) =>
 const styles = StyleSheet.create({
   wrap: { gap: Spacing.xl, paddingTop: Spacing.sm },
   head: { gap: 6 },
-  title: { fontSize: 20, fontWeight: '900', letterSpacing: -0.6 },
-  body: { fontSize: 13, lineHeight: 20 },
+  title: { fontSize: Type.sectionTitle, fontWeight: '900', letterSpacing: -0.6 },
+  body: { fontSize: Type.body, lineHeight: 20 },
   cards: { flexDirection: 'row', gap: Spacing.md },
   cardWrap: { flex: 1 },
   card: {
@@ -252,11 +252,12 @@ const styles = StyleSheet.create({
   pawSlot: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
   ring: { position: 'absolute', width: 86, height: 86, borderRadius: 43, borderWidth: 2 },
   particle: { position: 'absolute', left: '50%', top: '50%', width: 6, height: 6, borderRadius: 3, marginLeft: -3, marginTop: -3 },
+  // 반짝임 입자 — 어느 배경에서든 빛나 보여야 해서 테마와 무관하게 흰색이다
   sparkle: { position: 'absolute', backgroundColor: '#FFFFFF' },
-  cardTitle: { fontSize: 15, fontWeight: '900' },
-  cardCaption: { fontSize: 11.5 },
+  cardTitle: { fontSize: Type.callout, fontWeight: '900' },
+  cardCaption: { fontSize: Type.caption },
   pickedMark: { position: 'absolute', top: 10, right: 10, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   skip: { alignSelf: 'center', paddingVertical: 6 },
-  skipText: { fontSize: 13, fontWeight: '700', textDecorationLine: 'underline' },
-  note: { fontSize: 11.5, textAlign: 'center' },
+  skipText: { fontSize: Type.body, fontWeight: '700', textDecorationLine: 'underline' },
+  note: { fontSize: Type.caption, textAlign: 'center' },
 });

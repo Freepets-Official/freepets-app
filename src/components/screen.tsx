@@ -7,7 +7,7 @@ import { useScrollToTop } from 'expo-router';
 
 import { PullPaws } from '@/components/pull-paws';
 import { useTabChrome } from '@/components/tab-bar';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 
 const PULL_THRESHOLD = 64;
@@ -146,11 +146,11 @@ const styles = StyleSheet.create({
   headerText: { flex: 1, gap: 4 },
   headerRight: { paddingTop: 2 },
   eyebrow: {
-    fontSize: 12,
+    fontSize: Type.footnote,
     fontWeight: '800',
     letterSpacing: 1.1,
     textTransform: 'uppercase',
   },
-  title: { fontSize: 30, lineHeight: 40, fontWeight: '900', letterSpacing: -1 },
-  subtitle: { fontSize: 14, lineHeight: 21, marginTop: 2 },
+  title: { fontSize: Type.landingTitle, lineHeight: 40, fontWeight: '900', letterSpacing: -1 },
+  subtitle: { fontSize: Type.bodyLg, lineHeight: 21, marginTop: 2 },
 });

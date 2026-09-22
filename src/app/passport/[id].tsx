@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/text';
 import { DenialReport } from '@/components/denial-report';
 import { PassportCard } from '@/components/passport-card';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -211,18 +211,18 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: Radius.md,
   },
-  guideText: { fontSize: 12.5, fontWeight: '600', lineHeight: 18, flexShrink: 1 },
+  guideText: { fontSize: Type.footnote, fontWeight: '600', lineHeight: 18, flexShrink: 1 },
   carousel: { alignItems: 'center' },
   denial: { alignSelf: 'center', width: '100%', maxWidth: MaxContentWidth, paddingHorizontal: Spacing.xl },
   dots: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   dot: { height: 6, borderRadius: Radius.full },
-  dotLabel: { fontSize: 11.5, fontWeight: '700', marginLeft: 8 },
+  dotLabel: { fontSize: Type.caption, fontWeight: '700', marginLeft: 8 },
   footer: {
-    fontSize: 11.5,
+    fontSize: Type.caption,
     lineHeight: 17,
     textAlign: 'center',
     paddingHorizontal: Spacing.xxl,
   },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md },
-  emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  emptyText: { fontSize: Type.bodyLg, textAlign: 'center', lineHeight: 21 },
 });

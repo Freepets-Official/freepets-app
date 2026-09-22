@@ -5,7 +5,7 @@ import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -66,5 +66,5 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
-  text: { fontSize: 14, fontWeight: '700', flexShrink: 1 },
+  text: { fontSize: Type.bodyLg, fontWeight: '700', flexShrink: 1 },
 });

@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { Text } from '@/components/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { sinceText } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api';
@@ -118,8 +118,8 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
   },
   sentBody: { flex: 1, gap: 3 },
-  sentTitle: { fontSize: 14, fontWeight: '800', letterSpacing: -0.3 },
-  sentText: { fontSize: 12.5, lineHeight: 18 },
+  sentTitle: { fontSize: Type.bodyLg, fontWeight: '800', letterSpacing: -0.3 },
+  sentText: { fontSize: Type.footnote, lineHeight: 18 },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -129,10 +129,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingVertical: 14,
   },
-  triggerText: { fontSize: 14.5, fontWeight: '800' },
+  triggerText: { fontSize: Type.bodyLg, fontWeight: '800' },
   panel: { borderWidth: 1.5, borderRadius: Radius.lg, padding: Spacing.lg, gap: 8 },
-  panelTitle: { fontSize: 15, fontWeight: '800', letterSpacing: -0.3 },
-  panelHint: { fontSize: 12.5, lineHeight: 18 },
+  panelTitle: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
+  panelHint: { fontSize: Type.footnote, lineHeight: 18 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: 2 },
   chip: {
     borderWidth: 1.5,
@@ -140,8 +140,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
-  chipText: { fontSize: 13, fontWeight: '700' },
-  errorText: { fontSize: 12, lineHeight: 18, marginTop: 4 },
+  chipText: { fontSize: Type.body, fontWeight: '700' },
+  errorText: { fontSize: Type.footnote, lineHeight: 18, marginTop: 4 },
   cancel: { alignSelf: 'center', paddingVertical: 6, paddingHorizontal: Spacing.lg },
-  cancelText: { fontSize: 12.5, fontWeight: '700' },
+  cancelText: { fontSize: Type.footnote, fontWeight: '700' },
 });

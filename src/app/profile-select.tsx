@@ -4,7 +4,7 @@ import { Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
-import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore, type ProfileKind } from '@/store/app-store';
 
@@ -72,8 +72,8 @@ const styles = StyleSheet.create({
     gap: Spacing.xxl,
   },
   head: { alignItems: 'center', gap: 8 },
-  title: { fontSize: 24, lineHeight: 32, fontWeight: '900', letterSpacing: -0.8 },
-  sub: { fontSize: 13.5, textAlign: 'center', lineHeight: 20 },
+  title: { fontSize: Type.screenTitle, lineHeight: 34, fontWeight: '900', letterSpacing: -0.8 },
+  sub: { fontSize: Type.body, textAlign: 'center', lineHeight: 20 },
   grid: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.lg },
   tile: {
     flex: 1,
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 4,
   },
-  tileLabel: { fontSize: 18, fontWeight: '900', letterSpacing: -0.4 },
-  tileCaption: { fontSize: 12, textAlign: 'center', lineHeight: 17 },
-  note: { fontSize: 12.5, textAlign: 'center', lineHeight: 19, paddingHorizontal: 20 },
+  tileLabel: { fontSize: Type.sheetTitle, fontWeight: '900', letterSpacing: -0.4 },
+  tileCaption: { fontSize: Type.footnote, textAlign: 'center', lineHeight: 17 },
+  note: { fontSize: Type.footnote, textAlign: 'center', lineHeight: 19, paddingHorizontal: 20 },
 });

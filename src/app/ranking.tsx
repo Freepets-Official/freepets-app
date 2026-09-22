@@ -1,12 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { LoadState } from '@/components/load-state';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { TierDot } from '@/components/tier-paw';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { NotDeployedError, rankingApi, type OverallRanking } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
@@ -79,12 +80,9 @@ export default function RankingScreen() {
           </Text>
         </View>
       ) : state === 'failed' ? (
-        <Pressable onPress={() => setAttempt((a) => a + 1)} style={[styles.state, { borderColor: p.line, backgroundColor: p.card }]}>
-          <Ionicons name="cloud-offline-outline" size={26} color={p.muted} />
-          <Text style={[styles.stateText, { color: p.muted }]}>순위를 불러오지 못했어요. 눌러서 다시 시도</Text>
-        </Pressable>
+        <LoadState kind="failed" message="순위를 불러오지 못했어요." onRetry={() => setAttempt((a) => a + 1)} />
       ) : state === 'loading' ? (
-        <ActivityIndicator color={p.accent} style={{ paddingVertical: 40 }} />
+        <LoadState kind="loading" />
       ) : (
         <>
           {/* 내 자리 — 이 화면의 핵심. 순위는 서버가 계산한 값을 그대로 쓴다 */}
@@ -163,20 +161,20 @@ export default function RankingScreen() {
 
 const styles = StyleSheet.create({
   state: { alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: Radius.lg, paddingVertical: 28, paddingHorizontal: Spacing.xl, marginTop: Spacing.sm },
-  stateTitle: { fontSize: 15, fontWeight: '900' },
-  stateText: { fontSize: 13, lineHeight: 20, textAlign: 'center' },
+  stateTitle: { fontSize: Type.callout, fontWeight: '900' },
+  stateText: { fontSize: Type.body, lineHeight: 20, textAlign: 'center' },
   meCard: { gap: 3, borderWidth: 1.5, borderRadius: Radius.lg, padding: Spacing.lg, marginTop: Spacing.sm },
-  meLabel: { fontSize: 11.5, fontWeight: '700' },
-  meRank: { fontSize: 21, fontWeight: '900', letterSpacing: -0.6 },
-  meSub: { fontSize: 12.5, lineHeight: 18 },
+  meLabel: { fontSize: Type.caption, fontWeight: '700' },
+  meRank: { fontSize: Type.sectionTitle, fontWeight: '900', letterSpacing: -0.6 },
+  meSub: { fontSize: Type.footnote, lineHeight: 18 },
   list: { gap: 6, marginTop: Spacing.lg },
   row: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: 11 },
-  rank: { width: 24, fontSize: 13.5, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  rank: { width: 24, fontSize: Type.body, fontWeight: '900', fontVariant: ['tabular-nums'] },
   dot: { width: 10, height: 10 },
   who: { flex: 1, gap: 1 },
-  nickname: { fontSize: 13.5, fontWeight: '800' },
-  petLine: { fontSize: 10.5, fontWeight: '700' },
-  level: { fontSize: 12, fontWeight: '700' },
-  xp: { width: 62, fontSize: 12.5, fontWeight: '800', textAlign: 'right', fontVariant: ['tabular-nums'] },
-  note: { fontSize: 11.5, textAlign: 'center', marginTop: Spacing.sm },
+  nickname: { fontSize: Type.body, fontWeight: '800' },
+  petLine: { fontSize: Type.micro, fontWeight: '700' },
+  level: { fontSize: Type.footnote, fontWeight: '700' },
+  xp: { width: 62, fontSize: Type.footnote, fontWeight: '800', textAlign: 'right', fontVariant: ['tabular-nums'] },
+  note: { fontSize: Type.caption, textAlign: 'center', marginTop: Spacing.sm },
 });

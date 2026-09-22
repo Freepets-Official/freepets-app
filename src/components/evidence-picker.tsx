@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 
 export interface Evidence {
@@ -96,8 +96,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     paddingVertical: 16,
   },
-  buttonLabel: { fontSize: 14, fontWeight: '800' },
-  hint: { fontSize: 11.5, lineHeight: 17 },
+  buttonLabel: { fontSize: Type.bodyLg, fontWeight: '800' },
+  hint: { fontSize: Type.caption, lineHeight: 17 },
   preview: {
     borderRadius: Radius.lg,
     borderWidth: 1,
@@ -123,5 +123,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: 10,
   },
-  verifiedText: { fontSize: 12, fontWeight: '700', flexShrink: 1 },
+  verifiedText: { fontSize: Type.footnote, fontWeight: '700', flexShrink: 1 },
 });

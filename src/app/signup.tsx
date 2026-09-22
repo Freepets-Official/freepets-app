@@ -8,7 +8,7 @@ import { Text } from '@/components/text';
 import { AppLogo } from '@/components/app-logo';
 import { SocialButtons } from '@/components/social-buttons';
 import { useSocialLogin } from '@/hooks/use-social-login';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { ApiError, authApi } from '@/lib/api';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
@@ -253,15 +253,8 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.xxl },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.xl },
   head: { alignItems: 'center', gap: 8 },
-  logo: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontSize: 24, lineHeight: 32, fontWeight: '900', letterSpacing: -0.8 },
-  sub: { fontSize: 13, textAlign: 'center', lineHeight: 19, paddingHorizontal: 16 },
+  title: { fontSize: Type.screenTitle, lineHeight: 34, fontWeight: '900', letterSpacing: -0.8 },
+  sub: { fontSize: Type.body, textAlign: 'center', lineHeight: 19, paddingHorizontal: 16 },
   form: { gap: 10 },
   fieldWrap: { gap: 5 },
   field: {
@@ -273,10 +266,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: Spacing.lg,
   },
-  input: { flex: 1, fontSize: 15, padding: 0 },
-  hint: { fontSize: 12, fontWeight: '600', paddingLeft: 4 },
+  input: { flex: 1, fontSize: Type.callout, padding: 0 },
+  hint: { fontSize: Type.footnote, fontWeight: '600', paddingLeft: 4 },
   agree: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
-  agreeText: { flex: 1, fontSize: 13, lineHeight: 19 },
+  agreeText: { flex: 1, fontSize: Type.body, lineHeight: 19 },
   primary: {
     height: 52,
     borderRadius: Radius.md,
@@ -284,8 +277,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 4,
   },
-  primaryLabel: { fontSize: 16, fontWeight: '800' },
-  error: { fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: 2 },
+  primaryLabel: { fontSize: Type.cardTitle, fontWeight: '800' },
+  error: { fontSize: Type.body, fontWeight: '600', textAlign: 'center', marginTop: 2 },
   modalWrap: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', paddingHorizontal: Spacing.xl },
   modalCard: {
     width: '100%',
@@ -296,14 +289,14 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   modalHead: { alignItems: 'center', gap: 8, marginBottom: 2 },
-  modalTitle: { fontSize: 20, lineHeight: 27, fontWeight: '900', letterSpacing: -0.5 },
-  modalSub: { fontSize: 13, textAlign: 'center', lineHeight: 19, paddingHorizontal: 8 },
+  modalTitle: { fontSize: Type.sectionTitle, lineHeight: 27, fontWeight: '900', letterSpacing: -0.5 },
+  modalSub: { fontSize: Type.body, textAlign: 'center', lineHeight: 19, paddingHorizontal: 8 },
   modalCancel: { alignItems: 'center', paddingVertical: 6 },
-  modalCancelText: { fontSize: 14, fontWeight: '700' },
+  modalCancelText: { fontSize: Type.bodyLg, fontWeight: '700' },
   divider: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   line: { flex: 1, height: 1 },
-  dividerText: { fontSize: 12, fontWeight: '700' },
+  dividerText: { fontSize: Type.footnote, fontWeight: '700' },
   bottom: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
-  bottomText: { fontSize: 13.5 },
-  bottomLink: { fontSize: 13.5, fontWeight: '800' },
+  bottomText: { fontSize: Type.body },
+  bottomLink: { fontSize: Type.body, fontWeight: '800' },
 });

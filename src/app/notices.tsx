@@ -1,11 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
-import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { noticesApi, type Notice } from '@/lib/api';
 
@@ -46,19 +47,11 @@ export default function NoticesScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           {failed ? (
-            <Pressable
-              onPress={() => void load()}
-              style={[styles.card, CardShadow, { backgroundColor: p.card, borderColor: p.line, alignItems: 'center' }]}>
-              <Ionicons name="cloud-offline-outline" size={28} color={p.muted} />
-              <Text style={[styles.title, { color: p.ink }]}>공지를 불러오지 못했어요</Text>
-              <Text style={[styles.body, { color: p.muted }]}>눌러서 다시 시도</Text>
-            </Pressable>
+            <LoadState kind="failed" message="공지를 불러오지 못했어요." onRetry={() => void load()} />
           ) : items === null ? (
-            <ActivityIndicator color={p.accent} style={{ paddingVertical: 48 }} />
+            <LoadState kind="loading" />
           ) : items.length === 0 ? (
-            <Text style={[styles.body, { color: p.muted, textAlign: 'center', paddingVertical: 48 }]}>
-              아직 공지가 없어요.
-            </Text>
+            <LoadState kind="empty" message="아직 공지가 없어요." />
           ) : (
             items.map((n) => (
               <View
@@ -93,8 +86,8 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: 6 },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   tag: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 3 },
-  tagText: { fontSize: 11, fontWeight: '800' },
-  date: { fontSize: 11.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  title: { fontSize: 15.5, fontWeight: '800', letterSpacing: -0.3 },
-  body: { fontSize: 13, lineHeight: 20 },
+  tagText: { fontSize: Type.caption, fontWeight: '800' },
+  date: { fontSize: Type.caption, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  title: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
+  body: { fontSize: Type.body, lineHeight: 20 },
 });

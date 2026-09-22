@@ -8,7 +8,7 @@ import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -159,17 +159,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photoHint: { fontSize: 12.5, textAlign: 'center', marginTop: -6 },
+  photoHint: { fontSize: Type.footnote, textAlign: 'center', marginTop: -6 },
   field: { gap: 7 },
-  label: { fontSize: 14, fontWeight: '800' },
+  label: { fontSize: Type.bodyLg, fontWeight: '800' },
   input: {
     borderWidth: 1,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.lg,
     paddingVertical: 13,
-    fontSize: 15,
+    fontSize: Type.callout,
   },
-  fieldHint: { fontSize: 11.5, lineHeight: 16 },
+  fieldHint: { fontSize: Type.caption, lineHeight: 16 },
   readonly: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -179,13 +179,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 13,
   },
-  readonlyText: { fontSize: 14.5 },
-  error: { fontSize: 13, fontWeight: '700' },
+  readonlyText: { fontSize: Type.bodyLg },
+  error: { fontSize: Type.body, fontWeight: '700' },
   save: {
     alignItems: 'center',
     borderRadius: Radius.full,
     paddingVertical: 15,
     marginTop: Spacing.sm,
   },
-  saveText: { fontSize: 15.5, fontWeight: '800' },
+  saveText: { fontSize: Type.callout, fontWeight: '800' },
 });

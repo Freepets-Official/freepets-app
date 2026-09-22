@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius } from '@/constants/theme';
+import { Radius, Type } from '@/constants/theme';
 import { BADGE_DOMAINS, BADGE_TIERS, parseBadgeCode } from '@/data/badges';
 import { XP_RULES } from '@/data/level';
 import { usePalette } from '@/hooks/use-theme';
@@ -59,7 +59,7 @@ export function BadgeWall() {
                           ? { backgroundColor: t.color, borderColor: t.color }
                           : { backgroundColor: p.surface, borderColor: p.line },
                       ]}>
-                      <Ionicons name={on ? 'ribbon' : 'lock-closed-outline'} size={13} color={on ? '#FFFFFF' : p.muted} />
+                      <Ionicons name={on ? 'ribbon' : 'lock-closed-outline'} size={13} color={on ? p.onAccent : p.muted} />
                     </View>
                     <Text style={[styles.tierLabel, { color: on ? p.ink : p.muted }]}>{t.label}</Text>
                   </View>
@@ -140,20 +140,20 @@ const styles = StyleSheet.create({
   wall: { gap: 8 },
   row: { borderWidth: 1, borderRadius: Radius.md, padding: 12, gap: 8 },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  rowTitle: { fontSize: 14, fontWeight: '800' },
-  rowCount: { fontSize: 11.5, marginLeft: 'auto', fontVariant: ['tabular-nums'] },
+  rowTitle: { fontSize: Type.bodyLg, fontWeight: '800' },
+  rowCount: { fontSize: Type.caption, marginLeft: 'auto', fontVariant: ['tabular-nums'] },
   tiers: { flexDirection: 'row', justifyContent: 'space-between' },
   tier: { alignItems: 'center', gap: 3, width: 44 },
   gem: { width: 30, height: 30, borderRadius: 15, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  tierLabel: { fontSize: 10.5, fontWeight: '700' },
-  hint: { fontSize: 11.5, lineHeight: 16 },
+  tierLabel: { fontSize: Type.micro, fontWeight: '700' },
+  hint: { fontSize: Type.caption, lineHeight: 16 },
   track: { height: 5, borderRadius: 3, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 3 },
   quests: { gap: 8 },
   quest: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 10 },
   questXp: { borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 3, minWidth: 44, alignItems: 'center' },
-  questXpText: { fontSize: 12.5, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  questXpText: { fontSize: Type.footnote, fontWeight: '900', fontVariant: ['tabular-nums'] },
   questBody: { flex: 1 },
-  questTitle: { fontSize: 13.5, fontWeight: '700' },
-  questSub: { fontSize: 11.5, marginTop: 1 },
+  questTitle: { fontSize: Type.body, fontWeight: '700' },
+  questSub: { fontSize: Type.caption, marginTop: 1 },
 });

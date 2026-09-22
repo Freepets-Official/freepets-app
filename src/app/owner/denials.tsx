@@ -1,11 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
-import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { sinceText } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { ownerApi, type OwnerDenialAlert } from '@/lib/api';
@@ -50,13 +51,11 @@ export default function OwnerDenialsScreen() {
             조건을 확정한 뒤 손님이 &ldquo;문 앞에서 거부당했다&rdquo;고 남긴 제보예요. 제보가 남아 있는 동안은 손님 화면의 신뢰도가 내려가 있어요 — 조건이 바뀌었다면 「출입 조건 관리」에서 고쳐 주세요.
           </Text>
           {failed ? (
-            <Pressable onPress={retry}>
-              <Text style={[styles.empty, { color: p.muted }]}>제보를 불러오지 못했어요. 눌러서 다시 시도</Text>
-            </Pressable>
+            <LoadState kind="failed" message="제보를 불러오지 못했어요." onRetry={retry} />
           ) : alerts === null ? (
-            <ActivityIndicator color={p.accent} style={{ paddingVertical: 32 }} />
+            <LoadState kind="loading" />
           ) : alerts.length === 0 ? (
-            <Text style={[styles.empty, { color: p.muted }]}>확정 이후 들어온 거부 제보가 없어요.</Text>
+            <LoadState kind="empty" message="확정 이후 들어온 거부 제보가 없어요." />
           ) : (
             // 서버가 reportId를 안 주므로 key는 순서다(목록은 조회 전용이라 재정렬이 없다)
             alerts.map((a, i) => (
@@ -83,12 +82,11 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl, paddingVertical: Spacing.md, paddingBottom: 48 },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.md },
-  lead: { fontSize: 13, lineHeight: 20 },
+  lead: { fontSize: Type.body, lineHeight: 20 },
   card: { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: 8 },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   tag: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 3 },
-  tagText: { fontSize: 11.5, fontWeight: '800' },
-  when: { fontSize: 11.5 },
-  body: { fontSize: 14, lineHeight: 21 },
-  empty: { fontSize: 13.5, textAlign: 'center', paddingVertical: 32 },
+  tagText: { fontSize: Type.caption, fontWeight: '800' },
+  when: { fontSize: Type.caption },
+  body: { fontSize: Type.bodyLg, lineHeight: 21 },
 });

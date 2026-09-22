@@ -3,7 +3,7 @@ import { type ComponentProps } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius } from '@/constants/theme';
+import { Radius, Type } from '@/constants/theme';
 import type { SocialProvider } from '@/lib/api';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -93,6 +93,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   mark: { width: 22, alignItems: 'center', justifyContent: 'center' },
-  glyph: { fontSize: 17, fontWeight: '900' },
-  label: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: '800', marginLeft: -22 },
+  glyph: { fontSize: Type.sheetTitle, fontWeight: '900' },
+  label: { flex: 1, textAlign: 'center', fontSize: Type.callout, fontWeight: '800', marginLeft: -22 },
 });

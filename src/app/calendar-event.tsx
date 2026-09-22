@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DateField } from '@/components/date-field';
 import { Text } from '@/components/text';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import {
   CAL_EVENT_META,
   CAL_REPEAT_LABEL,
@@ -158,7 +158,7 @@ export default function CalendarEventScreen() {
           {/* 반복 — 기간 일정(여행 종료일)에는 못 건다. 서버가 거부하고(CALENDAR4007), 8/22~24 여행에 매일이 붙으면 25일부터 점이 계속 찍힌다 */}
           <Text style={[styles.label, { color: p.ink }]}>반복</Text>
           {type === 'TRAVEL' && endDate && endDate > date ? (
-            <Text style={{ color: p.muted, fontSize: 13 }}>기간이 있는 일정은 반복할 수 없어요.</Text>
+            <Text style={{ color: p.muted, fontSize: Type.body }}>기간이 있는 일정은 반복할 수 없어요.</Text>
           ) : (
             <View style={styles.petRow}>
               {REPEATS.map((r) => (
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 64 },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.sm, paddingTop: Spacing.md },
-  label: { fontSize: 13.5, fontWeight: '800', marginTop: Spacing.sm },
+  label: { fontSize: Type.body, fontWeight: '800', marginTop: Spacing.sm },
   typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   typeChip: {
     // 한 줄에 다 못 들어가면 자연스럽게 줄바꿈(예: 3 + 2). 최소 너비로 균형을 맞춘다.
@@ -263,17 +263,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     paddingVertical: 12,
   },
-  typeChipText: { fontSize: 12, fontWeight: '800' },
+  typeChipText: { fontSize: Type.footnote, fontWeight: '800' },
   input: {
     borderWidth: 1,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.lg,
     paddingVertical: 12,
-    fontSize: 14.5,
+    fontSize: Type.bodyLg,
   },
   petRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   chip: { borderWidth: 1.5, borderRadius: Radius.full, paddingHorizontal: 14, paddingVertical: 8 },
-  chipText: { fontSize: 13, fontWeight: '700' },
+  chipText: { fontSize: Type.body, fontWeight: '700' },
   dateCol: { gap: 6 },
   reminderRow: {
     flexDirection: 'row',
@@ -285,13 +285,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginTop: Spacing.md,
   },
-  reminderLabel: { fontSize: 14, fontWeight: '700' },
-  reminderSub: { fontSize: 11.5 },
+  reminderLabel: { fontSize: Type.bodyLg, fontWeight: '700' },
+  reminderSub: { fontSize: Type.caption },
   textarea: {
     borderWidth: 1,
     borderRadius: Radius.md,
     padding: Spacing.lg,
-    fontSize: 14.5,
+    fontSize: Type.bodyLg,
     minHeight: 80,
     textAlignVertical: 'top',
   },
@@ -301,5 +301,5 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     marginTop: Spacing.lg,
   },
-  saveText: { fontSize: 15.5, fontWeight: '800' },
+  saveText: { fontSize: Type.callout, fontWeight: '800' },
 });

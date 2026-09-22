@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Text } from '@/components/text';
 import { EvidencePicker, type Evidence } from '@/components/evidence-picker';
 import { Screen } from '@/components/screen';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
 import { FACILITIES, isMockFacilityId } from '@/data/mock';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore, type ReportType } from '@/store/app-store';
@@ -240,9 +240,9 @@ export default function ReportScreen() {
 
 const styles = StyleSheet.create({
   head: { gap: 4, paddingTop: Spacing.sm },
-  eyebrow: { fontSize: 11.5, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase' },
-  title: { fontSize: 26, fontWeight: '900', letterSpacing: -1, lineHeight: 34 },
-  sub: { fontSize: 13.5, lineHeight: 20, marginTop: 4 },
+  eyebrow: { fontSize: Type.caption, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase' },
+  title: { fontSize: Type.screenTitle, fontWeight: '900', letterSpacing: -1, lineHeight: 34 },
+  sub: { fontSize: Type.body, lineHeight: 20, marginTop: 4 },
   options: { gap: Spacing.sm },
   option: {
     flexDirection: 'row',
@@ -253,19 +253,19 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
   },
   optionText: { flex: 1, gap: 2 },
-  optionTitle: { fontSize: 14.5, fontWeight: '800' },
-  optionBody: { fontSize: 12.5, lineHeight: 18 },
+  optionTitle: { fontSize: Type.bodyLg, fontWeight: '800' },
+  optionBody: { fontSize: Type.footnote, lineHeight: 18 },
   block: { gap: 8 },
-  blockLabel: { fontSize: 15, fontWeight: '800' },
+  blockLabel: { fontSize: Type.callout, fontWeight: '800' },
   textarea: {
     borderWidth: 1,
     borderRadius: Radius.md,
     padding: Spacing.lg,
-    fontSize: 14.5,
+    fontSize: Type.bodyLg,
     minHeight: 110,
     textAlignVertical: 'top',
   },
-  error: { fontSize: 13, fontWeight: '700' },
+  error: { fontSize: Type.body, fontWeight: '700' },
   weightNote: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 12,
   },
-  weightText: { fontSize: 12.5, fontWeight: '700', flexShrink: 1 },
+  weightText: { fontSize: Type.footnote, fontWeight: '700', flexShrink: 1 },
   submit: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingVertical: 16,
   },
-  submitLabel: { fontSize: 15.5, fontWeight: '800' },
+  submitLabel: { fontSize: Type.callout, fontWeight: '800' },
   doneWrap: { alignItems: 'center', gap: Spacing.md, paddingVertical: 80 },
   doneIcon: {
     width: 68,
@@ -292,11 +292,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  doneTitle: { fontSize: 19, fontWeight: '900', letterSpacing: -0.5 },
+  doneTitle: { fontSize: Type.sectionTitle, fontWeight: '900', letterSpacing: -0.5 },
   doneBtn: {
     alignSelf: 'stretch', alignItems: 'center',
     borderRadius: Radius.full, paddingVertical: 14, marginTop: Spacing.lg,
   },
-  doneBtnText: { fontSize: 15.5, fontWeight: '800' },
-  doneBody: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  doneBtnText: { fontSize: Type.callout, fontWeight: '800' },
+  doneBody: { fontSize: Type.bodyLg, textAlign: 'center', lineHeight: 21 },
 });

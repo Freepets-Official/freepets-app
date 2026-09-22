@@ -17,7 +17,7 @@ import { ResultBadge } from '@/components/badge';
 import { GameCardFx } from '@/components/game-card-fx';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { FACILITIES } from '@/data/mock';
 import { type Pet } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
@@ -64,7 +64,7 @@ function NotificationBell({
       <Ionicons name="notifications-outline" size={22} color={p.ink} />
       {count > 0 && (
         <View style={[styles.bellBadge, { backgroundColor: urgent ? p.danger : p.accent, borderColor: p.bg }]}>
-          <Text style={styles.bellBadgeText}>{count > 9 ? '9+' : count}</Text>
+          <Text style={[styles.bellBadgeText, { color: p.onAccent }]}>{count > 9 ? '9+' : count}</Text>
         </View>
       )}
     </Pressable>
@@ -210,8 +210,8 @@ export default function HomeScreen() {
                     <Pressable
                       onPress={() => hideCheck(c.checkId)}
                       style={[styles.histDelete, { backgroundColor: p.danger }]}>
-                      <Ionicons name="trash" size={18} color="#FFFFFF" />
-                      <Text style={styles.histDeleteText}>삭제</Text>
+                      <Ionicons name="trash" size={18} color={p.onAccent} />
+                      <Text style={[styles.histDeleteText, { color: p.onAccent }]}>삭제</Text>
                     </Pressable>
                   )}>
                   <Pressable
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  bellBadgeText: { fontSize: 10, fontWeight: '900', color: '#FFFFFF' },
+  bellBadgeText: { fontSize: Type.micro, fontWeight: '900' },
   // 프리미엄 수집형 카드 — 그라디언트 네임플레이트 + 얇은 테두리 + 깊은 플로팅 그림자
   card: {
     borderRadius: Radius.xl,
@@ -429,12 +429,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     paddingVertical: 56,
   },
-  emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  emptyText: { fontSize: Type.bodyLg, textAlign: 'center', lineHeight: 21 },
   histDelete: {
     justifyContent: 'center', alignItems: 'center', gap: 2,
     width: 76, marginLeft: 8, borderRadius: Radius.md,
   },
-  histDeleteText: { color: '#FFFFFF', fontSize: 11.5, fontWeight: '800' },
+  histDeleteText: { fontSize: Type.caption, fontWeight: '800' },
   stampEntry: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, marginTop: 4,
@@ -444,8 +444,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   stampEntryTexts: { flexShrink: 1, gap: 2 },
-  stampEntryTitle: { fontSize: 13.5, fontWeight: '800' },
-  stampEntryBody: { fontSize: 11.5 },
+  stampEntryTitle: { fontSize: Type.body, fontWeight: '800' },
+  stampEntryBody: { fontSize: Type.caption },
 
   histList: { gap: Spacing.sm },
   histCard: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.lg, gap: 5 },
@@ -455,6 +455,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.sm,
   },
-  histName: { fontSize: 15, fontWeight: '800', letterSpacing: -0.3, flexShrink: 1 },
-  histMeta: { fontSize: 12 },
+  histName: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3, flexShrink: 1 },
+  histMeta: { fontSize: Type.footnote },
 });

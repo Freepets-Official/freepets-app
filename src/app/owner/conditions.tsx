@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { OwnerLoadState } from '@/components/owner-load-state';
 import { Text } from '@/components/text';
 import { ConfidenceBadge } from '@/components/confidence-badge';
-import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { REQUIREMENT_LABEL, type Requirement } from '@/data/types';
 import { useOwnerFacilities } from '@/hooks/use-owner-facilities';
 import { usePalette } from '@/hooks/use-theme';
@@ -166,26 +166,25 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 64 },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.xl, paddingTop: Spacing.sm },
   head: { gap: 6 },
-  eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  title: { fontSize: 26, fontWeight: '900', letterSpacing: -1, lineHeight: 33 },
+  eyebrow: { fontSize: Type.footnote, fontWeight: '800', letterSpacing: 0.5 },
+  title: { fontSize: Type.screenTitle, fontWeight: '900', letterSpacing: -1, lineHeight: 34 },
   status: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' },
-  statusText: { fontSize: 12.5, lineHeight: 18, flexShrink: 1 },
+  statusText: { fontSize: Type.footnote, lineHeight: 18, flexShrink: 1 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.lg, paddingVertical: 10 },
-  toggleLabel: { fontSize: 14.5, fontWeight: '800' },
+  toggleLabel: { fontSize: Type.bodyLg, fontWeight: '800' },
   segment: { flexDirection: 'row', borderRadius: Radius.full, overflow: 'hidden', gap: 2 },
   segmentBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.full },
-  segmentText: { fontSize: 12.5, fontWeight: '800' },
+  segmentText: { fontSize: Type.footnote, fontWeight: '800' },
   field: { gap: 8 },
-  fieldLabel: { fontSize: 14.5, fontWeight: '800' },
+  fieldLabel: { fontSize: Type.bodyLg, fontWeight: '800' },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.lg, paddingVertical: 10 },
-  input: { flex: 1, fontSize: 15, padding: 0 },
-  unit: { fontSize: 13, fontWeight: '700' },
+  input: { flex: 1, fontSize: Type.callout, padding: 0 },
+  unit: { fontSize: Type.body, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1.5, borderRadius: Radius.full, paddingHorizontal: 13, paddingVertical: 8 },
-  chipText: { fontSize: 13, fontWeight: '700' },
-  textarea: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, fontSize: 14.5, minHeight: 96, textAlignVertical: 'top' },
-  err: { fontSize: 12.5, lineHeight: 18, fontWeight: '600' },
+  chipText: { fontSize: Type.body, fontWeight: '700' },
+  textarea: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, fontSize: Type.bodyLg, minHeight: 96, textAlignVertical: 'top' },
+  err: { fontSize: Type.footnote, lineHeight: 18, fontWeight: '600' },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: Radius.full, paddingVertical: 15 },
-  saveText: { fontSize: 15, fontWeight: '800' },
-  empty: { fontSize: 14, textAlign: 'center', padding: 40 },
+  saveText: { fontSize: Type.callout, fontWeight: '800' },
 });

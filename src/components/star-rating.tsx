@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Type } from '@/constants/theme';
 import { Text } from '@/components/text';
 import { usePalette } from '@/hooks/use-theme';
 
@@ -63,6 +64,6 @@ const styles = StyleSheet.create({
   stars: { flexDirection: 'row', gap: 2 },
   inputRow: { gap: 8 },
   inputText: { gap: 1 },
-  inputLabel: { fontSize: 14.5, fontWeight: '800' },
-  inputHint: { fontSize: 12 },
+  inputLabel: { fontSize: Type.bodyLg, fontWeight: '800' },
+  inputHint: { fontSize: Type.footnote },
 });

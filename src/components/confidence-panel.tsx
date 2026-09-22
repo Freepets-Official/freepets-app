@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
 import { ConfidenceBadge } from '@/components/confidence-badge';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
 import { CONFIDENCE_SOURCE_LABEL, freshnessText, type Facility } from '@/data/types';
 import { useCallFacility } from '@/hooks/use-call-facility';
 import { usePalette } from '@/hooks/use-theme';
@@ -126,10 +126,10 @@ export function ConfidencePanel({ facility }: { facility: Facility }) {
 const styles = StyleSheet.create({
   card: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.xl, gap: Spacing.md },
   head: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexWrap: 'wrap' },
-  source: { fontSize: 12.5, fontWeight: '600' },
-  explain: { fontSize: 13.5, lineHeight: 20 },
+  source: { fontSize: Type.footnote, fontWeight: '600' },
+  explain: { fontSize: Type.body, lineHeight: 20 },
   actions: { gap: Spacing.sm, marginTop: 2 },
-  actionsTitle: { fontSize: 11.5, fontWeight: '800', letterSpacing: 0.3 },
+  actionsTitle: { fontSize: Type.caption, fontWeight: '800', letterSpacing: 0.3 },
   action: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -142,6 +142,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 12,
   },
-  actionText: { fontSize: 13.5, fontWeight: '700' },
-  actionError: { fontSize: 12.5, textAlign: 'center', marginTop: 2 },
+  actionText: { fontSize: Type.body, fontWeight: '700' },
+  actionError: { fontSize: Type.footnote, textAlign: 'center', marginTop: 2 },
 });

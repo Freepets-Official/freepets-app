@@ -3,7 +3,7 @@ import { Image, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
 import { TierPaw } from '@/components/tier-paw';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { MAX_LEVEL, TIER_COLOR_HEX, levelProgress, tierLook, tierName } from '@/data/level';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
@@ -122,18 +122,17 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Spacing.lg,
   },
-  tierCircle: { alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
   body: { flex: 1, gap: 7 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  level: { fontSize: 22, lineHeight: 29, fontWeight: '900', letterSpacing: -0.5 },
-  max: { fontSize: 12, marginLeft: 'auto' },
+  level: { fontSize: Type.headline, lineHeight: 29, fontWeight: '900', letterSpacing: -0.5 },
+  max: { fontSize: Type.footnote, marginLeft: 'auto' },
   tierChip: { borderWidth: 1, borderRadius: Radius.full, paddingHorizontal: 9, paddingVertical: 2 },
-  tierText: { fontSize: 11.5, fontWeight: '800' },
+  tierText: { fontSize: Type.caption, fontWeight: '800' },
   track: { height: 7, borderRadius: Radius.full, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: Radius.full },
-  sub: { fontSize: 12 },
+  sub: { fontSize: Type.footnote },
 
-  empty: { fontSize: 13, lineHeight: 19 },
+  empty: { fontSize: Type.body, lineHeight: 19 },
   badgeList: { gap: 8 },
   badge: {
     flexDirection: 'row',
@@ -145,7 +144,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   badgeBody: { flex: 1 },
-  badgeLabel: { fontSize: 14, fontWeight: '800' },
-  badgeDesc: { fontSize: 12, lineHeight: 17, marginTop: 1 },
-  badgeDate: { fontSize: 11 },
+  badgeLabel: { fontSize: Type.bodyLg, fontWeight: '800' },
+  badgeDesc: { fontSize: Type.footnote, lineHeight: 17, marginTop: 1 },
+  badgeDate: { fontSize: Type.caption },
 });

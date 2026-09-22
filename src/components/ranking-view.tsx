@@ -1,13 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
+import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
 import { RegionChips, useRegions } from '@/components/region-chips';
 import { PawBadge } from '@/components/paw-badge';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
 import { formatDistance } from '@/data/mock';
 import { CATEGORY_LABEL, type Category, type RankingItem } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
@@ -197,28 +198,11 @@ export function RankingView({ coords }: { coords: Coords | null }) {
       {!loading && !failed && <Text style={[styles.count, { color: p.muted }]}>{total}곳</Text>}
 
       <View style={styles.list}>
-        {loading && (
-          <View style={styles.state}>
-            <ActivityIndicator color={p.accent} />
-            <Text style={[styles.stateText, { color: p.muted }]}>랭킹을 불러오는 중…</Text>
-          </View>
-        )}
+        {loading && <LoadState kind="loading" />}
 
         {/* 실패와 "결과 없음"은 다른 화면이다 — 실패는 다시 시도가 의미 있지만 0건은 아니다 */}
         {!loading && failed && (
-          <View style={[styles.stateCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
-            <Ionicons name="cloud-offline-outline" size={30} color={p.muted} />
-            <Text style={[styles.stateTitle, { color: p.ink }]}>랭킹을 불러오지 못했어요</Text>
-            <Text style={[styles.stateSub, { color: p.muted }]}>잠시 후 다시 시도해 주세요.</Text>
-            <Pressable
-              onPress={() => setRetryKey((k) => k + 1)}
-              style={({ pressed }) => [
-                styles.retry,
-                { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : 'transparent' },
-              ]}>
-              <Text style={[styles.retryText, { color: p.accent }]}>다시 시도</Text>
-            </Pressable>
-          </View>
+          <LoadState kind="failed" message="랭킹을 불러오지 못했어요." onRetry={() => setRetryKey((k) => k + 1)} />
         )}
 
         {!loading &&
@@ -262,11 +246,14 @@ export function RankingView({ coords }: { coords: Coords | null }) {
           ))}
 
         {!loading && !failed && items.length === 0 && (
-          <Text style={[styles.empty, { color: p.muted }]}>
-            {sidoCode
-              ? `${selectedSido?.sido ?? '이 지역'}에는 아직 발자국 등급을 받은 시설이 없어요.\n다른 지역을 골라보세요.`
-              : '아직 발자국 등급을 받은 시설이 없어요.\n리뷰가 쌓이면 순위가 만들어집니다.'}
-          </Text>
+          <LoadState
+            kind="empty"
+            message={
+              sidoCode
+                ? `${selectedSido?.sido ?? '이 지역'}에는 아직 발자국 등급을 받은 시설이 없어요.\n다른 지역을 골라보세요.`
+                : '아직 발자국 등급을 받은 시설이 없어요.\n리뷰가 쌓이면 순위가 만들어집니다.'
+            }
+          />
         )}
       </View>
     </>
@@ -276,11 +263,11 @@ export function RankingView({ coords }: { coords: Coords | null }) {
 const styles = StyleSheet.create({
   legend: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.lg, gap: 6 },
   legendTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendTitle: { fontSize: 13.5, fontWeight: '800' },
-  legendBody: { fontSize: 12.5, lineHeight: 19 },
+  legendTitle: { fontSize: Type.body, fontWeight: '800' },
+  legendBody: { fontSize: Type.footnote, lineHeight: 19 },
   filterHead: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.sm },
-  filterLabel: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3, marginTop: 2 },
-  filterNote: { fontSize: 11.5, fontWeight: '600' },
+  filterLabel: { fontSize: Type.footnote, fontWeight: '800', letterSpacing: 0.3, marginTop: 2 },
+  filterNote: { fontSize: Type.caption, fontWeight: '600' },
   chips: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.xl },
   customRow: {
     flexDirection: 'row',
@@ -290,30 +277,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 10,
   },
-  customInput: { flex: 1, fontSize: 14.5, padding: 0 },
-  customUnit: { fontSize: 13, fontWeight: '700' },
-  count: { fontSize: 12.5, fontWeight: '700', marginTop: 2 },
+  customInput: { flex: 1, fontSize: Type.bodyLg, padding: 0 },
+  customUnit: { fontSize: Type.body, fontWeight: '700' },
+  count: { fontSize: Type.footnote, fontWeight: '700', marginTop: 2 },
   list: { gap: Spacing.md },
-  state: { alignItems: 'center', gap: Spacing.md, paddingVertical: 48 },
-  stateText: { fontSize: 13.5 },
-  stateCard: {
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    paddingVertical: 32,
-    paddingHorizontal: Spacing.lg,
-  },
-  stateTitle: { fontSize: 15, fontWeight: '800' },
-  stateSub: { fontSize: 12.5 },
-  retry: {
-    marginTop: 6,
-    borderWidth: 1,
-    borderRadius: Radius.full,
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-  },
-  retryText: { fontSize: 13, fontWeight: '800' },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -323,7 +290,7 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
   },
   rank: {
-    fontSize: 20,
+    fontSize: Type.sectionTitle,
     fontWeight: '900',
     fontVariant: ['tabular-nums'],
     width: 26,
@@ -331,8 +298,7 @@ const styles = StyleSheet.create({
   },
   info: { flex: 1, gap: 5 },
   nameRow: { flexDirection: 'row', alignItems: 'baseline', gap: 7 },
-  name: { fontSize: 16, fontWeight: '800', letterSpacing: -0.4, flexShrink: 1 },
-  cat: { fontSize: 11.5, fontWeight: '600' },
-  meta: { fontSize: 11.5, fontVariant: ['tabular-nums'] },
-  empty: { fontSize: 14, textAlign: 'center', lineHeight: 21, paddingVertical: 56 },
+  name: { fontSize: Type.cardTitle, fontWeight: '800', letterSpacing: -0.4, flexShrink: 1 },
+  cat: { fontSize: Type.caption, fontWeight: '600' },
+  meta: { fontSize: Type.caption, fontVariant: ['tabular-nums'] },
 });

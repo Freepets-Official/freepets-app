@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius } from '@/constants/theme';
+import { Radius, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 
 interface ChipProps {
@@ -38,5 +38,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 8,
   },
-  label: { fontSize: 13, fontWeight: '700' },
+  label: { fontSize: Type.body, fontWeight: '700' },
 });

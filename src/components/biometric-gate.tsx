@@ -5,7 +5,7 @@ import { AppState, Platform, Pressable, StyleSheet, View, type AppStateStatus } 
 
 import { Text } from '@/components/text';
 import { AppLogo } from '@/components/app-logo';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -118,8 +118,8 @@ const styles = StyleSheet.create({
     zIndex: 200,
     paddingHorizontal: Spacing.xl,
   },
-  title: { fontSize: 20, lineHeight: 27, fontWeight: '900', letterSpacing: -0.5, marginTop: 10 },
-  sub: { fontSize: 13.5, marginTop: 4, textAlign: 'center' },
+  title: { fontSize: Type.sectionTitle, lineHeight: 27, fontWeight: '900', letterSpacing: -0.5, marginTop: 10 },
+  sub: { fontSize: Type.body, marginTop: 4, textAlign: 'center' },
   btn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -130,5 +130,5 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     marginTop: Spacing.xl,
   },
-  btnText: { fontSize: 15, fontWeight: '800' },
+  btnText: { fontSize: Type.callout, fontWeight: '800' },
 });

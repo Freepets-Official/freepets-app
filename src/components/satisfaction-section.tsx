@@ -5,7 +5,7 @@ import { Text } from '@/components/text';
 import { PetAvatar } from '@/components/pet-avatar';
 import { ScoreSlider } from '@/components/score-slider';
 import { SectionTitle } from '@/components/section-title';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
 import { satisfactionMood } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
@@ -85,16 +85,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: 10,
   },
-  privacyText: { fontSize: 12, fontWeight: '600', flexShrink: 1, lineHeight: 17 },
+  privacyText: { fontSize: Type.footnote, fontWeight: '600', flexShrink: 1, lineHeight: 17 },
   card: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.xl, gap: Spacing.lg },
   petRow: { gap: 8 },
   petHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  petName: { fontSize: 15, fontWeight: '800', flex: 1 },
+  petName: { fontSize: Type.callout, fontWeight: '800', flex: 1 },
   scoreWrap: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  mood: { fontSize: 16 },
-  score: { fontSize: 17, fontWeight: '900', fontVariant: ['tabular-nums'] },
-  unrated: { fontSize: 12.5, fontWeight: '700' },
+  mood: { fontSize: Type.cardTitle },
+  score: { fontSize: Type.sheetTitle, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  unrated: { fontSize: Type.footnote, fontWeight: '700' },
   scale: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  scaleEnd: { fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  scaleMid: { fontSize: 11.5, fontWeight: '600' },
+  scaleEnd: { fontSize: Type.caption, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  scaleMid: { fontSize: Type.caption, fontWeight: '600' },
 });

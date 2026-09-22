@@ -5,8 +5,9 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch,
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { OwnerLoadState } from '@/components/owner-load-state';
+import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
-import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { useOwnerFacilities } from '@/hooks/use-owner-facilities';
 import { usePalette } from '@/hooks/use-theme';
 import { ApiError, ownerApi, type OwnerBenefit } from '@/lib/api';
@@ -126,13 +127,11 @@ export default function BenefitsScreen() {
 
           <View style={styles.list}>
             {failed ? (
-              <Pressable onPress={retry}>
-                <Text style={[styles.emptyList, { color: p.muted }]}>혜택을 불러오지 못했어요. 눌러서 다시 시도</Text>
-              </Pressable>
+              <LoadState kind="failed" message="혜택을 불러오지 못했어요." onRetry={retry} />
             ) : list === null ? (
-              <ActivityIndicator color={p.accent} style={{ paddingVertical: 24 }} />
+              <LoadState kind="loading" />
             ) : list.length === 0 ? (
-              <Text style={[styles.emptyList, { color: p.muted }]}>아직 등록한 혜택이 없어요. 위에서 첫 혜택을 추가해보세요.</Text>
+              <LoadState kind="empty" message="아직 등록한 혜택이 없어요. 위에서 첫 혜택을 추가해보세요." />
             ) : (
               list.map((b) => (
                 <View key={b.benefitId} style={[styles.item, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
@@ -159,20 +158,18 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 64 },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.xl, paddingTop: Spacing.sm },
   head: { gap: 4 },
-  eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
-  title: { fontSize: 26, fontWeight: '900', letterSpacing: -1, lineHeight: 33 },
-  sub: { fontSize: 13, lineHeight: 20, marginTop: 4 },
+  eyebrow: { fontSize: Type.footnote, fontWeight: '800', letterSpacing: 0.5 },
+  title: { fontSize: Type.screenTitle, fontWeight: '900', letterSpacing: -1, lineHeight: 34 },
+  sub: { fontSize: Type.body, lineHeight: 20, marginTop: 4 },
   addCard: { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: Spacing.sm },
-  input: { borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.lg, paddingVertical: 12, fontSize: 14.5 },
+  input: { borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.lg, paddingVertical: 12, fontSize: Type.bodyLg },
   addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: Radius.full, paddingVertical: 12 },
-  addBtnText: { fontSize: 14, fontWeight: '800' },
-  err: { fontSize: 12.5, lineHeight: 18, fontWeight: '600' },
+  addBtnText: { fontSize: Type.bodyLg, fontWeight: '800' },
+  err: { fontSize: Type.footnote, lineHeight: 18, fontWeight: '600' },
   list: { gap: Spacing.sm },
   item: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg },
   itemBody: { flex: 1, gap: 2 },
-  itemTitle: { fontSize: 14.5, fontWeight: '800' },
-  itemDetail: { fontSize: 12.5, lineHeight: 18 },
+  itemTitle: { fontSize: Type.bodyLg, fontWeight: '800' },
+  itemDetail: { fontSize: Type.footnote, lineHeight: 18 },
   del: { padding: 4 },
-  emptyList: { fontSize: 13, lineHeight: 20, textAlign: 'center', paddingVertical: 24 },
-  empty: { fontSize: 14, textAlign: 'center', padding: 40 },
 });

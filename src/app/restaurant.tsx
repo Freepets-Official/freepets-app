@@ -5,11 +5,12 @@ import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, TextInpu
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
 import { BusinessVerify } from '@/components/business-verify';
 import { CertificatePicker } from '@/components/certificate-picker';
 import { ConfidenceBadge } from '@/components/confidence-badge';
-import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { formatDistance } from '@/data/mock';
 import {
   decisionVerdict,
@@ -158,15 +159,16 @@ export default function RestaurantScreen() {
                 {picker.loading && <ActivityIndicator size="small" color={p.muted} />}
               </View>
               {picker.failed ? (
-                <Pressable onPress={picker.retry}>
-                  <Text style={[styles.empty, { color: p.muted }]}>음식점을 불러오지 못했어요. 눌러서 다시 시도</Text>
-                </Pressable>
+                <LoadState kind="failed" message="음식점을 불러오지 못했어요." onRetry={picker.retry} />
               ) : !picker.loading && candidates.length === 0 ? (
-                <Text style={[styles.empty, { color: p.muted }]}>
-                  {picker.query.trim()
-                    ? '그 이름의 식당을 못 찾았어요. 관광공사에 등록된 이름으로 찾아보세요.'
-                    : '주변 30km에 등록할 음식점이 없어요. 이름을 입력하면 전국에서 찾아요.'}
-                </Text>
+                <LoadState
+                  kind="empty"
+                  message={
+                    picker.query.trim()
+                      ? '그 이름의 식당을 못 찾았어요. 관광공사에 등록된 이름으로 찾아보세요.'
+                      : '주변 30km에 등록할 음식점이 없어요. 이름을 입력하면 전국에서 찾아요.'
+                  }
+                />
               ) : (
                 candidates.map((f) => (
                   <Pressable
@@ -419,7 +421,7 @@ function StepTitle({ p, n, label, facility }: { p: any; n: number; label: string
     <View style={{ gap: 2 }}>
       <View style={styles.stepTitleRow}>
         <View style={[styles.stepNum, { backgroundColor: p.accent }]}>
-          <Text style={styles.stepNumText}>{n}</Text>
+          <Text style={[styles.stepNumText, { color: p.onAccent }]}>{n}</Text>
         </View>
         <Text style={[styles.stepTitleText, { color: p.ink }]}>{label}</Text>
       </View>
@@ -470,13 +472,12 @@ const styles = StyleSheet.create({
   progress: { flexDirection: 'row', gap: 5, alignItems: 'center' },
   progressDot: { height: 4, borderRadius: Radius.full, minWidth: 20 },
   head: { gap: 4 },
-  eyebrow: { fontSize: 11.5, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase' },
-  title: { fontSize: 25, fontWeight: '900', letterSpacing: -1, lineHeight: 33 },
-  sub: { fontSize: 13.5, lineHeight: 21, marginTop: 4 },
+  eyebrow: { fontSize: Type.caption, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase' },
+  title: { fontSize: Type.screenTitle, fontWeight: '900', letterSpacing: -1, lineHeight: 34 },
+  sub: { fontSize: Type.body, lineHeight: 21, marginTop: 4 },
   block: { gap: Spacing.md },
-  blockLabel: { fontSize: 15, fontWeight: '800' },
-  hint: { fontSize: 13, lineHeight: 19 },
-  empty: { fontSize: 13.5, paddingVertical: Spacing.lg, textAlign: 'center' },
+  blockLabel: { fontSize: Type.callout, fontWeight: '800' },
+  hint: { fontSize: Type.body, lineHeight: 19 },
 
   searchRow: {
     flexDirection: 'row',
@@ -487,7 +488,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 12,
   },
-  searchInput: { flex: 1, fontSize: 15, padding: 0 },
+  searchInput: { flex: 1, fontSize: Type.callout, padding: 0 },
   pickRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -496,21 +497,21 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Spacing.lg,
   },
-  pickName: { fontSize: 15.5, fontWeight: '800' },
-  pickMeta: { fontSize: 12, marginTop: 2 },
+  pickName: { fontSize: Type.callout, fontWeight: '800' },
+  pickMeta: { fontSize: Type.footnote, marginTop: 2 },
 
   stepTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   stepNum: { width: 22, height: 22, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
-  stepNumText: { fontSize: 12, fontWeight: '900', color: '#FFFFFF' },
-  stepTitleText: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
-  stepFacility: { fontSize: 12.5, marginLeft: 30 },
+  stepNumText: { fontSize: Type.footnote, fontWeight: '900' },
+  stepTitleText: { fontSize: Type.sheetTitle, fontWeight: '900', letterSpacing: -0.5 },
+  stepFacility: { fontSize: Type.footnote, marginLeft: 30 },
 
   qCard: { borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, gap: 6 },
-  qText: { fontSize: 14.5, fontWeight: '700', lineHeight: 20 },
-  qHint: { fontSize: 12, lineHeight: 17 },
+  qText: { fontSize: Type.bodyLg, fontWeight: '700', lineHeight: 20 },
+  qHint: { fontSize: Type.footnote, lineHeight: 17 },
   yn: { flexDirection: 'row', gap: Spacing.sm, marginTop: 4 },
   ynBtn: { flex: 1, alignItems: 'center', borderWidth: 1.5, borderRadius: Radius.full, paddingVertical: 10 },
-  ynText: { fontSize: 14, fontWeight: '800' },
+  ynText: { fontSize: Type.bodyLg, fontWeight: '800' },
 
   verdictCard: {
     flexDirection: 'row',
@@ -520,7 +521,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     padding: Spacing.lg,
   },
-  verdictText: { fontSize: 13, lineHeight: 19, flex: 1 },
+  verdictText: { fontSize: Type.body, lineHeight: 19, flex: 1 },
 
   reqRow: {
     flexDirection: 'row',
@@ -531,10 +532,10 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
   },
   reqTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  reqLabel: { fontSize: 14.5, fontWeight: '800', flexShrink: 1 },
+  reqLabel: { fontSize: Type.bodyLg, fontWeight: '800', flexShrink: 1 },
   reqTag: { borderRadius: Radius.full, paddingHorizontal: 8, paddingVertical: 2 },
-  reqTagText: { fontSize: 10.5, fontWeight: '800' },
-  reqHelp: { fontSize: 12, lineHeight: 17, marginTop: 2 },
+  reqTagText: { fontSize: Type.micro, fontWeight: '800' },
+  reqHelp: { fontSize: Type.footnote, lineHeight: 17, marginTop: 2 },
   countBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -543,18 +544,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 12,
   },
-  countText: { fontSize: 13.5, fontWeight: '800' },
+  countText: { fontSize: Type.body, fontWeight: '800' },
 
   noticeCard: { borderWidth: 1.5, borderRadius: Radius.lg, padding: Spacing.lg, gap: 8 },
-  noticeTitle: { fontSize: 15, fontWeight: '900', letterSpacing: -0.3 },
-  noticeBody: { fontSize: 13, lineHeight: 20 },
+  noticeTitle: { fontSize: Type.callout, fontWeight: '900', letterSpacing: -0.3 },
+  noticeBody: { fontSize: Type.body, lineHeight: 20 },
   missingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  missingText: { fontSize: 13, lineHeight: 19, flexShrink: 1 },
+  missingText: { fontSize: Type.body, lineHeight: 19, flexShrink: 1 },
   stepList: { gap: 8, marginTop: 4 },
   guideStep: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   guideNum: { width: 20, height: 20, borderRadius: Radius.full, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  guideNumText: { fontSize: 11, fontWeight: '900' },
-  guideText: { fontSize: 13, lineHeight: 19, flexShrink: 1 },
+  guideNumText: { fontSize: Type.caption, fontWeight: '900' },
+  guideText: { fontSize: Type.body, lineHeight: 19, flexShrink: 1 },
   linkBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -564,8 +565,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingVertical: 13,
   },
-  linkText: { fontSize: 13.5, fontWeight: '800' },
-  disclaimer: { fontSize: 11.5, lineHeight: 17 },
+  linkText: { fontSize: Type.body, fontWeight: '800' },
+  disclaimer: { fontSize: Type.caption, lineHeight: 17 },
 
   primaryBtn: {
     alignItems: 'center',
@@ -574,16 +575,16 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     marginTop: 2,
   },
-  primaryBtnText: { fontSize: 15, fontWeight: '800' },
+  primaryBtnText: { fontSize: Type.callout, fontWeight: '800' },
 
   doneWrap: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xxl },
   doneIcon: { width: 74, height: 74, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
-  doneTitle: { fontSize: 21, lineHeight: 28, fontWeight: '900', letterSpacing: -0.5 },
-  doneBody: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  doneTitle: { fontSize: Type.sectionTitle, lineHeight: 27, fontWeight: '900', letterSpacing: -0.5 },
+  doneBody: { fontSize: Type.bodyLg, textAlign: 'center', lineHeight: 21 },
   doneCard: { width: '100%', borderRadius: Radius.lg, borderWidth: 1.5, padding: Spacing.xl, gap: 8, marginTop: 4 },
   doneCardHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexWrap: 'wrap' },
-  doneCardSource: { fontSize: 12.5, fontWeight: '600' },
-  doneCondition: { fontSize: 14, lineHeight: 21 },
+  doneCardSource: { fontSize: Type.footnote, fontWeight: '600' },
+  doneCondition: { fontSize: Type.bodyLg, lineHeight: 21 },
   doneBtn: { width: '100%', alignItems: 'center', borderRadius: Radius.full, paddingVertical: 16, marginTop: 4 },
-  doneBtnText: { fontSize: 15.5, fontWeight: '800' },
+  doneBtnText: { fontSize: Type.callout, fontWeight: '800' },
 });

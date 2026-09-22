@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius } from '@/constants/theme';
+import { Radius, Type } from '@/constants/theme';
 import { PAW_MIN_REVIEWS, type PawGrade } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 
@@ -63,5 +63,5 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     alignSelf: 'flex-start',
   },
-  pendingText: { fontSize: 11, fontWeight: '700' },
+  pendingText: { fontSize: Type.caption, fontWeight: '700' },
 });

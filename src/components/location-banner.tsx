@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 
 type Status = 'undetermined' | 'loading' | 'granted' | 'denied';
@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   text: { flex: 1, gap: 1 },
-  title: { fontSize: 14, fontWeight: '800', letterSpacing: -0.3 },
-  sub: { fontSize: 12, lineHeight: 16 },
-  note: { fontSize: 12.5, fontWeight: '600', lineHeight: 17, flexShrink: 1 },
+  title: { fontSize: Type.bodyLg, fontWeight: '800', letterSpacing: -0.3 },
+  sub: { fontSize: Type.footnote, lineHeight: 16 },
+  note: { fontSize: Type.footnote, fontWeight: '600', lineHeight: 17, flexShrink: 1 },
 });

@@ -29,6 +29,8 @@ export const Palette = {
     dangerSoft: '#FCE7E6',
     unknown: '#8C8591',
     unknownSoft: '#F3EEF1',
+    // 달력의 토요일. 일요일은 danger(빨강)를 쓰는데 토요일만 팔레트 밖 값이 박혀 있었다
+    saturday: '#4C8DF5',
   },
   // 다크 테마 — 웜 다크(살짝 보라·핑크 기운) 그라운드에 같은 로즈핑크 액센트.
   // 의미색은 어두운 배경에서 읽히도록 톤을 올렸다.
@@ -52,6 +54,8 @@ export const Palette = {
     dangerSoft: '#3A1D1C',
     unknown: '#9C94A4',
     unknownSoft: '#29232F',
+    // 라이트보다 밝게 — danger가 다크에서 밝아지는 것과 짝을 맞춘다
+    saturday: '#6FA3F7',
   },
 } as const;
 
@@ -59,6 +63,46 @@ export const Palette = {
 export type ThemeMode = 'light' | 'dark' | 'auto';
 
 export type PaletteColors = { [K in keyof typeof Palette.light]: string };
+
+/**
+ * 글자 크기 사다리.
+ *
+ * 토큰을 만들기 전 앱에는 **30가지 크기**가 섞여 있었다. 11.5·12·12.5·13·13.5·14·14.5·15가
+ * 각각 40~78회씩 쓰여, 3.5pt 폭에 여덟 단계가 들어차 있었다 — 눈으로 구분되지 않는 차이를
+ * 화면마다 다르게 고른 결과지 의도가 아니었다.
+ *
+ * 그래서 **각 구간에서 가장 많이 쓰이던 값**을 대표로 뽑아 사다리를 만들었다. 가장 많은 쪽을
+ * 고른 이유는 실제로 바뀌는 자리를 최소로 줄이기 위해서다.
+ *
+ * 명함·여권 카드(`pet-id-card`, `passport-card`)와 스플래시·로고는 이 사다리를 쓰지 않는다.
+ * 실제 카드 비율에 맞춰 픽셀로 맞춰 둔 고정 디자인이라, 사다리에 맞추면 도리어 깨진다.
+ */
+export const Type = {
+  /** 칩·배지 안의 아주 작은 글씨 */
+  micro: 10.5,
+  /** 보조 설명·메타 정보 */
+  caption: 11.5,
+  /** 각주·부연 */
+  footnote: 12.5,
+  /** 본문 */
+  body: 13,
+  /** 강조 본문·목록 항목 */
+  bodyLg: 14,
+  /** 버튼·입력 글씨 */
+  callout: 15,
+  /** 카드 제목 */
+  cardTitle: 16,
+  /** 바텀시트 제목·목록 이름 */
+  sheetTitle: 17,
+  /** 섹션 제목 */
+  sectionTitle: 20,
+  /** 완료 화면 제목·큰 수치 */
+  headline: 22,
+  /** 일반 화면 대제목 */
+  screenTitle: 26,
+  /** 탭 랜딩 대제목 — `Screen`의 title. 푸시된 화면보다 한 단 크게 두는 의도된 위계다 */
+  landingTitle: 30,
+} as const;
 
 export const Radius = { sm: 12, md: 16, lg: 20, xl: 26, full: 999 } as const;
 

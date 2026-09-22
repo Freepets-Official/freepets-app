@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { hasStamp } from '@/data/stamps';
 import { ON_SITE_RADIUS_M, distanceMeters, getCurrentLocation } from '@/lib/location';
 import { usePalette } from '@/hooks/use-theme';
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   icon: { width: 38, height: 38, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
   texts: { flexShrink: 1, gap: 2 },
-  title: { fontSize: 13.5, fontWeight: '800' },
-  body: { fontSize: 11.5 },
-  message: { fontSize: 11.5, paddingHorizontal: 2 },
+  title: { fontSize: Type.body, fontWeight: '800' },
+  body: { fontSize: Type.caption },
+  message: { fontSize: Type.caption, paddingHorizontal: 2 },
 });

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { sinceText } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { DENIAL_REASON_LABEL, useAppStore, type Report } from '@/store/app-store';
@@ -93,18 +93,18 @@ const styles = StyleSheet.create({
   },
   headRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.md },
   body: { flex: 1, gap: 3 },
-  title: { fontSize: 14, fontWeight: '800', letterSpacing: -0.3 },
-  detail: { fontSize: 12.5, lineHeight: 18 },
+  title: { fontSize: Type.bodyLg, fontWeight: '800', letterSpacing: -0.3 },
+  detail: { fontSize: Type.footnote, lineHeight: 18 },
   toggle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     alignSelf: 'flex-start',
   },
-  toggleText: { fontSize: 12.5, fontWeight: '800' },
+  toggleText: { fontSize: Type.footnote, fontWeight: '800' },
   list: { gap: 5, paddingLeft: 2 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  listText: { fontSize: 12.5, fontWeight: '600', flexShrink: 1 },
+  listText: { fontSize: Type.footnote, fontWeight: '600', flexShrink: 1 },
   compact: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  compactText: { fontSize: 11.5, fontWeight: '700', flexShrink: 1 },
+  compactText: { fontSize: Type.caption, fontWeight: '700', flexShrink: 1 },
 });

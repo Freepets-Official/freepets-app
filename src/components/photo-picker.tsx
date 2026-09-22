@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/components/text';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
 
 /**
@@ -73,7 +73,7 @@ export function PhotoPicker({
 const styles = StyleSheet.create({
   buttons: { flexDirection: 'row', gap: Spacing.sm },
   btn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderRadius: Radius.md, paddingVertical: 12 },
-  btnText: { fontSize: 13.5, fontWeight: '700' },
+  btnText: { fontSize: Type.body, fontWeight: '700' },
   preview: { borderWidth: 1, borderRadius: Radius.md, overflow: 'hidden' },
   image: { width: '100%', height: '100%' },
   remove: { position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },

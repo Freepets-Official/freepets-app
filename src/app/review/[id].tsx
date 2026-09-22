@@ -8,7 +8,7 @@ import { PhotoPicker } from '@/components/photo-picker';
 import { Text } from '@/components/text';
 import { Screen } from '@/components/screen';
 import { StarInput } from '@/components/star-rating';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
 import { PET_KIND_LABEL, REVIEW_TAG_LABEL, type ReviewTag } from '@/data/types';
 import { ApiError } from '@/lib/api';
 import { haptic } from '@/lib/haptics';
@@ -271,17 +271,17 @@ export default function ReviewWriteScreen() {
 
 const styles = StyleSheet.create({
   head: { gap: 4, paddingTop: Spacing.sm },
-  eyebrow: { fontSize: 11.5, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase' },
-  title: { fontSize: 26, lineHeight: 35, fontWeight: '900', letterSpacing: -1 },
-  sub: { fontSize: 13.5, lineHeight: 20, marginTop: 2 },
+  eyebrow: { fontSize: Type.caption, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase' },
+  title: { fontSize: Type.screenTitle, lineHeight: 34, fontWeight: '900', letterSpacing: -1 },
+  sub: { fontSize: Type.body, lineHeight: 20, marginTop: 2 },
   card: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.xl, gap: Spacing.lg },
   divider: { height: 1 },
   block: { gap: 8 },
-  blockLabel: { fontSize: 15, fontWeight: '800' },
-  blockHint: { fontSize: 12.5, marginTop: -4 },
+  blockLabel: { fontSize: Type.callout, fontWeight: '800' },
+  blockHint: { fontSize: Type.footnote, marginTop: -4 },
   tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   tag: { borderWidth: 1, borderRadius: Radius.full, paddingHorizontal: 13, paddingVertical: 7 },
-  tagText: { fontSize: 12.5, fontWeight: '700' },
+  tagText: { fontSize: Type.footnote, fontWeight: '700' },
   discloseRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -292,18 +292,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginTop: 4,
   },
-  discloseLabel: { fontSize: 14, fontWeight: '800' },
-  discloseSub: { fontSize: 12, lineHeight: 17, marginTop: 2 },
+  discloseLabel: { fontSize: Type.bodyLg, fontWeight: '800' },
+  discloseSub: { fontSize: Type.footnote, lineHeight: 17, marginTop: 2 },
   textarea: {
     borderWidth: 1,
     borderRadius: Radius.md,
     padding: Spacing.lg,
-    fontSize: 14.5,
+    fontSize: Type.bodyLg,
     minHeight: 100,
     textAlignVertical: 'top',
   },
-  error: { fontSize: 13, fontWeight: '700' },
-  existingPhoto: { height: 140, borderRadius: 12, overflow: 'hidden' },
+  error: { fontSize: Type.body, fontWeight: '700' },
+  existingPhoto: { height: 140, borderRadius: Radius.sm, overflow: 'hidden' },
   existingImage: { width: '100%', height: '100%' },
   submit: {
     flexDirection: 'row',
@@ -313,5 +313,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingVertical: 16,
   },
-  submitLabel: { fontSize: 15.5, fontWeight: '800' },
+  submitLabel: { fontSize: Type.callout, fontWeight: '800' },
 });

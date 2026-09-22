@@ -9,7 +9,7 @@ import { Text } from '@/components/text';
 import { BusinessVerify } from '@/components/business-verify';
 import { CertificatePicker } from '@/components/certificate-picker';
 import { ConfidenceBadge } from '@/components/confidence-badge';
-import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { formatDistance } from '@/data/mock';
 import { CATEGORY_LABEL, REQUIREMENT_LABEL, type Requirement } from '@/data/types';
 import { useFacilityPicker } from '@/hooks/use-facility-picker';
@@ -429,9 +429,9 @@ function StepLabel({ n, label, done }: { n: number; label: string; done: boolean
     <View style={styles.stepLabel}>
       <View style={[styles.stepNum, { backgroundColor: done ? p.success : p.accent }]}>
         {done ? (
-          <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+          <Ionicons name="checkmark" size={13} color={p.onAccent} />
         ) : (
-          <Text style={styles.stepNumText}>{n}</Text>
+          <Text style={[styles.stepNumText, { color: p.onAccent }]}>{n}</Text>
         )}
       </View>
       <Text style={[styles.stepText, { color: p.ink }]}>{label}</Text>
@@ -441,20 +441,20 @@ function StepLabel({ n, label, done }: { n: number; label: string; done: boolean
 
 const styles = StyleSheet.create({
   newFacility: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed', borderRadius: Radius.md, paddingVertical: 12, marginTop: 4 },
-  newFacilityText: { fontSize: 13, fontWeight: '800' },
+  newFacilityText: { fontSize: Type.body, fontWeight: '800' },
   safe: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 64, alignItems: 'center' },
   inner: { width: '100%', maxWidth: MaxContentWidth, gap: Spacing.xl, paddingTop: Spacing.sm },
   head: { gap: 4 },
-  eyebrow: { fontSize: 11.5, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase' },
-  title: { fontSize: 26, fontWeight: '900', letterSpacing: -1, lineHeight: 34 },
-  sub: { fontSize: 13.5, lineHeight: 20, marginTop: 4 },
+  eyebrow: { fontSize: Type.caption, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase' },
+  title: { fontSize: Type.screenTitle, fontWeight: '900', letterSpacing: -1, lineHeight: 34 },
+  sub: { fontSize: Type.body, lineHeight: 20, marginTop: 4 },
 
   stepBlock: { gap: Spacing.sm },
   stepLabel: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
   stepNum: { width: 22, height: 22, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
-  stepNumText: { fontSize: 12, fontWeight: '900', color: '#FFFFFF' },
-  stepText: { fontSize: 15.5, fontWeight: '800', letterSpacing: -0.3 },
+  stepNumText: { fontSize: Type.footnote, fontWeight: '900' },
+  stepText: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
 
   inputRow: {
     flexDirection: 'row',
@@ -465,8 +465,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 13,
   },
-  input: { flex: 1, fontSize: 15, padding: 0 },
-  unit: { fontSize: 14, fontWeight: '700' },
+  input: { flex: 1, fontSize: Type.callout, padding: 0 },
+  unit: { fontSize: Type.bodyLg, fontWeight: '700' },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -475,9 +475,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingVertical: 15,
   },
-  actionBtnText: { fontSize: 15, fontWeight: '800' },
-  hint: { fontSize: 11.5, lineHeight: 17 },
-  err: { fontSize: 12.5, fontWeight: '700' },
+  actionBtnText: { fontSize: Type.callout, fontWeight: '800' },
+  hint: { fontSize: Type.caption, lineHeight: 17 },
+  err: { fontSize: Type.footnote, fontWeight: '700' },
 
   verifiedBox: {
     flexDirection: 'row',
@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 13,
   },
-  verifiedText: { fontSize: 13.5, fontWeight: '700' },
+  verifiedText: { fontSize: Type.body, fontWeight: '700' },
 
   pickedRow: {
     flexDirection: 'row',
@@ -498,9 +498,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     padding: Spacing.lg,
   },
-  pickedName: { fontSize: 15, fontWeight: '800' },
-  pickedMeta: { fontSize: 12, marginTop: 2 },
-  change: { fontSize: 13, fontWeight: '800' },
+  pickedName: { fontSize: Type.callout, fontWeight: '800' },
+  pickedMeta: { fontSize: Type.footnote, marginTop: 2 },
+  change: { fontSize: Type.body, fontWeight: '800' },
   candidates: { gap: Spacing.sm },
   // 테두리 색은 쓰는 쪽에서 팔레트로 넣는다 — 여기 borderColor를 비워두면 RN이 검정을 쓴다
   candidate: {
@@ -512,8 +512,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 12,
   },
-  candName: { fontSize: 14.5, fontWeight: '700' },
-  candMeta: { fontSize: 12, marginTop: 1 },
+  candName: { fontSize: Type.bodyLg, fontWeight: '700' },
+  candMeta: { fontSize: Type.footnote, marginTop: 1 },
 
   toggleRow: {
     flexDirection: 'row',
@@ -524,13 +524,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 10,
   },
-  toggleLabel: { fontSize: 14.5, fontWeight: '700' },
+  toggleLabel: { fontSize: Type.bodyLg, fontWeight: '700' },
   segment: { flexDirection: 'row', borderRadius: Radius.full, overflow: 'hidden' },
   segmentBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: Radius.full },
-  segmentText: { fontSize: 13.5, fontWeight: '800' },
+  segmentText: { fontSize: Type.body, fontWeight: '800' },
 
   field: { gap: 7 },
-  fieldLabel: { fontSize: 14, fontWeight: '800' },
+  fieldLabel: { fontSize: Type.bodyLg, fontWeight: '800' },
   reqChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   reqChip: {
     flexDirection: 'row',
@@ -541,20 +541,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 8,
   },
-  reqChipText: { fontSize: 13, fontWeight: '700' },
+  reqChipText: { fontSize: Type.body, fontWeight: '700' },
   textarea: {
     borderWidth: 1,
     borderRadius: Radius.md,
     padding: Spacing.lg,
-    fontSize: 14.5,
+    fontSize: Type.bodyLg,
     minHeight: 92,
     textAlignVertical: 'top',
   },
 
   doneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md, padding: Spacing.xl },
   doneIcon: { width: 76, height: 76, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
-  doneTitle: { fontSize: 21, lineHeight: 28, fontWeight: '900', letterSpacing: -0.5 },
-  doneBody: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  doneTitle: { fontSize: Type.sectionTitle, lineHeight: 27, fontWeight: '900', letterSpacing: -0.5 },
+  doneBody: { fontSize: Type.bodyLg, textAlign: 'center', lineHeight: 21 },
   doneCard: {
     width: '100%',
     maxWidth: MaxContentWidth,
@@ -565,8 +565,8 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   doneCardHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexWrap: 'wrap' },
-  doneCardSource: { fontSize: 12.5, fontWeight: '600' },
-  doneCondition: { fontSize: 14.5, lineHeight: 21 },
+  doneCardSource: { fontSize: Type.footnote, fontWeight: '600' },
+  doneCondition: { fontSize: Type.bodyLg, lineHeight: 21 },
   doneBtn: {
     width: '100%',
     maxWidth: MaxContentWidth,
@@ -575,7 +575,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     marginTop: Spacing.sm,
   },
-  doneBtnText: { fontSize: 15.5, fontWeight: '800' },
+  doneBtnText: { fontSize: Type.callout, fontWeight: '800' },
   doneSecondary: { alignItems: 'center', paddingVertical: 12, marginTop: 2 },
-  doneSecondaryText: { fontSize: 14, fontWeight: '800' },
+  doneSecondaryText: { fontSize: Type.bodyLg, fontWeight: '800' },
 });

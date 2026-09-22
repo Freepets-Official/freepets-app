@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
-import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { sinceText } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { DENIAL_REASON_LABEL, useAppStore } from '@/store/app-store';
@@ -56,7 +56,7 @@ export default function NotificationsScreen() {
                 { backgroundColor: p.danger, opacity: pressed ? 0.92 : 1 },
               ]}>
               <View style={styles.bell}>
-                <Ionicons name="notifications" size={18} color="#FFFFFF" />
+                <Ionicons name="notifications" size={18} color={p.onAccent} />
               </View>
               <View style={styles.cardText}>
                 <View style={styles.denialTitleRow}>
@@ -68,7 +68,7 @@ export default function NotificationsScreen() {
                   {report.reason ? ` · ${DENIAL_REASON_LABEL[report.reason]}` : ''} — 방문 전 확인하세요
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+              <Ionicons name="chevron-forward" size={20} color={p.onAccent} />
             </Pressable>
           ))}
 
@@ -111,10 +111,10 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: Spacing.xl, paddingBottom: 48 },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.md, paddingTop: Spacing.sm },
   head: { gap: 4, paddingBottom: Spacing.xs },
-  title: { fontSize: 26, lineHeight: 35, fontWeight: '900', letterSpacing: -1 },
-  sub: { fontSize: 13.5, lineHeight: 20 },
+  title: { fontSize: Type.screenTitle, lineHeight: 34, fontWeight: '900', letterSpacing: -1 },
+  sub: { fontSize: Type.body, lineHeight: 20 },
   empty: { alignItems: 'center', gap: Spacing.md, paddingVertical: 72 },
-  emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  emptyText: { fontSize: Type.bodyLg, textAlign: 'center', lineHeight: 21 },
 
   denialCard: {
     flexDirection: 'row',
@@ -133,8 +133,14 @@ const styles = StyleSheet.create({
   },
   cardText: { flex: 1, gap: 3 },
   denialTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  /**
+   * 아래 흰색 세 줄은 팔레트 토큰을 쓰지 않는다.
+   *
+   * 거부 알림 카드는 dangerSolid로 꽉 채운 면이라 글씨가 양 테마에서 늘 흰색이고,
+   * 0.25·0.92 알파 변형이 같이 쓰인다. 알파까지 토큰으로 만들 수는 없어 한 벌로 둔다.
+   */
   denialLabel: {
-    fontSize: 10.5,
+    fontSize: Type.micro,
     fontWeight: '900',
     color: '#FFFFFF',
     backgroundColor: 'rgba(255,255,255,0.25)',
@@ -143,8 +149,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     overflow: 'hidden',
   },
-  denialTitle: { fontSize: 14.5, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
-  denialBody: { fontSize: 12.5, lineHeight: 18, color: 'rgba(255,255,255,0.92)' },
+  denialTitle: { fontSize: Type.bodyLg, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.3 },
+  denialBody: { fontSize: Type.footnote, lineHeight: 18, color: 'rgba(255,255,255,0.92)' },
 
   alertCard: {
     flexDirection: 'row',
@@ -161,6 +167,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  alertTitle: { fontSize: 14.5, fontWeight: '800', letterSpacing: -0.3 },
-  alertBody: { fontSize: 12.5, lineHeight: 18 },
+  alertTitle: { fontSize: Type.bodyLg, fontWeight: '800', letterSpacing: -0.3 },
+  alertBody: { fontSize: Type.footnote, lineHeight: 18 },
 });

@@ -10,7 +10,7 @@ import { RankingView } from '@/components/ranking-view';
 import { RegionChips } from '@/components/region-chips';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
-import { Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { CATEGORY_LABEL, type Category, type Facility } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { facilitiesApi } from '@/lib/api';
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     paddingVertical: 9,
   },
-  segmentLabel: { fontSize: 13.5, fontWeight: '800', letterSpacing: -0.2 },
+  segmentLabel: { fontSize: Type.body, fontWeight: '800', letterSpacing: -0.2 },
   search: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 12,
   },
-  searchInput: { flex: 1, fontSize: 15, padding: 0 },
+  searchInput: { flex: 1, fontSize: Type.callout, padding: 0 },
   chips: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.xl },
   list: { gap: Spacing.md },
   courseCta: {
@@ -410,8 +410,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   courseText: { flex: 1, gap: 2 },
-  courseTitle: { fontSize: 15, fontWeight: '800', letterSpacing: -0.3 },
-  courseBody: { fontSize: 12, lineHeight: 17 },
+  courseTitle: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
+  courseBody: { fontSize: Type.footnote, lineHeight: 17 },
   regionHint: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -421,9 +421,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: 9,
   },
-  regionHintText: { flex: 1, fontSize: 12.5, fontWeight: '700' },
+  regionHintText: { flex: 1, fontSize: Type.footnote, fontWeight: '700' },
   empty: { alignItems: 'center', gap: Spacing.md, paddingVertical: 56 },
-  emptyText: { fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  emptyText: { fontSize: Type.bodyLg, textAlign: 'center', lineHeight: 21 },
   retry: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -434,5 +434,5 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     marginTop: 4,
   },
-  retryText: { fontSize: 13.5, fontWeight: '800' },
+  retryText: { fontSize: Type.body, fontWeight: '800' },
 });
