@@ -65,6 +65,7 @@ export default function CourseScreen() {
     setLastCoords,
     restoring,
     session,
+    refreshGamification,
   } = useAppStore();
 
   const [selectedPetIds, setSelectedPetIds] = useState<number[]>(pets.map((x) => x.petId));
@@ -412,6 +413,9 @@ export default function CourseScreen() {
         text: next ? `'${course.name}'을(를) 공개했어요` : `'${course.name}'을(를) 비공개로 바꿨어요`,
         failed: false,
       });
+      // 공개로 바꾼 것만 XP가 붙는다(20 + 스톱 수 × 5, 코스당 평생 1회). 비공개로 되돌려도
+      // 회수되지 않으니 그때는 다시 물을 이유가 없다.
+      if (next) refreshGamification();
       // 둘러보기를 다시 부르지 않는다. 내 코스는 그 목록에서 걸러지므로 바뀔 게 없고,
       // 부르면 늦게 온 응답이 새 목록을 덮는 경합만 생긴다.
     } catch (e) {

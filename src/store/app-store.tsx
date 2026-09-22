@@ -435,7 +435,9 @@ interface AppStore {
   /** 레벨업 알림 on/off. 실패하면 false를 돌려주고 화면 값도 원래대로 되돌린다 */
   setLevelUpNotification: (enabled: boolean) => Promise<boolean>;
   /** 방금 감지한 레벨업·새 배지. 토스트가 잠깐 보여주고 지운다 */
-  gamificationNews: { kind: 'level' | 'badge'; text: string } | null;
+  gamificationNews: { kind: 'level' | 'badge' | 'xp'; text: string } | null;
+  /** XP를 주는 행동 뒤에 레벨·배지·경험치를 다시 받아온다. 화면을 막지 않는다 */
+  refreshGamification: () => void;
   dismissGamificationNews: () => void;
 
   /** 시설 조회 — 서버 검색결과 캐시 우선, 없으면 목데이터 */
@@ -979,6 +981,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       .sort((a, b) => a.dday - b.dday);
   }, [pets]);
 
+  /**
+   * XP 재조회를 부르는 손잡이.
+   *
+   * 실제 함수(`refreshGamification`)는 `applyGamification` 뒤에서야 만들 수 있는데,
+   * XP를 주는 행동들은 이 파일 위쪽에 있다. 선언 순서 때문에 직접 부를 수 없어 ref로 건넨다.
+   */
+  const refreshGamificationRef = useRef<() => void>(() => {});
+
   const runCheck = useCallback(
     async (facilityId: number, petIds: number[]): Promise<PetCheck | null> => {
       // 서버 시설(검색·홈 TOP3·상세)은 목데이터에 없다. 캐시를 먼저 보지 않으면
@@ -1046,6 +1056,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       };
       setChecks((prev) => [check, ...prev]);
+      refreshGamificationRef.current(); // 판별 5 XP
       return check;
     },
     [pets, businessRegs],
@@ -1130,6 +1141,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         });
       }
       await loadReviews(input.facilityId);
+      refreshGamificationRef.current(); // 리뷰 20 XP
     },
     [loadReviews],
   );
@@ -1332,7 +1344,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 새로 생긴 것만 잠깐 띄운다. 첫 조회(직전 값 없음)는 알리지 않는다 — 앱을 켤 때마다
    * "축하합니다"가 뜨면 아무 의미가 없다.
    */
-  const [gamificationNews, setGamificationNews] = useState<{ kind: 'level' | 'badge'; text: string } | null>(null);
+  const [gamificationNews, setGamificationNews] = useState<{ kind: 'level' | 'badge' | 'xp'; text: string } | null>(null);
   const dismissGamificationNews = useCallback(() => setGamificationNews(null), []);
   const gamificationRef = useMirrorRef(gamification);
   // 토스트 문구에 쓸 발바닥 모양 — 렌더마다 콜백을 새로 만들지 않으려고 ref로 읽는다
@@ -1348,6 +1360,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           kind: 'badge',
           text: newBadges.length === 1 ? `새 배지 · ${newBadges[0].label}` : `새 배지 ${newBadges.length}개 · ${newBadges[0].label} 외`,
         });
+      } else if (g.totalXp > prev.totalXp) {
+        // 레벨업도 배지도 아닌 보통의 적립. 이게 없으면 판별·리뷰를 해도 화면에 아무 변화가 없다
+        setGamificationNews({ kind: 'xp', text: `+${g.totalXp - prev.totalXp} XP` });
       }
     }
     const patching = notifPatchSeqRef.current > 0;
@@ -1369,6 +1384,23 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       alive = false;
     };
   }, [session.authed, session.key, applyGamification]);
+
+  /**
+   * XP를 주는 행동 직후에 다시 조회한다.
+   *
+   * 서버는 판별·리뷰·제보·만족도·코스 API 안에서 **조용히** XP를 준다. 그 API들의 응답에는
+   * 얼마를 받았는지도, 레벨이 올랐는지도 들어 있지 않다(`api-specs/gamification.md`).
+   * 그래서 다시 조회하지 않으면 사용자는 리뷰를 쓰고도 레벨·배지·경험치 바가 그대로인
+   * 화면을 본다 — 여태 이 조회가 로그인 시점과 홈 당겨서 새로고침 두 곳에만 걸려 있어,
+   * 새 배지를 띄우려고 만든 토스트가 사실상 뜨지 않았다.
+   *
+   * 화면을 막지 않는다. 실패하면 다음 조회 때 따라잡히고, 그 사이에도 행동 자체는 성공했다.
+   */
+  const refreshGamification = useCallback(() => {
+    if (!session.authed && !(__DEV__ && DEV_TOKEN)) return;
+    gamificationApi.me().then(applyGamification).catch(() => {});
+  }, [session.authed, applyGamification]);
+  refreshGamificationRef.current = refreshGamification;
 
   /**
    * 레벨업 알림 on/off.
@@ -1545,7 +1577,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           timers.delete(key);
           satisfactionApi
             .set(facilityId, petId, score)
-            .then(() => loadTopPlaces()) // 기록이 바뀌면 홈 TOP3도 갱신
+            .then(() => {
+              loadTopPlaces(); // 기록이 바뀌면 홈 TOP3도 갱신
+              refreshGamificationRef.current(); // 만족도 첫 기록 10 XP
+            })
             .catch(() => {
               /**
                * 저장에 실패하면 **화면도 되돌린다.**
@@ -1722,6 +1757,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         return { ...prev, [facilityId]: { ...cur, mine: toReport(created) } };
       });
       downgradeFacility(facilityId);
+      refreshGamificationRef.current(); // 거부 제보 15 XP
     },
     [downgradeFacility],
   );
@@ -2647,6 +2683,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             coords: input.coords ?? null,
           })
           .then((saved) => {
+            // 도장·정복자 배지는 서버가 도장 수로 센다. 저장이 끝난 뒤에 물어야 반영돼 있다
+            refreshGamificationRef.current();
             if (!saved) return;
             // 서버가 정한 값(사진 URL·현장 판정)으로 맞춘다
             setStamps((prev) =>
@@ -2727,6 +2765,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setLevelUpNotification,
       gamificationNews,
       dismissGamificationNews,
+      refreshGamification,
       facilityById,
       registerFacilities,
       loadFacility,
@@ -2819,6 +2858,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setLevelUpNotification,
       gamificationNews,
       dismissGamificationNews,
+      refreshGamification,
       facilityById,
       registerFacilities,
       loadFacility,
