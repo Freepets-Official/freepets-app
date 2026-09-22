@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -443,6 +443,37 @@ export default function CourseScreen() {
    * ② 스톱별 시간을 어느 코스 것으로 저장할지 가른다(저장 전 빌더는 `BUILDER_PLAN_KEY`).
    */
   const [openedCourse, setOpenedCourse] = useState<SavedCourse | null>(null);
+
+  /**
+   * 담아둔 코스를 열면 **뒤로가기가 그것부터 닫는다.**
+   *
+   * 코스를 여는 것은 화면 이동이 아니라 이 화면의 상태 변화다. 그래서 네비게이션 기록에는
+   * 아무것도 쌓이지 않고, 뒤로가기는 그 단계를 건너뛰어 탐색 탭까지 한 번에 나가 버렸다 —
+   * 사용자에게는 두 칸 뒤로 간 것으로 보인다(실기기에서 보고된 문제).
+   *
+   * 목적지를 정해 보내지 않는다. 이 화면을 떠나려는 시도를 **한 번만 취소하고** 연 코스를
+   * 닫을 뿐이라, 다음 뒤로가기는 여기까지 온 진짜 경로를 그대로 따라간다. 탐색 탭에서
+   * 왔으면 탐색 탭으로, 홈에서 왔으면 홈으로 간다.
+   *
+   * iOS 스와이프와 안드로이드 하드웨어 버튼도 같은 이벤트를 타므로 함께 처리된다.
+   */
+  const navigation = useNavigation();
+  useEffect(() => {
+    if (!openedCourse) return;
+    let off: (() => void) | null = null;
+    off = navigation.addListener('beforeRemove', (e) => {
+      e.preventDefault();
+      // 상태가 바뀌어 이 효과가 정리되기 전에 한 번 더 눌릴 수 있다. 그때 또 막히지 않게
+      // 스스로 떨어진다 — 두 번째 뒤로가기는 화면을 정말로 떠나야 한다.
+      off?.();
+      off = null;
+      setOpenedCourse(null);
+      setStopIds([]);
+      setCourseCheck(null);
+      setCourseCheckError(null);
+    });
+    return () => off?.();
+  }, [navigation, openedCourse]);
   /** 순서 바꾸기 시트가 열렸는가 */
   const [reordering, setReordering] = useState(false);
 
