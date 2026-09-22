@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/text';
 import { useTabChrome } from '@/components/tab-bar';
-import { CardShadow, Radius, Spacing } from '@/constants/theme';
+import { CardShadow, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import {
   CAL_EVENT_META,
   CAL_REPEAT_LABEL,
@@ -83,180 +83,182 @@ export default function CalendarScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={[styles.safe, { backgroundColor: p.bg }]}>
-      {/* 헤더 — 월 이동 */}
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.eyebrow, { color: p.accent }]}>반려동물 캘린더</Text>
-          <Text style={[styles.month, { color: p.ink }]}>
-            {y}년 {m + 1}월
-          </Text>
-        </View>
-        <View style={styles.navBtns}>
-          <Pressable onPress={goToday} style={[styles.todayBtn, { backgroundColor: p.accentSoft }]}>
-            <Text style={[styles.todayText, { color: p.accent }]}>오늘</Text>
-          </Pressable>
-          <Pressable onPress={() => moveMonth(-1)} style={[styles.arrow, { borderColor: p.line }]}>
-            <Ionicons name="chevron-back" size={18} color={p.ink} />
-          </Pressable>
-          <Pressable onPress={() => moveMonth(1)} style={[styles.arrow, { borderColor: p.line }]}>
-            <Ionicons name="chevron-forward" size={18} color={p.ink} />
-          </Pressable>
-        </View>
-      </View>
-
-      {/* 범례 */}
-      <View style={styles.legend}>
-        {TYPES.map((t) => (
-          <View key={t} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: CAL_EVENT_META[t].color }]} />
-            <Text style={[styles.legendText, { color: p.muted }]}>{CAL_EVENT_META[t].label}</Text>
+      <View style={styles.inner}>
+        {/* 헤더 — 월 이동 */}
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.eyebrow, { color: p.accent }]}>반려동물 캘린더</Text>
+            <Text style={[styles.month, { color: p.ink }]}>
+              {y}년 {m + 1}월
+            </Text>
           </View>
-        ))}
-      </View>
+          <View style={styles.navBtns}>
+            <Pressable onPress={goToday} style={[styles.todayBtn, { backgroundColor: p.accentSoft }]}>
+              <Text style={[styles.todayText, { color: p.accent }]}>오늘</Text>
+            </Pressable>
+            <Pressable onPress={() => moveMonth(-1)} style={[styles.arrow, { borderColor: p.line }]}>
+              <Ionicons name="chevron-back" size={18} color={p.ink} />
+            </Pressable>
+            <Pressable onPress={() => moveMonth(1)} style={[styles.arrow, { borderColor: p.line }]}>
+              <Ionicons name="chevron-forward" size={18} color={p.ink} />
+            </Pressable>
+          </View>
+        </View>
 
-      {/* 요일 헤더 */}
-      <View style={styles.weekRow}>
-        {WEEKDAYS.map((w, i) => (
-          <Text
-            key={w}
-            style={[
-              styles.weekday,
-              { color: i === 0 ? p.danger : i === 6 ? '#4C8DF5' : p.muted },
-            ]}>
-            {w}
-          </Text>
-        ))}
-      </View>
+        {/* 범례 */}
+        <View style={styles.legend}>
+          {TYPES.map((t) => (
+            <View key={t} style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: CAL_EVENT_META[t].color }]} />
+              <Text style={[styles.legendText, { color: p.muted }]}>{CAL_EVENT_META[t].label}</Text>
+            </View>
+          ))}
+        </View>
 
-      {/* 월 그리드 */}
-      <View style={styles.grid}>
-        {cells.map((d) => {
-          const ds = ymd(d);
-          const inMonth = d.getMonth() === m;
-          const isToday = ds === today;
-          const isSel = ds === selected;
-          const evs = eventsOn(ds);
-          // 기간 일정과 하루짜리를 나눠 그린다 — 앞은 막대, 뒤는 점
-          const spans = evs
-            .map((e) => ({ event: e, pos: spanPosition(e, ds) }))
-            .filter((x): x is { event: CalendarEvent; pos: 'start' | 'middle' | 'end' } => x.pos !== null);
-          const dots = evs.filter((e) => spanPosition(e, ds) === null);
-          const wd = d.getDay();
-          return (
-            <Pressable key={ds} onPress={() => setSelected(ds)} style={styles.cell}>
-              <View
-                style={[
-                  styles.dayNumWrap,
-                  isSel && { backgroundColor: p.accent },
-                  isToday && !isSel && { backgroundColor: p.accentSoft },
-                ]}>
-                <Text
+        {/* 요일 헤더 */}
+        <View style={styles.weekRow}>
+          {WEEKDAYS.map((w, i) => (
+            <Text
+              key={w}
+              style={[
+                styles.weekday,
+                { color: i === 0 ? p.danger : i === 6 ? '#4C8DF5' : p.muted },
+              ]}>
+              {w}
+            </Text>
+          ))}
+        </View>
+
+        {/* 월 그리드 */}
+        <View style={styles.grid}>
+          {cells.map((d) => {
+            const ds = ymd(d);
+            const inMonth = d.getMonth() === m;
+            const isToday = ds === today;
+            const isSel = ds === selected;
+            const evs = eventsOn(ds);
+            // 기간 일정과 하루짜리를 나눠 그린다 — 앞은 막대, 뒤는 점
+            const spans = evs
+              .map((e) => ({ event: e, pos: spanPosition(e, ds) }))
+              .filter((x): x is { event: CalendarEvent; pos: 'start' | 'middle' | 'end' } => x.pos !== null);
+            const dots = evs.filter((e) => spanPosition(e, ds) === null);
+            const wd = d.getDay();
+            return (
+              <Pressable key={ds} onPress={() => setSelected(ds)} style={styles.cell}>
+                <View
                   style={[
-                    styles.dayNum,
-                    {
-                      color: isSel
-                        ? p.onAccent
-                        : !inMonth
-                          ? p.line
-                          : wd === 0
-                            ? p.danger
-                            : wd === 6
-                              ? '#4C8DF5'
-                              : p.ink,
-                    },
+                    styles.dayNumWrap,
+                    isSel && { backgroundColor: p.accent },
+                    isToday && !isSel && { backgroundColor: p.accentSoft },
                   ]}>
-                  {d.getDate()}
-                </Text>
-              </View>
-              {/*
-                기간 일정(여행)은 점이 아니라 막대로 그린다. 며칠에 걸친 일이 날마다 점
-                하나로 흩어지면 "이어진 하루하루"라는 게 안 보인다. 시작·끝만 모서리를
-                둥글게 해서 어디서 시작하고 끝나는지 드러낸다.
-              */}
-              {spans.length > 0 && (
-                <View style={styles.spanWrap}>
-                  {spans.slice(0, 2).map((sp, i) => (
+                  <Text
+                    style={[
+                      styles.dayNum,
+                      {
+                        color: isSel
+                          ? p.onAccent
+                          : !inMonth
+                            ? p.line
+                            : wd === 0
+                              ? p.danger
+                              : wd === 6
+                                ? '#4C8DF5'
+                                : p.ink,
+                      },
+                    ]}>
+                    {d.getDate()}
+                  </Text>
+                </View>
+                {/*
+                  기간 일정(여행)은 점이 아니라 막대로 그린다. 며칠에 걸친 일이 날마다 점
+                  하나로 흩어지면 "이어진 하루하루"라는 게 안 보인다. 시작·끝만 모서리를
+                  둥글게 해서 어디서 시작하고 끝나는지 드러낸다.
+                */}
+                {spans.length > 0 && (
+                  <View style={styles.spanWrap}>
+                    {spans.slice(0, 2).map((sp, i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.span,
+                          {
+                            backgroundColor: CAL_EVENT_META[sp.event.type].color,
+                            opacity: inMonth ? 1 : 0.4,
+                            borderTopLeftRadius: sp.pos === 'start' ? 3 : 0,
+                            borderBottomLeftRadius: sp.pos === 'start' ? 3 : 0,
+                            borderTopRightRadius: sp.pos === 'end' ? 3 : 0,
+                            borderBottomRightRadius: sp.pos === 'end' ? 3 : 0,
+                            // 시작·끝은 칸 안쪽으로 물리고, 중간은 칸을 꽉 채워 이어 보이게 한다
+                            marginLeft: sp.pos === 'start' ? 4 : 0,
+                            marginRight: sp.pos === 'end' ? 4 : 0,
+                          },
+                        ]}
+                      />
+                    ))}
+                  </View>
+                )}
+                <View style={styles.dots}>
+                  {dots.slice(0, 3).map((e, i) => (
                     <View
                       key={i}
-                      style={[
-                        styles.span,
-                        {
-                          backgroundColor: CAL_EVENT_META[sp.event.type].color,
-                          opacity: inMonth ? 1 : 0.4,
-                          borderTopLeftRadius: sp.pos === 'start' ? 3 : 0,
-                          borderBottomLeftRadius: sp.pos === 'start' ? 3 : 0,
-                          borderTopRightRadius: sp.pos === 'end' ? 3 : 0,
-                          borderBottomRightRadius: sp.pos === 'end' ? 3 : 0,
-                          // 시작·끝은 칸 안쪽으로 물리고, 중간은 칸을 꽉 채워 이어 보이게 한다
-                          marginLeft: sp.pos === 'start' ? 4 : 0,
-                          marginRight: sp.pos === 'end' ? 4 : 0,
-                        },
-                      ]}
+                      style={[styles.dot, { backgroundColor: CAL_EVENT_META[e.type].color, opacity: inMonth ? 1 : 0.4 }]}
                     />
                   ))}
                 </View>
-              )}
-              <View style={styles.dots}>
-                {dots.slice(0, 3).map((e, i) => (
-                  <View
-                    key={i}
-                    style={[styles.dot, { backgroundColor: CAL_EVENT_META[e.type].color, opacity: inMonth ? 1 : 0.4 }]}
-                  />
-                ))}
-              </View>
-            </Pressable>
-          );
-        })}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* 선택한 날짜의 일정 */}
+        <View style={styles.panelHead}>
+          <Text style={[styles.panelTitle, { color: p.ink }]}>{selLabel}</Text>
+          <Text style={[styles.panelCount, { color: p.muted }]}>일정 {dayEvents.length}</Text>
+        </View>
+
+        <ScrollView
+          ref={scrollRef}
+          style={styles.panel}
+          contentContainerStyle={styles.panelContent}
+          showsVerticalScrollIndicator={false}
+          onScroll={chrome ? () => chrome.onScroll() : undefined}
+          scrollEventThrottle={64}>
+          {dayEvents.map((e) => (
+            <EventRow
+              key={e.eventId}
+              e={e}
+              petName={petName(e.petId)}
+              taken={e.type === 'MED' ? isMedTaken(e.eventId, selected) : false}
+              onEdit={() =>
+                router.push({ pathname: '/calendar-event', params: { eventId: String(e.eventId) } })
+              }
+              onToggleTaken={() => toggleMedTaken(e.eventId, selected)}
+              onToggleReminder={() => toggleEventReminder(e.eventId)}
+              onDelete={() => {
+                void removeCalendarEvent(e.eventId).then((ok) => {
+                  if (!ok) notify('삭제 실패', calendarErrorRef.current ?? '일정을 서버에서 지우지 못했어요. 잠시 후 다시 시도해 주세요.');
+                });
+              }}
+            />
+          ))}
+          {dayEvents.length === 0 && (
+            <View style={styles.empty}>
+              <Ionicons name="paw-outline" size={28} color={p.muted} />
+              <Text style={[styles.emptyText, { color: p.muted }]}>이 날은 일정이 없어요.</Text>
+            </View>
+          )}
+
+          <Pressable
+            onPress={() => router.push({ pathname: '/calendar-event', params: { date: selected } })}
+            style={({ pressed }) => [
+              styles.addBtn,
+              { backgroundColor: pressed ? p.accentDark : p.accent },
+            ]}>
+            <Ionicons name="add" size={20} color={p.onAccent} />
+            <Text style={[styles.addText, { color: p.onAccent }]}>일정 추가</Text>
+          </Pressable>
+        </ScrollView>
       </View>
-
-      {/* 선택한 날짜의 일정 */}
-      <View style={styles.panelHead}>
-        <Text style={[styles.panelTitle, { color: p.ink }]}>{selLabel}</Text>
-        <Text style={[styles.panelCount, { color: p.muted }]}>일정 {dayEvents.length}</Text>
-      </View>
-
-      <ScrollView
-        ref={scrollRef}
-        style={styles.panel}
-        contentContainerStyle={styles.panelContent}
-        showsVerticalScrollIndicator={false}
-        onScroll={chrome ? () => chrome.onScroll() : undefined}
-        scrollEventThrottle={64}>
-        {dayEvents.map((e) => (
-          <EventRow
-            key={e.eventId}
-            e={e}
-            petName={petName(e.petId)}
-            taken={e.type === 'MED' ? isMedTaken(e.eventId, selected) : false}
-            onEdit={() =>
-              router.push({ pathname: '/calendar-event', params: { eventId: String(e.eventId) } })
-            }
-            onToggleTaken={() => toggleMedTaken(e.eventId, selected)}
-            onToggleReminder={() => toggleEventReminder(e.eventId)}
-            onDelete={() => {
-              void removeCalendarEvent(e.eventId).then((ok) => {
-                if (!ok) notify('삭제 실패', calendarErrorRef.current ?? '일정을 서버에서 지우지 못했어요. 잠시 후 다시 시도해 주세요.');
-              });
-            }}
-          />
-        ))}
-        {dayEvents.length === 0 && (
-          <View style={styles.empty}>
-            <Ionicons name="paw-outline" size={28} color={p.muted} />
-            <Text style={[styles.emptyText, { color: p.muted }]}>이 날은 일정이 없어요.</Text>
-          </View>
-        )}
-
-        <Pressable
-          onPress={() => router.push({ pathname: '/calendar-event', params: { date: selected } })}
-          style={({ pressed }) => [
-            styles.addBtn,
-            { backgroundColor: pressed ? p.accentDark : p.accent },
-          ]}>
-          <Ionicons name="add" size={20} color={p.onAccent} />
-          <Text style={[styles.addText, { color: p.onAccent }]}>일정 추가</Text>
-        </Pressable>
-      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -356,6 +358,13 @@ function EventRow({
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  /**
+   * 넓은 화면(웹·태블릿)에서 달력이 끝까지 늘어나지 않게 가둔다.
+   *
+   * 다른 화면은 `Screen`이나 각자의 래퍼로 이미 `MaxContentWidth`를 쓰는데 캘린더만 빠져 있어,
+   * 웹에서 이 탭만 7칸 그리드가 화면 폭만큼 벌어졌다.
+   */
+  inner: { flex: 1, width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center' },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-end',
