@@ -53,7 +53,8 @@ import {
 import { loadMyReviewIds, saveMyReviewIds } from '@/lib/my-reviews';
 import { loadSettings, saveSettings } from '@/lib/settings-store';
 import type { Coords } from '@/lib/location';
-import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS, isMockFacilityId } from '@/data/mock';
+import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_REPORTS, REVIEWS } from '@/data/mock';
+import { isMockFacilityId } from '@/data/facility-id';
 import { eventOccursOn, nextVaccinationOf, pawGradeOf, vaccinationDday } from '@/data/types';
 import type { Gamification, TierAnimal } from '@/data/level';
 import { tierName } from '@/data/level';

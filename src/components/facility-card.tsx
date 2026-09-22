@@ -9,7 +9,7 @@ import { PressableScale } from '@/components/pressable-scale';
 import { DenialAlert } from '@/components/denial-alert';
 import { PawBadge } from '@/components/paw-badge';
 import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
-import { formatDistance } from '@/data/mock';
+import { formatDistance } from '@/lib/format';
 import { CATEGORY_LABEL, REQUIREMENT_LABEL, pawGradeOf, type Facility } from '@/data/types';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';

@@ -1,3 +1,4 @@
+import { mockId } from '@/data/facility-id';
 import type { Report } from '@/store/app-store';
 
 import type { CalendarEvent, Facility, Pet, PetCheck, PetSatisfaction, Review, ReviewPetInfo, ReviewTag } from '@/data/types';
@@ -8,19 +9,10 @@ import type { CalendarEvent, Facility, Pet, PetCheck, PetSatisfaction, Review, R
  */
 
 /**
- * 목 시설 ID는 서버 ID와 겹치면 안 된다.
- *
- * 예전엔 1~14를 썼는데 서버에도 같은 ID가 있어서, 상세를 열면 `loadFacility`가 서버 응답을
- * 목 데이터에 병합해 **두 시설이 섞였다** — 목 10번(테라로사 커피공장)에 서버 10번
- * (상의자동차야영장)의 이름·조건이 덮이고 목의 requirements만 남는 식이었다.
- * 시설 10은 거부 제보 시연용이라 데모 시나리오가 그대로 깨졌다.
- *
- * 서버 시설이 48,754건이므로 900000번대는 앞으로도 겹치지 않는다.
- * `mockId()`로 감싸 원래 번호를 읽을 수 있게 두고, `isMockFacilityId()`로 서버 호출을 건너뛴다.
+ * 목 ID 규칙은 `facility-id.ts`로 옮겼다 — 목 데이터를 지워도 남아야 하는 규칙이라서다.
+ * 옛 import가 깨지지 않게 여기서 다시 내보낸다.
  */
-export const MOCK_ID_BASE = 900_000;
-export const mockId = (n: number) => MOCK_ID_BASE + n;
-export const isMockFacilityId = (id: number) => id >= MOCK_ID_BASE;
+export { MOCK_ID_BASE, isMockFacilityId, mockId } from '@/data/facility-id';
 
 export const FACILITIES: Facility[] = [
   {
@@ -362,23 +354,9 @@ export const INITIAL_SATISFACTIONS: PetSatisfaction[] = [
   { petId: 2, facilityId: mockId(2), score: 4.2 }, // 카페 파도살롱 (실내가 좁아 시큰둥)
 ];
 
-export function formatDistance(m: number | null): string {
-  // 거리를 모르면 지어내지 않는다. 좌표 없이 상세를 열면 서버가 null을 주는데,
-  // 이걸 0으로 떨어뜨리면 200km 떨어진 시설이 "0m"로 표시된다.
-  if (m == null) return '거리 미상';
-  return m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
-}
+/** 목과 무관한 유틸이라 `lib/format.ts`로 옮겼다. 옛 import를 위해 다시 내보낸다 */
+export { formatDistance } from '@/lib/format';
 
-/**
- * 지역 선택용 — 실제로는 관광공사 areaCode2/ldongCode2로 전국 코드를 동기화한다.
- * 목은 강원(시/군) + 서울(구 단위 예시)로 "서울=구, 지방=시/군"의 단위 차이를 보여준다.
- * 지금 목 시설은 모두 강원 강릉시라, 다른 지역을 고르면 결과가 비어 있는 게 정상이다.
- */
-export const REGIONS: { sido: string; sigungus: string[] }[] = [
-  { sido: '강원특별자치도', sigungus: ['강릉시', '속초시', '춘천시', '양양군'] },
-  { sido: '서울특별시', sigungus: ['강남구', '마포구', '종로구'] },
-  { sido: '경기도', sigungus: ['성남시', '가평군'] },
-];
 
 /**
  * 데모용 리뷰. 실제로는 GET /api/v1/facilities/{id}/reviews 로 받아온다.

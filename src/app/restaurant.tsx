@@ -11,7 +11,7 @@ import { BusinessVerify } from '@/components/business-verify';
 import { CertificatePicker } from '@/components/certificate-picker';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
-import { formatDistance } from '@/data/mock';
+import { formatDistance } from '@/lib/format';
 import {
   decisionVerdict,
   F6_DECISION,

@@ -1,6 +1,7 @@
 import { judgeGroup, type GroupResult } from '@/data/judge';
 import { distanceMeters } from '@/lib/location';
-import { FACILITIES, mockId, reviewsOf } from '@/data/mock';
+import { FACILITIES, reviewsOf } from '@/data/mock';
+import { mockId } from '@/data/facility-id';
 import type { Category, CheckResult, Facility, Pet, PetSatisfaction, ReviewTag } from '@/data/types';
 
 /**

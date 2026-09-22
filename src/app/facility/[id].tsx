@@ -21,7 +21,7 @@ import { StampAction } from '@/components/stamp-action';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
 import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
-import { formatDistance } from '@/data/mock';
+import { formatDistance } from '@/lib/format';
 import {
   AI_JUDGEABLE_KINDS,
   CATEGORY_LABEL,
