@@ -22,6 +22,7 @@ import { SectionTitle } from '@/components/section-title';
 import { Radius, Spacing, Type } from '@/constants/theme';
 import { FACILITIES } from '@/data/mock';
 import { type Pet } from '@/data/types';
+import { useQuestsLeft } from '@/hooks/use-daily-quests';
 import { usePalette } from '@/hooks/use-theme';
 import { uniqueRegionCount } from '@/data/stamps';
 import { GuestScreen } from '@/components/guest-prompt';
@@ -116,6 +117,8 @@ export default function HomeScreen() {
   }, [checks, facilityById, loadFacility]);
   // 뱃지 기준과 같은 값(서로 다른 시군구 수)을 쓴다 — 홈과 도장첩이 다른 숫자를 보이면 안 된다
   const stampCount = useMemo(() => uniqueRegionCount(stamps), [stamps]);
+  // 로그인한 계정만 물어본다 — 게스트에게는 퀘스트가 없다
+  const questsLeft = useQuestsLeft(session.authed);
   const alerts = plannedDenialAlerts();
   const vax = upcomingVaccinations();
 
@@ -143,12 +146,24 @@ export default function HomeScreen() {
           <Pressable
             onPress={() => router.push('/quests')}
             hitSlop={8}
-            accessibilityLabel="오늘의 퀘스트"
+            accessibilityLabel={
+              questsLeft === null ? '오늘의 퀘스트' : `오늘의 퀘스트, ${questsLeft}개 남음`
+            }
             style={({ pressed }) => [
               styles.bellBtn,
               { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
             ]}>
             <QuestScrollIcon size={21} color={p.ink} />
+            {/*
+              오늘 남은 퀘스트 수. 퀘스트 화면이 아이콘 뒤에 숨어 있어서, 들어가 보기 전에는
+              할 일이 남았는지 알 수 없었다 — 돌아올 이유가 숫자로 보여야 한다.
+              `null`(아직 모름)과 `0`(다 했다)을 구분한다. 0에는 배지를 그리지 않는다.
+            */}
+            {questsLeft !== null && questsLeft > 0 && (
+              <View style={[styles.bellBadge, { backgroundColor: p.accent, borderColor: p.bg }]}>
+                <Text style={[styles.bellBadgeText, { color: p.onAccent }]}>{questsLeft}</Text>
+              </View>
+            )}
           </Pressable>
           <NotificationBell
             count={alertCount}
