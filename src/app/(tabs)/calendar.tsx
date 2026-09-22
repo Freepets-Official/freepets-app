@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
 import { useTabChrome } from '@/components/tab-bar';
 import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
@@ -242,10 +243,7 @@ export default function CalendarScreen() {
             />
           ))}
           {dayEvents.length === 0 && (
-            <View style={styles.empty}>
-              <Ionicons name="paw-outline" size={28} color={p.muted} />
-              <Text style={[styles.emptyText, { color: p.muted }]}>이 날은 일정이 없어요.</Text>
-            </View>
+            <LoadState kind="empty" icon="paw-outline" message="이 날은 일정이 없어요." />
           )}
 
           <Pressable
@@ -458,8 +456,6 @@ const styles = StyleSheet.create({
   },
   takenText: { fontSize: Type.caption, fontWeight: '800' },
   rowActions: { alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2, gap: 10 },
-  empty: { alignItems: 'center', gap: 8, paddingVertical: 36 },
-  emptyText: { fontSize: Type.body },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',

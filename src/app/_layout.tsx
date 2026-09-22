@@ -10,6 +10,7 @@ import { AppSplash } from '@/components/app-splash';
 import { BiometricGate } from '@/components/biometric-gate';
 import { CallConfirmSheet } from '@/components/call-confirm-sheet';
 import { GamificationToast } from '@/components/gamification-toast';
+import { LevelUpBurst } from '@/components/level-up-burst';
 import { PawTouches } from '@/components/paw-touches';
 import { AppThemeProvider, usePalette, useColorScheme } from '@/hooks/use-theme';
 import { FontScaleProvider } from '@/components/text';
@@ -259,6 +260,18 @@ function RootNavigator() {
   );
 }
 
+/**
+ * 레벨업 연출을 스토어에 붙인다.
+ *
+ * 별도 컴포넌트로 뺀 이유는 연출 자체가 무거워서다 — 레벨업이 없는 평소에는 아무것도 그리지
+ * 않아야 하는데, 레이아웃 본문에서 직접 읽으면 애니메이션 훅이 항상 살아 있게 된다.
+ */
+function LevelUpOverlay() {
+  const { levelUp, dismissLevelUp } = useAppStore();
+  if (!levelUp) return null;
+  return <LevelUpBurst level={levelUp.level} tierName={levelUp.tierName} onDone={dismissLevelUp} />;
+}
+
 export default function RootLayout() {
   // 화면 모드는 스토어에 있고, 실제 스킴 전환(자동 경계·포그라운드 재계산)은
   // AppThemeProvider가 관리한다. 두 프로바이더 안에서 테마를 읽는다.
@@ -325,8 +338,10 @@ function ThemedRoot() {
       {/* 전화 후 "확인하셨나요"는 앱 전체에서 한 곳에서만 묻는다 — 전화 버튼이 여러 화면에 있어도
           신뢰도 갱신 규칙이 갈리지 않게 하려는 것이다 */}
       <CallConfirmSheet />
-      {/* 레벨업·새 배지 — 어느 화면에 있든 위에서 잠깐 */}
+      {/* 새 배지·경험치 적립 — 어느 화면에 있든 위에서 잠깐 */}
       <GamificationToast />
+      {/* 레벨업만은 화면을 멈춰 세운다. 스플래시보다는 아래에 둔다 */}
+      <LevelUpOverlay />
       {/* 다크에선 밝은 글씨의 상태바 */}
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       {!splashDone && <AppSplash onDone={() => setSplashDone(true)} />}
