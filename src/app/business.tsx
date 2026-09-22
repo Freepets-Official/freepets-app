@@ -230,7 +230,9 @@ export default function BusinessScreen() {
                     {picker.loading && <ActivityIndicator size="small" color={p.muted} />}
                   </View>
                   {picker.failed ? (
-                    <Pressable onPress={picker.retry} style={styles.candidate}>
+                    <Pressable
+                      onPress={picker.retry}
+                      style={[styles.candidate, { borderColor: p.line, backgroundColor: p.card }]}>
                       <Ionicons name="refresh" size={15} color={p.muted} />
                       <Text style={[styles.candMeta, { color: p.muted }]}>
                         매장을 불러오지 못했어요. 눌러서 다시 시도
@@ -500,6 +502,7 @@ const styles = StyleSheet.create({
   pickedMeta: { fontSize: Type.footnote, marginTop: 2 },
   change: { fontSize: Type.body, fontWeight: '800' },
   candidates: { gap: Spacing.sm },
+  // 테두리 색은 쓰는 쪽에서 팔레트로 넣는다 — 여기 borderColor를 비워두면 RN이 검정을 쓴다
   candidate: {
     flexDirection: 'row',
     alignItems: 'center',
