@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View }
 import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
 import { FacilityCard } from '@/components/facility-card';
+import { LoadState } from '@/components/load-state';
 import { RankingView } from '@/components/ranking-view';
 import { RegionChips } from '@/components/region-chips';
 import { Screen } from '@/components/screen';
@@ -307,25 +308,14 @@ export default function ExploreScreen() {
 
           {/* 위치 권한 안내는 '내 주변'에서만 — '전체'는 위치 없이 전국을 검색한다 */}
           {mode === 'nearby' && locState === 'denied' ? (
-            <View style={styles.empty}>
-              <Ionicons name="location-outline" size={30} color={p.muted} />
-              <Text style={[styles.emptyText, { color: p.muted }]}>
-                내 주변 시설을 보려면 위치 권한이 필요해요.
-              </Text>
-              <Pressable
-                onPress={locate}
-                style={({ pressed }) => [styles.retry, { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : 'transparent' }]}>
-                <Ionicons name="navigate" size={15} color={p.accent} />
-                <Text style={[styles.retryText, { color: p.accent }]}>위치 다시 시도</Text>
-              </Pressable>
-            </View>
+            <LoadState
+              kind="empty"
+              icon="location-outline"
+              message="내 주변 시설을 보려면 위치 권한이 필요해요."
+              action={{ label: '위치 다시 시도', icon: 'navigate', onPress: locate }}
+            />
           ) : (mode === 'nearby' && locState === 'loading') || (loading && items.length === 0) ? (
-            <View style={styles.empty}>
-              <ActivityIndicator color={p.accent} />
-              <Text style={[styles.emptyText, { color: p.muted }]}>
-                {mode === 'all' ? '시설을 찾고 있어요…' : '내 주변 시설을 찾고 있어요…'}
-              </Text>
-            </View>
+            <LoadState kind="loading" message={mode === 'all' ? '시설을 찾고 있어요…' : '내 주변 시설을 찾고 있어요…'} />
           ) : (
             <View style={styles.list}>
               {facilities.map((f) => (
@@ -333,28 +323,17 @@ export default function ExploreScreen() {
               ))}
               {facilities.length === 0 &&
                 (failed ? (
-                  <View style={styles.empty}>
-                    <Ionicons name="cloud-offline-outline" size={30} color={p.muted} />
-                    <Text style={[styles.emptyText, { color: p.muted }]}>
-                      시설 정보를 불러오지 못했어요.{'\n'}네트워크 상태를 확인하고 다시 시도해 주세요.
-                    </Text>
-                    <Pressable
-                      onPress={() => setRetryKey((k) => k + 1)}
-                      style={({ pressed }) => [
-                        styles.retry,
-                        { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : 'transparent' },
-                      ]}>
-                      <Ionicons name="refresh" size={15} color={p.accent} />
-                      <Text style={[styles.retryText, { color: p.accent }]}>다시 시도</Text>
-                    </Pressable>
-                  </View>
+                  <LoadState
+                    kind="failed"
+                    message={'시설 정보를 불러오지 못했어요.\n네트워크 상태를 확인하고 다시 시도해 주세요.'}
+                    onRetry={() => setRetryKey((k) => k + 1)}
+                  />
                 ) : (
-                  <View style={styles.empty}>
-                    <Ionicons name="search" size={30} color={p.muted} />
-                    <Text style={[styles.emptyText, { color: p.muted }]}>
-                      조건에 맞는 시설이 없어요.{'\n'}검색어·카테고리·반경(설정)을 바꿔 보세요.
-                    </Text>
-                  </View>
+                  <LoadState
+                    kind="empty"
+                    icon="search"
+                    message={'조건에 맞는 시설이 없어요.\n검색어·카테고리·반경(설정)을 바꿔 보세요.'}
+                  />
                 ))}
             </View>
           )}
@@ -422,17 +401,4 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   regionHintText: { flex: 1, fontSize: Type.footnote, fontWeight: '700' },
-  empty: { alignItems: 'center', gap: Spacing.md, paddingVertical: 56 },
-  emptyText: { fontSize: Type.bodyLg, textAlign: 'center', lineHeight: 21 },
-  retry: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1.5,
-    borderRadius: Radius.full,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    marginTop: 4,
-  },
-  retryText: { fontSize: Type.body, fontWeight: '800' },
 });

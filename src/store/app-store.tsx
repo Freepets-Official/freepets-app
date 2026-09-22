@@ -435,9 +435,12 @@ interface AppStore {
   /** 레벨업 알림 on/off. 실패하면 false를 돌려주고 화면 값도 원래대로 되돌린다 */
   setLevelUpNotification: (enabled: boolean) => Promise<boolean>;
   /** 방금 감지한 레벨업·새 배지. 토스트가 잠깐 보여주고 지운다 */
-  gamificationNews: { kind: 'level' | 'badge' | 'xp'; text: string } | null;
+  gamificationNews: { kind: 'badge' | 'xp'; text: string } | null;
   /** XP를 주는 행동 뒤에 레벨·배지·경험치를 다시 받아온다. 화면을 막지 않는다 */
   refreshGamification: () => void;
+  /** 레벨업 순간. 토스트가 아니라 전체 화면 연출로 보여준다 */
+  levelUp: { level: number; tierName: string } | null;
+  dismissLevelUp: () => void;
   dismissGamificationNews: () => void;
 
   /** 시설 조회 — 서버 검색결과 캐시 우선, 없으면 목데이터 */
@@ -1344,7 +1347,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 새로 생긴 것만 잠깐 띄운다. 첫 조회(직전 값 없음)는 알리지 않는다 — 앱을 켤 때마다
    * "축하합니다"가 뜨면 아무 의미가 없다.
    */
-  const [gamificationNews, setGamificationNews] = useState<{ kind: 'level' | 'badge' | 'xp'; text: string } | null>(null);
+  const [gamificationNews, setGamificationNews] = useState<{ kind: 'badge' | 'xp'; text: string } | null>(null);
+  /**
+   * 레벨업은 토스트로 흘려보내지 않는다.
+   *
+   * 레벨은 수십 번의 판별과 리뷰가 쌓여야 오르는 값인데, 배지·적립과 같은 크기로 스쳐 가면
+   * 올랐다는 사실조차 놓친다. 화면을 한 번 멈춰 세우고 사용자가 닫게 한다.
+   */
+  const [levelUp, setLevelUp] = useState<{ level: number; tierName: string } | null>(null);
+  const dismissLevelUp = useCallback(() => setLevelUp(null), []);
   const dismissGamificationNews = useCallback(() => setGamificationNews(null), []);
   const gamificationRef = useMirrorRef(gamification);
   // 토스트 문구에 쓸 발바닥 모양 — 렌더마다 콜백을 새로 만들지 않으려고 ref로 읽는다
@@ -1354,7 +1365,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if (prev) {
       const newBadges = g.badges.filter((b) => !prev.badges.some((x) => x.code === b.code));
       if (g.level > prev.level) {
-        setGamificationNews({ kind: 'level', text: `Lv.${g.level} 달성! ${tierName(g, pawAnimalRef.current || g.tierAnimal)}` });
+        setLevelUp({ level: g.level, tierName: tierName(g, pawAnimalRef.current || g.tierAnimal) });
       } else if (newBadges.length > 0) {
         setGamificationNews({
           kind: 'badge',
@@ -2213,6 +2224,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setStamps([]);
     void clearStamps();
     setGamification(null);
+    setLevelUp(null);
   }, []);
   useLayoutEffect(() => {
     clearAccountStateRef.current = clearAccountState;
@@ -2766,6 +2778,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       gamificationNews,
       dismissGamificationNews,
       refreshGamification,
+      levelUp,
+      dismissLevelUp,
       facilityById,
       registerFacilities,
       loadFacility,
@@ -2859,6 +2873,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       gamificationNews,
       dismissGamificationNews,
       refreshGamification,
+      levelUp,
+      dismissLevelUp,
       facilityById,
       registerFacilities,
       loadFacility,

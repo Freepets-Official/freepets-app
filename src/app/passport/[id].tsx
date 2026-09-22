@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
 import { DenialReport } from '@/components/denial-report';
 import { PassportCard } from '@/components/passport-card';
@@ -19,6 +20,7 @@ import { useAppStore } from '@/store/app-store';
  * "이 가족"이 아니라 "지금 문 앞에 있는 이 아이"이기 때문이다.
  */
 export default function PassportScreen() {
+  const router = useRouter();
   const p = usePalette();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { pets, checks, confidenceOf, facilityById, loadFacility, hydrateCheck } = useAppStore();
@@ -93,10 +95,7 @@ export default function PassportScreen() {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
         <Stack.Screen options={{ title: '동반 출입증', headerBackButtonDisplayMode: 'minimal' }} />
-        <View style={styles.empty}>
-          <ActivityIndicator color={p.accent} />
-          <Text style={[styles.emptyText, { color: p.muted }]}>출입증을 불러오는 중이에요.</Text>
-        </View>
+        <LoadState kind="loading" message="출입증을 불러오는 중이에요." size="page" />
       </SafeAreaView>
     );
   }
@@ -108,14 +107,21 @@ export default function PassportScreen() {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: p.bg }]}>
         <Stack.Screen options={{ title: '동반 출입증', headerBackButtonDisplayMode: 'minimal'}} />
-        <View style={styles.empty}>
-          <Ionicons name="document-text-outline" size={34} color={p.muted} />
-          <Text style={[styles.emptyText, { color: p.muted }]}>
-            {stale
-              ? `판별 기록은 있지만 출입증에 담을 상세 정보가 없어요.\n한 번 더 판별하면 바로 만들어져요.`
-              : `먼저 AI 출입 판별을 해주세요.\n판별 결과로 출입증이 만들어져요.`}
-          </Text>
-        </View>
+        <LoadState
+          kind="empty"
+          icon="document-text-outline"
+          size="page"
+          message={
+            stale
+              ? '판별 기록은 있지만 출입증에 담을 상세 정보가 없어요.\n한 번 더 판별하면 바로 만들어져요.'
+              : '먼저 AI 출입 판별을 해주세요.\n판별 결과로 출입증이 만들어져요.'
+          }
+          action={
+            facility
+              ? { label: '이 시설 판별하기', icon: 'sparkles', onPress: () => router.replace({ pathname: '/facility/[id]', params: { id: String(facility.facilityId) } }) }
+              : { label: '시설 찾아보기', icon: 'search', onPress: () => router.replace('/(tabs)/explore') }
+          }
+        />
       </SafeAreaView>
     );
   }
@@ -223,6 +229,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: Spacing.xxl,
   },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md },
-  emptyText: { fontSize: Type.bodyLg, textAlign: 'center', lineHeight: 21 },
 });

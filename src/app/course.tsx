@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, TextInput,
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
 import { ResultBadge } from '@/components/badge';
 import { Chip } from '@/components/chip';
@@ -821,9 +822,12 @@ export default function CourseScreen() {
 
           {/* 데려갈 아이 */}
           {pets.length === 0 ? (
-            <Text style={[styles.empty, { color: p.muted }]}>
-              반려동물 탭에서 아이를 먼저 등록해 주세요.
-            </Text>
+            <LoadState
+              kind="empty"
+              icon="paw"
+              message="코스에 데려갈 아이가 없어요."
+              action={{ label: '아이 등록하기', icon: 'add', onPress: () => router.push('/(tabs)/pets') }}
+            />
           ) : (
             <View style={styles.petRow}>
               {pets.map((pet) => {
@@ -1900,7 +1904,6 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: Type.caption, fontWeight: '800', letterSpacing: 0.9, textTransform: 'uppercase' },
   title: { fontSize: Type.screenTitle, fontWeight: '900', letterSpacing: -1, lineHeight: 34 },
   sub: { fontSize: Type.body, lineHeight: 20, marginTop: 4 },
-  empty: { fontSize: Type.body, paddingVertical: Spacing.xl, textAlign: 'center' },
 
   petRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   petChip: {

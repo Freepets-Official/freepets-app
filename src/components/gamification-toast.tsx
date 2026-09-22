@@ -11,14 +11,14 @@ import { useAppStore } from '@/store/app-store';
 
 const SHOW_MS = 4500;
 
-/** 알림 종류별 아이콘 — 레벨업은 발바닥, 배지는 리본, 그냥 적립은 위로 오르는 화살표 */
-const ICON = { level: 'paw', badge: 'ribbon', xp: 'arrow-up-circle' } as const;
+/** 알림 종류별 아이콘 — 배지는 리본, 적립은 위로 오르는 화살표 */
+const ICON = { badge: 'ribbon', xp: 'arrow-up-circle' } as const;
 
 /** 경험치 적립은 축하가 아니라 확인이라 짧게 스친다 */
 const SHOW_MS_XP = 2200;
 
 /**
- * 레벨업·새 배지·경험치 적립 알림.
+ * 새 배지·경험치 적립 알림. **레벨업은 여기가 아니라 `LevelUpBurst`가 맡는다.**
  *
  * 서버는 배지 획득 푸시를 보내지 않고, 레벨업 푸시도 꺼둘 수 있다. 경험치 적립에 이르면
  * 알려주는 수단이 아예 없다 — 판별·리뷰 API가 조용히 XP를 주고 응답에 아무 표시도 넣지

@@ -15,6 +15,7 @@ import { QuestScrollIcon } from '@/components/quest-scroll-icon';
 import { Text } from '@/components/text';
 import { ResultBadge } from '@/components/badge';
 import { GameCardFx } from '@/components/game-card-fx';
+import { LoadState } from '@/components/load-state';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
 import { Radius, Spacing, Type } from '@/constants/theme';
@@ -150,12 +151,12 @@ export default function HomeScreen() {
       // 앱을 껐다 켜기 전까지 빈 화면에서 빠져나올 방법이 없었다.
       onRefresh={reloadAll}>
       {pets.length === 0 ? (
-        <View style={[styles.empty, { borderColor: p.line }]}>
-          <Ionicons name="paw" size={30} color={p.accent} />
-          <Text style={[styles.emptyText, { color: p.muted }]}>
-            내 반려동물 탭에서{'\n'}아이를 먼저 등록해 주세요.
-          </Text>
-        </View>
+        <LoadState
+          kind="empty"
+          icon="paw"
+          message={'아직 등록한 아이가 없어요.\n아이를 등록하면 그 아이 기준으로 판별해 드려요.'}
+          action={{ label: '아이 등록하기', icon: 'add', onPress: () => router.push('/(tabs)/pets') }}
+        />
       ) : pets.length === 1 ? (
         <View style={styles.card}>
           <PetIdCard pet={pets[0]} />
@@ -421,15 +422,6 @@ const styles = StyleSheet.create({
   },
   stackItem: { position: 'absolute', top: 0, left: 0, right: 0 },
   stackCard: { height: STACK_CARD_H },
-  empty: {
-    alignItems: 'center',
-    gap: Spacing.md,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderRadius: Radius.lg,
-    paddingVertical: 56,
-  },
-  emptyText: { fontSize: Type.bodyLg, textAlign: 'center', lineHeight: 21 },
   histDelete: {
     justifyContent: 'center', alignItems: 'center', gap: 2,
     width: 76, marginLeft: 8, borderRadius: Radius.md,
