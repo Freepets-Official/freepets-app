@@ -422,12 +422,16 @@ function Row({ label, value, alert }: { label: string; value: string; alert?: bo
 /**
  * 아직 못 하는 운영 업무.
  *
- * 리뷰 신고 처리와 테스트 계정 정리도 운영자 화면에 있어야 하지만, **서버에 그 API가 없다**
- * (라이브 Swagger 75개 확인, 2026-09-22). 신고는 접수(`POST /reviews/{id}/report`)만 있고
- * 목록·처리가 없으며, 계정 관리 엔드포인트는 아예 없다.
+ * 리뷰 신고 처리도 운영자 화면에 있어야 하지만 **서버에 그 API가 없다**(라이브 Swagger
+ * 75개 확인, 2026-09-22). 접수(`POST /reviews/{id}/report`)만 있고 목록·처리가 없다.
  *
  * 빈 화면을 만들어 두지 않고 **무엇이 없는지 적는다.** 동작하지 않는 메뉴가 있으면
  * 운영자는 그게 고장인지 미구현인지 알 수 없다.
+ *
+ * 테스트 계정 정리는 여기 없다. 운영자가 계정을 지울 일이 아니라 **랭킹이 활동 없는
+ * 계정을 빼면 되는 일**이기 때문이다(2026-09-22 실측: 참여자 37명 중 33명이 XP 0인 테스트
+ * 계정). 백엔드에 `GET /gamification/ranking`에서 XP 0을 제외해 달라고 요청해 뒀다.
+ * 계정 삭제는 리뷰·판별 이력까지 CASCADE로 함께 날아가 되돌릴 수 없다.
  */
 function PendingCapabilities() {
   const p = usePalette();
@@ -438,10 +442,7 @@ function PendingCapabilities() {
         <Text style={{ fontWeight: '800' }}>리뷰 신고 처리</Text> — 접수만 있고 목록·처리 API가
         없어요. 신고 목록 조회와 숨김·기각이 필요해요.
       </Text>
-      <Text style={[styles.pendingItem, { color: p.muted }]}>
-        <Text style={{ fontWeight: '800' }}>테스트 계정 정리</Text> — 계정 관리 API가 없어요.
-        전체 랭킹에 남아 있는 테스트 닉네임을 지우려면 계정 조회·삭제가 필요해요.
-      </Text>
+
     </View>
   );
 }
