@@ -163,13 +163,6 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.xxl },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.xl },
   brand: { alignItems: 'center', gap: 10 },
-  logo: {
-    width: 68,
-    height: 68,
-    borderRadius: Radius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   // 워드마크는 UI 글씨가 아니라 브랜드 타이포라 Type 사다리를 따르지 않는다
   wordmark: { fontSize: 28, lineHeight: 38, fontWeight: '900', letterSpacing: -1 },
   tagline: { fontSize: Type.body, textAlign: 'center', lineHeight: 20, paddingHorizontal: 20 },

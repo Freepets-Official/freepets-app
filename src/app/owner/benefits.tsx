@@ -5,6 +5,7 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Switch,
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { OwnerLoadState } from '@/components/owner-load-state';
+import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
 import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { useOwnerFacilities } from '@/hooks/use-owner-facilities';
@@ -126,13 +127,11 @@ export default function BenefitsScreen() {
 
           <View style={styles.list}>
             {failed ? (
-              <Pressable onPress={retry}>
-                <Text style={[styles.emptyList, { color: p.muted }]}>혜택을 불러오지 못했어요. 눌러서 다시 시도</Text>
-              </Pressable>
+              <LoadState kind="failed" message="혜택을 불러오지 못했어요." onRetry={retry} />
             ) : list === null ? (
-              <ActivityIndicator color={p.accent} style={{ paddingVertical: 24 }} />
+              <LoadState kind="loading" />
             ) : list.length === 0 ? (
-              <Text style={[styles.emptyList, { color: p.muted }]}>아직 등록한 혜택이 없어요. 위에서 첫 혜택을 추가해보세요.</Text>
+              <LoadState kind="empty" message="아직 등록한 혜택이 없어요. 위에서 첫 혜택을 추가해보세요." />
             ) : (
               list.map((b) => (
                 <View key={b.benefitId} style={[styles.item, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
@@ -173,6 +172,4 @@ const styles = StyleSheet.create({
   itemTitle: { fontSize: Type.bodyLg, fontWeight: '800' },
   itemDetail: { fontSize: Type.footnote, lineHeight: 18 },
   del: { padding: 4 },
-  emptyList: { fontSize: Type.body, lineHeight: 20, textAlign: 'center', paddingVertical: 24 },
-  empty: { fontSize: Type.bodyLg, textAlign: 'center', padding: 40 },
 });

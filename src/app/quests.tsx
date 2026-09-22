@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
+import { LoadState } from '@/components/load-state';
 import { PawChooser } from '@/components/paw-chooser';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
@@ -99,14 +100,11 @@ export default function QuestsScreen() {
       <Stack.Screen options={{ title: '오늘의 퀘스트', headerBackButtonDisplayMode: 'minimal' }} />
 
       {failed ? (
-        <Pressable onPress={retry} style={[styles.state, { borderColor: p.line, backgroundColor: p.card }]}>
-          <Ionicons name="cloud-offline-outline" size={26} color={p.muted} />
-          <Text style={[styles.stateText, { color: p.muted }]}>퀘스트를 불러오지 못했어요. 눌러서 다시 시도</Text>
-        </Pressable>
+        <LoadState kind="failed" message="퀘스트를 불러오지 못했어요." onRetry={retry} />
       ) : !data ? (
-        <ActivityIndicator color={p.accent} style={{ paddingVertical: 40 }} />
+        <LoadState kind="loading" />
       ) : quests.length === 0 ? (
-        <Text style={[styles.stateText, { color: p.muted, paddingVertical: 32 }]}>오늘 받을 수 있는 퀘스트가 없어요.</Text>
+        <LoadState kind="empty" message="오늘 받을 수 있는 퀘스트가 없어요." />
       ) : (
         <>
           <View style={[styles.summary, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
@@ -198,8 +196,6 @@ export default function QuestsScreen() {
 }
 
 const styles = StyleSheet.create({
-  state: { alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: Radius.lg, paddingVertical: 28, paddingHorizontal: Spacing.xl },
-  stateText: { fontSize: Type.body, lineHeight: 20, textAlign: 'center' },
   summary: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: Radius.lg, paddingVertical: Spacing.lg },
   summaryItem: { flex: 1, alignItems: 'center', gap: 3 },
   summaryDivider: { width: 1, alignSelf: 'stretch', marginVertical: 4 },

@@ -5,6 +5,7 @@ import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, TextInpu
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
 import { BusinessVerify } from '@/components/business-verify';
 import { CertificatePicker } from '@/components/certificate-picker';
@@ -158,15 +159,16 @@ export default function RestaurantScreen() {
                 {picker.loading && <ActivityIndicator size="small" color={p.muted} />}
               </View>
               {picker.failed ? (
-                <Pressable onPress={picker.retry}>
-                  <Text style={[styles.empty, { color: p.muted }]}>음식점을 불러오지 못했어요. 눌러서 다시 시도</Text>
-                </Pressable>
+                <LoadState kind="failed" message="음식점을 불러오지 못했어요." onRetry={picker.retry} />
               ) : !picker.loading && candidates.length === 0 ? (
-                <Text style={[styles.empty, { color: p.muted }]}>
-                  {picker.query.trim()
-                    ? '그 이름의 식당을 못 찾았어요. 관광공사에 등록된 이름으로 찾아보세요.'
-                    : '주변 30km에 등록할 음식점이 없어요. 이름을 입력하면 전국에서 찾아요.'}
-                </Text>
+                <LoadState
+                  kind="empty"
+                  message={
+                    picker.query.trim()
+                      ? '그 이름의 식당을 못 찾았어요. 관광공사에 등록된 이름으로 찾아보세요.'
+                      : '주변 30km에 등록할 음식점이 없어요. 이름을 입력하면 전국에서 찾아요.'
+                  }
+                />
               ) : (
                 candidates.map((f) => (
                   <Pressable
@@ -476,7 +478,6 @@ const styles = StyleSheet.create({
   block: { gap: Spacing.md },
   blockLabel: { fontSize: Type.callout, fontWeight: '800' },
   hint: { fontSize: Type.body, lineHeight: 19 },
-  empty: { fontSize: Type.body, paddingVertical: Spacing.lg, textAlign: 'center' },
 
   searchRow: {
     flexDirection: 'row',

@@ -187,5 +187,4 @@ const styles = StyleSheet.create({
   err: { fontSize: Type.footnote, lineHeight: 18, fontWeight: '600' },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: Radius.full, paddingVertical: 15 },
   saveText: { fontSize: Type.callout, fontWeight: '800' },
-  empty: { fontSize: Type.bodyLg, textAlign: 'center', padding: 40 },
 });

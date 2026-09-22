@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { LoadState } from '@/components/load-state';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { TierDot } from '@/components/tier-paw';
@@ -79,12 +80,9 @@ export default function RankingScreen() {
           </Text>
         </View>
       ) : state === 'failed' ? (
-        <Pressable onPress={() => setAttempt((a) => a + 1)} style={[styles.state, { borderColor: p.line, backgroundColor: p.card }]}>
-          <Ionicons name="cloud-offline-outline" size={26} color={p.muted} />
-          <Text style={[styles.stateText, { color: p.muted }]}>순위를 불러오지 못했어요. 눌러서 다시 시도</Text>
-        </Pressable>
+        <LoadState kind="failed" message="순위를 불러오지 못했어요." onRetry={() => setAttempt((a) => a + 1)} />
       ) : state === 'loading' ? (
-        <ActivityIndicator color={p.accent} style={{ paddingVertical: 40 }} />
+        <LoadState kind="loading" />
       ) : (
         <>
           {/* 내 자리 — 이 화면의 핵심. 순위는 서버가 계산한 값을 그대로 쓴다 */}

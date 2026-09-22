@@ -123,5 +123,4 @@ const styles = StyleSheet.create({
   chipText: { fontSize: Type.body, fontWeight: '700' },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: Radius.full, paddingVertical: 15 },
   saveText: { fontSize: Type.callout, fontWeight: '800' },
-  empty: { fontSize: Type.bodyLg, textAlign: 'center', padding: 40 },
 });

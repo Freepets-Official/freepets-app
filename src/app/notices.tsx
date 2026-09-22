@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
 import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
@@ -46,19 +47,11 @@ export default function NoticesScreen() {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           {failed ? (
-            <Pressable
-              onPress={() => void load()}
-              style={[styles.card, CardShadow, { backgroundColor: p.card, borderColor: p.line, alignItems: 'center' }]}>
-              <Ionicons name="cloud-offline-outline" size={28} color={p.muted} />
-              <Text style={[styles.title, { color: p.ink }]}>공지를 불러오지 못했어요</Text>
-              <Text style={[styles.body, { color: p.muted }]}>눌러서 다시 시도</Text>
-            </Pressable>
+            <LoadState kind="failed" message="공지를 불러오지 못했어요." onRetry={() => void load()} />
           ) : items === null ? (
-            <ActivityIndicator color={p.accent} style={{ paddingVertical: 48 }} />
+            <LoadState kind="loading" />
           ) : items.length === 0 ? (
-            <Text style={[styles.body, { color: p.muted, textAlign: 'center', paddingVertical: 48 }]}>
-              아직 공지가 없어요.
-            </Text>
+            <LoadState kind="empty" message="아직 공지가 없어요." />
           ) : (
             items.map((n) => (
               <View

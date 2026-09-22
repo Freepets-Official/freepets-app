@@ -253,13 +253,6 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: Spacing.xl, paddingVertical: Spacing.xxl },
   inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Spacing.xl },
   head: { alignItems: 'center', gap: 8 },
-  logo: {
-    width: 52,
-    height: 52,
-    borderRadius: Radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   title: { fontSize: Type.screenTitle, lineHeight: 34, fontWeight: '900', letterSpacing: -0.8 },
   sub: { fontSize: Type.body, textAlign: 'center', lineHeight: 19, paddingHorizontal: 16 },
   form: { gap: 10 },

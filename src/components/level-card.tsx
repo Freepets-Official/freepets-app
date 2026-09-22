@@ -122,7 +122,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Spacing.lg,
   },
-  tierCircle: { alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
   body: { flex: 1, gap: 7 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   level: { fontSize: Type.headline, lineHeight: 29, fontWeight: '900', letterSpacing: -0.5 },

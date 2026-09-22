@@ -177,5 +177,4 @@ const styles = StyleSheet.create({
   trendDay: { fontSize: Type.micro, fontVariant: ['tabular-nums'] },
   tip: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, borderRadius: Radius.md, padding: Spacing.md },
   tipText: { flex: 1, fontSize: Type.body, lineHeight: 19 },
-  empty: { fontSize: Type.bodyLg, textAlign: 'center', padding: 40 },
 });

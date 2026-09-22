@@ -657,7 +657,6 @@ const styles = StyleSheet.create({
   block: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, gap: 8 },
   blockLabel: { fontSize: Type.bodyLg, fontWeight: '700' },
   blockHint: { fontSize: Type.footnote, marginTop: -4 },
-  blockDivider: { height: 1 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 2 },
   footer: { fontSize: Type.caption, textAlign: 'center', paddingTop: Spacing.sm },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
