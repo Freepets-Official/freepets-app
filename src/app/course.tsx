@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +8,9 @@ import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
 import { ResultBadge } from '@/components/badge';
 import { Chip } from '@/components/chip';
+import { CourseActionNotice } from '@/components/course/action-notice';
+import { StopReorderSheet } from '@/components/course/stop-reorder-sheet';
+import { StopTimeField } from '@/components/course/stop-time-field';
 import {
   CoursePickCard,
   LikedCourseCard,
@@ -21,6 +24,7 @@ import {
   SaveCourseAction,
 } from '@/components/course/course-check';
 import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
+import { BUILDER_PLAN_KEY, outOfOrderStops } from '@/data/course-plan';
 import {
   PRESET_COURSES,
   recommendCourse,
@@ -35,19 +39,15 @@ import { facilitiesApi } from '@/lib/api';
 import { getCurrentLocation, type Coords } from '@/lib/location';
 import {
   CATEGORY_LABEL,
-  type CourseDistanceOption,
-  type CourseRegion,
   type CourseCheckResult,
   type CourseStop,
-  type CourseTheme,
-  type LikedCourse,
   type Facility,
-  type PresetCourse,
   type SavedCourse,
-  type SimilarCourse,
 } from '@/data/types';
 import { ApiError, aiApi, coursesApi } from '@/lib/api';
 import { useCourseLibrary } from '@/hooks/use-course-library';
+import { useCourseRecommendations } from '@/hooks/use-course-recommendations';
+import { useCoursePlan } from '@/hooks/use-course-plan';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -80,32 +80,34 @@ export default function CourseScreen() {
   const [selectedPetIds, setSelectedPetIds] = useState<number[]>(pets.map((x) => x.petId));
   const [stopIds, setStopIds] = useState<number[]>([]);
 
-  // ── 지역×테마 추천(서버) ─────────────────────────────────────────────
-  // 재료(지역·테마·거리)는 서버가 준다. 지역 이름은 자유 텍스트라 "강원"처럼 축약해 보내면
-  // 실제 값("강원특별자치도")과 안 맞아 후보가 0건이 되므로, 반드시 이 응답의 값을 그대로 쓴다.
-  const [regions, setRegions] = useState<CourseRegion[]>([]);
-  const [themes, setThemes] = useState<CourseTheme[]>([]);
-  const [distanceOptions, setDistanceOptions] = useState<CourseDistanceOption[]>([]);
-  const [sido, setSido] = useState<string | null>(null);
-  const [sigungu, setSigungu] = useState<string | null>(null);
-  const [pickedThemes, setPickedThemes] = useState<string[]>([]);
-  const [maxDistance, setMaxDistance] = useState<string | null>(null);
-  // 결과에 그때의 요청 키를 함께 담는다. 필터를 바꾼 뒤 300ms 디바운스 동안 이전 결과가
-  // 새 필터의 답인 것처럼 보이는 걸 막으려는 것이다.
-  const [preset, setPreset] = useState<{ key: string; course: PresetCourse } | null>(null);
-  const [presetLoading, setPresetLoading] = useState(false);
-  const [presetError, setPresetError] = useState<string | null>(null);
-
-  // ── 개인화 추천(서버) ────────────────────────────────────────────────
-  // liked는 실제 방문 기록이, similar는 취향 데이터가 있어야 의미가 있다. 둘 다 없으면
-  // 서버가 각각 COURSE4002 / 콜드스타트로 답하므로 그대로 구분해 보여준다.
-  const [liked, setLiked] = useState<LikedCourse | null>(null);
-  /** 방문 기록이 부족해서 못 만든 상태(COURSE4002). 장애와 구분한다 */
-  const [likedEmpty, setLikedEmpty] = useState(false);
-  const [similar, setSimilar] = useState<SimilarCourse | null>(null);
-  const [personalLoading, setPersonalLoading] = useState(false);
-  /** 기록 부족이 아니라 진짜 실패(네트워크·401·5xx) */
-  const [personalError, setPersonalError] = useState(false);
+  /**
+   * 서버 추천(지역×테마 · 개인화)은 한 훅에 묶여 있다(`use-course-recommendations`).
+   * 지역·거리 필터를 두 조회가 함께 쓰기 때문이다. 이 화면은 결과를 그리기만 한다.
+   */
+  const {
+    regions,
+    themes,
+    distanceOptions,
+    sigunguOptions,
+    sido,
+    setSido,
+    sigungu,
+    setSigungu,
+    pickedThemes,
+    toggleTheme,
+    maxDistance,
+    setMaxDistance,
+    presetKey,
+    presetReady,
+    preset,
+    presetLoading,
+    presetError,
+    liked,
+    likedEmpty,
+    similar,
+    personalLoading,
+    personalError,
+  } = useCourseRecommendations(selectedPetIds);
 
   // ── 서버 코스 일괄 판별 ──────────────────────────────────────────────
   // 빌더의 스톱은 전부 목 시설이라 서버 판별을 쓸 수 없다. 서버가 만들어 준 코스(preset·
@@ -273,125 +275,7 @@ export default function CourseScreen() {
     };
   }, [picking, pickCenter, pickQuery, pickRetry, registerFacilities]);
 
-  // 재료는 필터와 무관하게 한 번만 받는다. 실패해도 화면 전체를 막지 않는다 —
-  // 아래 로컬 추천·직접 만들기는 그대로 쓸 수 있어야 한다.
-  useEffect(() => {
-    let active = true;
-    Promise.all([
-      coursesApi.regions().catch(() => [] as CourseRegion[]),
-      coursesApi.themes().catch(() => [] as CourseTheme[]),
-      coursesApi.distanceOptions().catch(() => [] as CourseDistanceOption[]),
-    ]).then(([rg, th, dp]) => {
-      if (!active) return;
-      setRegions(rg);
-      setThemes(th);
-      setDistanceOptions(dp);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
 
-  /** 지금 화면의 필터 조합. 결과에 붙은 키와 다르면 그 결과는 옛 필터의 답이다 */
-  const presetKey = `${sido ?? ''}|${sigungu ?? ''}|${[...pickedThemes].sort().join(',')}|${maxDistance ?? ''}`;
-
-  // 지역과 테마가 모두 정해져야 조회한다(서버 필수 파라미터).
-  // 조건이 안 맞을 때 상태를 되돌리지 않고 렌더에서 presetReady로 가린다 —
-  // effect 본문에서 setState를 동기로 부르면 연쇄 렌더 경고가 뜬다.
-  useEffect(() => {
-    if (!sido || pickedThemes.length === 0) return;
-    let active = true;
-    const t = setTimeout(async () => {
-      if (!active) return;
-      setPresetLoading(true);
-      setPresetError(null);
-      try {
-        const key = presetKey;
-        const res = await coursesApi.preset({
-          sido,
-          sigungu: sigungu ?? undefined,
-          themes: pickedThemes,
-          maxDistanceM: maxDistance ?? undefined,
-        });
-        if (!active) return;
-        setPreset({ key, course: res });
-      } catch (e) {
-        if (!active) return;
-        setPreset(null);
-        // 조건에 맞는 시설이 2곳 미만이면 서버가 COURSE4001을 준다 — 장애가 아니라 조건 문제라
-        // 그대로 알려주고 다른 조합을 고르게 한다.
-        setPresetError(e instanceof Error ? e.message : '코스를 만들지 못했어요');
-      } finally {
-        if (active) setPresetLoading(false);
-      }
-    }, 300);
-    return () => {
-      active = false;
-      clearTimeout(t);
-    };
-  }, [sido, sigungu, pickedThemes, maxDistance, presetKey]);
-
-  // 선택한 아이가 바뀌면 개인화 추천을 다시 받는다. 실패(기록 부족)는 장애가 아니라
-  // "아직 데이터가 없다"는 정상 상태라 화면을 막지 않는다.
-  useEffect(() => {
-    let active = true;
-    const t = setTimeout(async () => {
-      if (!active) return;
-      // 아이를 하나도 안 고르면 판별할 대상이 없다. 직전 결과를 남겨두면 "누구 취향인지"
-      // 알 수 없는 카드가 그대로 떠 있게 되므로 비운다.
-      if (selectedPetIds.length === 0) {
-        setLiked(null);
-        setSimilar(null);
-        setLikedEmpty(false);
-        setPersonalError(false);
-        setPersonalLoading(false);
-        return;
-      }
-      setPersonalLoading(true);
-      setPersonalError(false);
-      const params = {
-        petIds: selectedPetIds,
-        sido: sido ?? undefined,
-        sigungu: sigungu ?? undefined,
-        maxDistanceM: maxDistance ?? undefined,
-      };
-      // 기록 부족(COURSE4002)과 진짜 실패를 구분한다. 네트워크·401·5xx까지 "방문 기록이
-      // 없어요"로 안내하면 서버 장애를 사용자 탓으로 돌리는 셈이 된다.
-      const [lk, sm] = await Promise.all([
-        coursesApi
-          .liked(params)
-          .then((r) => ({ ok: true as const, value: r }))
-          .catch((e) => ({ ok: false as const, empty: e instanceof ApiError && e.code === 'COURSE4002' })),
-        coursesApi.similar(params).catch(() => null),
-      ]);
-      // 화면을 떠났으면 상태를 건드리지 않는다. 로딩만은 내린다 — 켜둔 채 빠져나가면
-      // 다시 들어왔을 때 아무도 끄지 않는 스피너가 남는다.
-      /**
-       * 새 요청이 이미 시작됐으면 이 응답은 옛 답이다.
-       *
-       * 예전에는 `active`가 false여도 로딩만 끄고 나갔는데, 그 로딩은 **새 요청의 것**이다.
-       * 아이를 두 번 빠르게 바꾸면 A의 응답이 B의 스피너를 끄고 옛 추천이 다시 보였다.
-       * 정리는 다음 effect가 이미 맡고 있으므로 여기서는 아무것도 건드리지 않는다.
-       */
-      if (!active) return;
-      setLiked(lk.ok ? lk.value : null);
-      setLikedEmpty(!lk.ok && lk.empty);
-      setPersonalError(!lk.ok && !lk.empty);
-      setSimilar(sm);
-      setPersonalLoading(false);
-    }, 300);
-    return () => {
-      active = false;
-      clearTimeout(t);
-    };
-  }, [selectedPetIds, sido, sigungu, maxDistance]);
-
-  const sigunguOptions = regions.find((r) => r.sido === sido)?.sigungus ?? [];
-  /** 지역·테마가 다 골라졌을 때만 결과를 보여준다(고르는 중엔 직전 결과가 남아 있어도 감춘다) */
-  const presetReady = sido !== null && pickedThemes.length > 0;
-
-  const toggleTheme = (value: string) =>
-    setPickedThemes((prev) => (prev.includes(value) ? prev.filter((x) => x !== value) : [...prev, value]));
 
   const chosenPets = useMemo(
     () => pets.filter((x) => selectedPetIds.includes(x.petId)),
@@ -430,6 +314,63 @@ export default function CourseScreen() {
    * 것처럼 보이던 원인이다. 상세를 미리 받아 캐시를 채운 뒤 스톱을 세운다.
    */
   const [openingCourseId, setOpeningCourseId] = useState<number | null>(null);
+  /**
+   * 지금 빌더에 올라와 있는 저장 코스. 두 가지에 쓴다.
+   *
+   * ① 빌더 머리에 "무엇을 보고 있는지"를 적는다 — 예전에는 코스를 눌러도 화면이 그대로인 것
+   *    처럼 보였다. 스톱은 실제로 바뀌는데 빌더가 한참 아래에 있어 눈에 안 띄었기 때문이다.
+   * ② 스톱별 시간을 어느 코스 것으로 저장할지 가른다(저장 전 빌더는 `BUILDER_PLAN_KEY`).
+   */
+  const [openedCourse, setOpenedCourse] = useState<SavedCourse | null>(null);
+
+  /**
+   * 담아둔 코스를 열면 **뒤로가기가 그것부터 닫는다.**
+   *
+   * 코스를 여는 것은 화면 이동이 아니라 이 화면의 상태 변화다. 그래서 네비게이션 기록에는
+   * 아무것도 쌓이지 않고, 뒤로가기는 그 단계를 건너뛰어 탐색 탭까지 한 번에 나가 버렸다 —
+   * 사용자에게는 두 칸 뒤로 간 것으로 보인다(실기기에서 보고된 문제).
+   *
+   * 목적지를 정해 보내지 않는다. 이 화면을 떠나려는 시도를 **한 번만 취소하고** 연 코스를
+   * 닫을 뿐이라, 다음 뒤로가기는 여기까지 온 진짜 경로를 그대로 따라간다. 탐색 탭에서
+   * 왔으면 탐색 탭으로, 홈에서 왔으면 홈으로 간다.
+   *
+   * ⚠️ **iOS 스와이프는 이 이벤트로 막을 수 없다.** Expo Router의 `Stack`은 네이티브 스택이라
+   * 스와이프로 밀어낸 화면은 이미 네이티브에서 사라진 뒤다 — `preventDefault()`가 닿지 않는다
+   * (`usePreventRemove`는 SDK 58부터다). 그래서 **연 코스가 있는 동안에는 스와이프 자체를
+   * 잠근다**(아래 `gestureEnabled`). 헤더 뒤로가기와 안드로이드 하드웨어 버튼은 JS를 거치므로
+   * 이 이벤트로 잡힌다.
+   */
+  const navigation = useNavigation();
+  useEffect(() => {
+    if (!openedCourse) return;
+    let off: (() => void) | null = null;
+    off = navigation.addListener('beforeRemove', (e) => {
+      e.preventDefault();
+      // 상태가 바뀌어 이 효과가 정리되기 전에 한 번 더 눌릴 수 있다. 그때 또 막히지 않게
+      // 스스로 떨어진다 — 두 번째 뒤로가기는 화면을 정말로 떠나야 한다.
+      off?.();
+      off = null;
+      setOpenedCourse(null);
+      setStopIds([]);
+      setCourseCheck(null);
+      setCourseCheckError(null);
+    });
+    return () => off?.();
+  }, [navigation, openedCourse]);
+  /** 순서 바꾸기 시트가 열렸는가 */
+  const [reordering, setReordering] = useState(false);
+
+  /**
+   * 스톱별 방문 시각. **서버에 시간 필드가 없어 기기에 남는다**(`data/course-plan.ts`).
+   * 저장 전 빌더와 저장된 코스를 다른 키로 나눈다 — 저장하면 빌더 일정이 그 코스로 옮겨간다.
+   */
+  const { planOf, setStopTime, adoptPlan } = useCoursePlan();
+  const planKey = openedCourse ? String(openedCourse.courseId) : BUILDER_PLAN_KEY;
+  const plan = planOf(planKey);
+  const scrollRef = useRef<ScrollView>(null);
+  /** 빌더 블록의 y 좌표. 코스를 열면 그 자리로 데려간다 */
+  const builderY = useRef(0);
+
   const openSavedCourse = async (course: SavedCourse) => {
     setOpeningCourseId(course.courseId);
     try {
@@ -439,7 +380,10 @@ export default function CourseScreen() {
       setOpeningCourseId(null);
     }
     setStopIds(course.stopIds);
+    setOpenedCourse(course);
     setPicking(false);
+    // 바뀐 것을 보게 한다. 레이아웃이 자리를 잡은 뒤에 움직여야 엉뚱한 곳으로 가지 않는다
+    setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(builderY.current - 12, 0), animated: true }), 60);
   };
 
   /**
@@ -449,6 +393,30 @@ export default function CourseScreen() {
    * 판별되지도 않았는데 결과가 "코스 전체"로 표시됐다 — 가장 위험한 종류의 거짓이다.
    * 담는 단계에서 막고 이유를 알린다.
    */
+  /**
+   * 빌더 코스를 담는다. 담은 뒤 **빌더에 짜둔 시간을 새 코스로 옮긴다** —
+   * 옮기지 않으면 저장하는 순간 시간이 사라진 것처럼 보인다(키가 코스 ID로 바뀌므로).
+   */
+  const saveBuilderCourse = async () => {
+    if (stopIds.length === 0) return;
+    // 이름은 `saveCourse`가 스톱 내용으로 짓는다 — 아래 값은 스톱 이름을 모를 때의 대비책이다
+    // 지금 보고 있는 일정의 키를 먼저 잡아둔다 — 아래에서 openedCourse를 비우면 키가 바뀐다
+    const fromKey = planKey;
+    /**
+     * **저장의 원본은 `stopIds`다.** `stopFacilities`는 상세를 못 받은 장소가 걸러진 목록이라,
+     * 그걸로 저장하면 네트워크가 한 번 흔들린 것만으로 **스톱이 조용히 사라진 코스**가 저장된다.
+     * 이름만 아는 만큼 채워 넣고, ID는 하나도 빠뜨리지 않는다.
+     */
+    const stops = stopIds.map((id) => {
+      const f = facilityById(id);
+      return f ? { facilityId: id, name: f.name } : { facilityId: id };
+    });
+    const newId = await saveCourse(BUILDER_PLAN_KEY, '내가 만든 코스', stops);
+    if (newId === null) return;
+    adoptPlan(fromKey, newId);
+    setOpenedCourse(null);
+  };
+
   const MAX_STOPS = 10;
   const addStop = (facilityId: number) => {
     setStopIds((prev) => {
@@ -500,6 +468,9 @@ export default function CourseScreen() {
   };
 
   // 스토어 캐시에서 찾는다 — 서버 시설과 목 시설을 모두 아는 건 여기뿐이다
+  /** 앞 스톱보다 이른 시각인 곳. 막지 않고 표시만 한다 */
+  const outOfOrder = useMemo(() => outOfOrderStops(stopIds, plan), [stopIds, plan]);
+
   const stopFacilities = stopIds
     .map((id) => facilityById(id))
     .filter((f): f is NonNullable<typeof f> => !!f);
@@ -521,8 +492,15 @@ export default function CourseScreen() {
 
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
-      <Stack.Screen options={{ title: '여행 코스', headerBackButtonDisplayMode: 'minimal'}} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <Stack.Screen
+        options={{
+          title: '여행 코스',
+          headerBackButtonDisplayMode: 'minimal',
+          // 연 코스가 있으면 스와이프로 화면을 통째로 빠져나가지 못하게 한다 — 위 beforeRemove 주석 참고
+          gestureEnabled: !openedCourse,
+        }}
+      />
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           <View style={styles.head}>
             <Text style={[styles.eyebrow, { color: p.accent }]}>여행 코스 판별</Text>
@@ -738,29 +716,6 @@ export default function CourseScreen() {
                 )}
               </View>
 
-              {saveMessage && (
-                <View
-                  style={[
-                    styles.saveNotice,
-                    saveMessage.failed
-                      ? { backgroundColor: p.dangerSoft, borderColor: p.danger }
-                      : { backgroundColor: p.successSoft, borderColor: p.success },
-                  ]}>
-                  <Ionicons
-                    name={saveMessage.failed ? 'alert-circle' : 'checkmark-circle'}
-                    size={16}
-                    color={saveMessage.failed ? p.danger : p.success}
-                  />
-                  <Text
-                    style={[
-                      styles.saveNoticeText,
-                      { color: saveMessage.failed ? p.danger : p.ink },
-                    ]}>
-                    {saveMessage.text}
-                  </Text>
-                </View>
-              )}
-
               {/*
                 둘러보기 — 다른 사람이 공개한 코스. 못 불러온 것과 아직 없는 것을 나눠서 안내한다.
                 로딩 중(null)에는 자리만 비워둔다 — 빈 상태를 먼저 보여주면 없는 줄 알고 지나친다.
@@ -944,13 +899,36 @@ export default function CourseScreen() {
 
           {/* 코스 빌더 — 스톱 목록 */}
           {stopFacilities.length > 0 && (
-            <View style={styles.builder}>
+            <View style={styles.builder} onLayout={(e) => { builderY.current = e.nativeEvent.layout.y; }}>
               <View style={styles.builderHead}>
-                <Text style={[styles.blockLabel, { color: p.ink }]}>내 코스 · {stopFacilities.length}곳</Text>
-                <Pressable onPress={() => { setStopIds([]); setCourseCheck(null); setCourseCheckError(null); }}>
+                <View style={styles.builderTitle}>
+                  <Text style={[styles.blockLabel, { color: p.ink }]}>
+                    {openedCourse ? openedCourse.name : '내 코스'} · {stopFacilities.length}곳
+                  </Text>
+                  {openedCourse && (
+                    <Text style={[styles.builderSub, { color: p.muted }]} numberOfLines={1}>
+                      담아둔 코스를 열었어요 · 고치면 「이 코스로 저장」으로 새로 담겨요
+                    </Text>
+                  )}
+                </View>
+                <Pressable
+                  onPress={() => { setStopIds([]); setOpenedCourse(null); setCourseCheck(null); setCourseCheckError(null); }}>
                   <Text style={[styles.clear, { color: p.muted }]}>비우기</Text>
                 </Pressable>
               </View>
+
+              {/* 순서를 손가락으로 바꾸는 길. 행마다 있는 화살표는 한 칸씩 옮길 때 그대로 쓴다 */}
+              {stopFacilities.length > 1 && (
+                <Pressable
+                  onPress={() => setReordering(true)}
+                  style={({ pressed }) => [
+                    styles.reorderBtn,
+                    { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
+                  ]}>
+                  <Ionicons name="reorder-three" size={16} color={p.accent} />
+                  <Text style={[styles.reorderBtnText, { color: p.accent }]}>순서 바꾸기</Text>
+                </Pressable>
+              )}
 
               {stopFacilities.map((f, i) => {
                 const stopResult =
@@ -973,9 +951,13 @@ export default function CourseScreen() {
                       onPress={() =>
                         router.push({
                           pathname: '/facility/[id]',
-                          params: { id: String(f.facilityId), from: 'course' },
+                          params: { id: String(f.facilityId) },
                         })
                       }
+                      // 꾹 누르면 순서 바꾸기로 간다. 목록이 세로 스크롤 안에 있어 여기서 바로
+                      // 끌게 하면 스크롤과 다투므로, 끌기 전용 시트를 여는 것까지만 한다
+                      onLongPress={stopFacilities.length > 1 ? () => setReordering(true) : undefined}
+                      delayLongPress={280}
                       style={({ pressed }) => [styles.stopBody, { opacity: pressed ? 0.6 : 1 }]}>
                       <View style={styles.stopTop}>
                         <Text style={[styles.stopCat, { color: p.accent }]}>
@@ -988,6 +970,18 @@ export default function CourseScreen() {
                         {formatDistance(f.distanceM)}
                       </Text>
                     </Pressable>
+
+                    {/*
+                      방문 시각. 시설 이름을 누르면 상세로 가므로 **Pressable 바깥**에 둔다 —
+                      안에 넣으면 시간을 고치려다 화면이 넘어간다.
+                    */}
+                    <View style={styles.stopTime}>
+                      <StopTimeField
+                        value={plan[String(f.facilityId)]}
+                        outOfOrder={outOfOrder.has(f.facilityId)}
+                        onChange={(t) => setStopTime(planKey, f.facilityId, t)}
+                      />
+                    </View>
 
                     <View style={styles.stopActions}>
                       <Pressable
@@ -1023,6 +1017,34 @@ export default function CourseScreen() {
                 <Ionicons name={picking ? 'remove' : 'add'} size={17} color={p.accent} />
                 <Text style={[styles.addStopText, { color: p.accent }]}>
                   {picking ? '닫기' : '스톱 추가'}
+                </Text>
+              </Pressable>
+
+              {/*
+                빌더로 짠 코스를 담는다. 예전에는 추천 카드에만 저장 버튼이 있어서, 직접
+                고른 코스는 화면을 떠나는 순간 사라졌다 — 스톱 순서와 시간까지 정해 놓고도.
+
+                담은 코스를 열어 고친 경우에도 **새 코스로** 담긴다. 서버의 덮어쓰기
+                (`PUT /courses/{id}`)는 스톱을 전부 다시 실어야 하는데, 원본을 바꿔버리면
+                남이 담아간 코스와 어긋난다. 원본은 두고 새로 담는 쪽이 덜 놀랍다.
+              */}
+              <Pressable
+                onPress={() => void saveBuilderCourse()}
+                disabled={savingKey === BUILDER_PLAN_KEY}
+                style={({ pressed }) => [
+                  styles.saveCourseBtn,
+                  {
+                    borderColor: p.accent,
+                    backgroundColor: pressed || savingKey === BUILDER_PLAN_KEY ? p.accentSoft : 'transparent',
+                  },
+                ]}>
+                {savingKey === BUILDER_PLAN_KEY ? (
+                  <ActivityIndicator color={p.accent} size="small" />
+                ) : (
+                  <Ionicons name="bookmark-outline" size={16} color={p.accent} />
+                )}
+                <Text style={[styles.saveCourseText, { color: p.accent }]}>
+                  {openedCourse ? '고친 대로 새로 담기' : '이 코스로 저장'}
                 </Text>
               </Pressable>
             </View>
@@ -1111,6 +1133,22 @@ export default function CourseScreen() {
           )}
         </View>
       </ScrollView>
+      {/* 어디서 눌렀든 보이게 화면 아래에 띄운다 — 배너를 블록 안에 두면 담기 버튼에서 멀다 */}
+      <CourseActionNotice message={saveMessage} onDismiss={() => setSaveMessage(null)} />
+
+      <StopReorderSheet
+        visible={reordering}
+        stopIds={stopIds}
+        facilityOf={facilityById}
+        onClose={() => setReordering(false)}
+        onConfirm={(ids) => {
+          setStopIds(ids);
+          setReordering(false);
+          // 순서가 바뀌면 이전 판별 결과는 더 이상 이 코스의 답이 아니다
+          setCourseCheck(null);
+          setCourseCheckError(null);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1140,16 +1178,6 @@ export default function CourseScreen() {
 /** 추천 코스를 내 코스로 담는다. 서버는 stopIds만 저장한다. */
 
 const styles = StyleSheet.create({
-  saveNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    paddingVertical: 11,
-    paddingHorizontal: Spacing.lg,
-  },
-  saveNoticeText: { flex: 1, fontSize: Type.body, lineHeight: 19, fontWeight: '600' },
   presetBlock: { gap: 10, marginTop: 4 },
   filterLabel: { fontSize: Type.footnote, fontWeight: '800', letterSpacing: 0.3 },
   chips: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.xl },
@@ -1210,6 +1238,19 @@ const styles = StyleSheet.create({
   buildText: { fontSize: Type.bodyLg, fontWeight: '800' },
 
   builder: { gap: Spacing.sm },
+  builderTitle: { flex: 1, gap: 2 },
+  builderSub: { fontSize: Type.caption },
+  reorderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: Radius.full,
+    paddingVertical: 8,
+    marginBottom: 2,
+  },
+  reorderBtnText: { fontSize: Type.footnote, fontWeight: '800' },
   builderHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   clear: { fontSize: Type.footnote, fontWeight: '700' },
   stopRow: { flexDirection: 'row', gap: Spacing.md, borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.md },
@@ -1222,6 +1263,17 @@ const styles = StyleSheet.create({
   stopCat: { fontSize: Type.micro, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' },
   stopName: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
   stopMeta: { fontSize: Type.footnote },
+  saveCourseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: Radius.full,
+    paddingVertical: 11,
+  },
+  saveCourseText: { fontSize: Type.callout, fontWeight: '800' },
+  stopTime: { justifyContent: 'center' },
   stopActions: { flexDirection: 'row', alignItems: 'center' },
   iconBtn: { padding: 4 },
   addStopBtn: {
