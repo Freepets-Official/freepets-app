@@ -48,6 +48,11 @@ export function CourseActionNotice({
       <Pressable
         onPress={onDismiss}
         accessibilityRole="alert"
+        /**
+         * 안드로이드는 `alert` 역할만으로 읽어주지 않는다. TalkBack이 새로 뜬 문구를 소리내려면
+         * 라이브 리전이 필요하다 — 담기 결과를 눈으로 못 보는 사용자에게는 이게 유일한 확인이다.
+         */
+        accessibilityLiveRegion="polite"
         style={[
           styles.card,
           message.failed

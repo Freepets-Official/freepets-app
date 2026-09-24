@@ -34,31 +34,40 @@ const SLOT = ROW_H + GAP;
 
 export function StopReorderSheet({
   visible,
-  stops,
+  stopIds,
+  facilityOf,
   onClose,
   onConfirm,
 }: {
   visible: boolean;
-  stops: Facility[];
+  /**
+   * 스톱 **전부**의 ID. 상세를 못 받은 장소도 들어 있다.
+   *
+   * 예전에는 이미 걸러진 `Facility[]`를 받았는데, 그러면 확인을 누르는 순간 **못 불러온
+   * 장소가 코스에서 사라졌다** — 순서만 바꾸려던 사용자가 스톱을 잃는다.
+   */
+  stopIds: number[];
+  /** ID로 시설을 찾는다. 없으면 자리만 남기고 "불러오지 못함"으로 그린다 */
+  facilityOf: (id: number) => Facility | undefined;
   onClose: () => void;
-  /** 확인을 눌렀을 때만 불린다. 바뀐 순서의 시설 ID 목록 */
+  /** 확인을 눌렀을 때만 불린다. 바뀐 순서의 시설 ID 목록 — 받은 것을 하나도 빠뜨리지 않는다 */
   onConfirm: (facilityIds: number[]) => void;
 }) {
   const p = usePalette();
   const insets = useSafeAreaInsets();
-  const [order, setOrder] = useState<Facility[]>(stops);
+  const [order, setOrder] = useState<number[]>(stopIds);
 
   /**
    * 시트를 **열 때만** 바깥의 순서를 들여온다.
    *
-   * `stops`를 의존성에 넣으면 안 된다 — 바깥에서 매 렌더 새로 만드는 배열이라, 부모가
-   * 한 번만 다시 그려도 이 효과가 돌아 **끌던 순서가 제자리로 돌아간다.**
+   * `stopIds`를 의존성에 넣어도 되는 것은 `visible`이 켜지는 순간만 보기 때문이다. 값 자체로
+   * 다시 초기화하면 부모가 한 번만 다시 그려도 **끌던 순서가 제자리로 돌아간다.**
    */
   const wasVisible = useRef(false);
   useEffect(() => {
-    if (visible && !wasVisible.current) setOrder(stops);
+    if (visible && !wasVisible.current) setOrder(stopIds);
     wasVisible.current = visible;
-  }, [visible, stops]);
+  }, [visible, stopIds]);
 
   const move = useCallback((from: number, to: number) => {
     setOrder((prev) => {
@@ -89,13 +98,14 @@ export function StopReorderSheet({
           </Text>
 
           <View style={{ height: order.length * SLOT }}>
-            {order.map((f, i) => (
+            {order.map((id, i) => (
               <DraggableRow
-                key={f.facilityId}
-                facility={f}
+                key={id}
+                facility={facilityOf(id)}
                 index={i}
                 count={order.length}
                 onMove={move}
+                onShift={(dir) => move(i, i + dir)}
               />
             ))}
           </View>
@@ -110,7 +120,7 @@ export function StopReorderSheet({
               <Text style={[styles.btnText, { color: p.muted }]}>취소</Text>
             </Pressable>
             <Pressable
-              onPress={() => onConfirm(order.map((f) => f.facilityId))}
+              onPress={() => onConfirm(order)}
               style={({ pressed }) => [
                 styles.btn,
                 { borderColor: p.accent, backgroundColor: pressed ? p.accentDark : p.accent },
@@ -136,11 +146,15 @@ function DraggableRow({
   index,
   count,
   onMove,
+  onShift,
 }: {
-  facility: Facility;
+  /** 상세를 못 받았으면 undefined — 자리는 지키고 "불러오지 못함"으로 그린다 */
+  facility: Facility | undefined;
   index: number;
   count: number;
   onMove: (from: number, to: number) => void;
+  /** 스크린 리더용 — 끌지 않고 한 칸씩 옮긴다 */
+  onShift: (direction: -1 | 1) => void;
 }) {
   const p = usePalette();
   /** 손가락이 움직인 거리 */
@@ -197,6 +211,22 @@ function DraggableRow({
   return (
     <GestureDetector gesture={drag}>
       <Animated.View
+        /**
+         * 스크린 리더는 드래그를 쓸 수 없다. VoiceOver·TalkBack에서 「위로」·「아래로」
+         * 동작으로 한 칸씩 옮길 수 있게 열어 둔다 — 순서 바꾸기가 그들에게만 막히면 안 된다.
+         */
+        accessible
+        accessibilityRole="adjustable"
+        accessibilityLabel={`${index + 1}번째, ${facility ? facility.name : '불러오지 못한 장소'}`}
+        accessibilityHint="꾹 눌러 끌거나, 위로·아래로 동작으로 순서를 바꿀 수 있어요"
+        accessibilityActions={[
+          { name: 'increment', label: '위로 옮기기' },
+          { name: 'decrement', label: '아래로 옮기기' },
+        ]}
+        onAccessibilityAction={(e) => {
+          if (e.nativeEvent.actionName === 'increment') onShift(-1);
+          else if (e.nativeEvent.actionName === 'decrement') onShift(1);
+        }}
         style={[
           styles.row,
           { backgroundColor: p.card, borderColor: p.line, shadowColor: '#000' },
@@ -206,11 +236,11 @@ function DraggableRow({
           <Text style={[styles.orderNum, { color: p.accent }]}>{index + 1}</Text>
         </View>
         <View style={styles.rowBody}>
-          <Text style={[styles.rowName, { color: p.ink }]} numberOfLines={1}>
-            {facility.name}
+          <Text style={[styles.rowName, { color: facility ? p.ink : p.muted }]} numberOfLines={1}>
+            {facility ? facility.name : '불러오지 못한 장소'}
           </Text>
           <Text style={[styles.rowCat, { color: p.muted }]} numberOfLines={1}>
-            {CATEGORY_LABEL[facility.category]}
+            {facility ? CATEGORY_LABEL[facility.category] : '이름은 없지만 코스에는 남아 있어요'}
           </Text>
         </View>
         <Ionicons name="reorder-three" size={22} color={p.muted} />

@@ -334,7 +334,11 @@ export default function CourseScreen() {
    * 닫을 뿐이라, 다음 뒤로가기는 여기까지 온 진짜 경로를 그대로 따라간다. 탐색 탭에서
    * 왔으면 탐색 탭으로, 홈에서 왔으면 홈으로 간다.
    *
-   * iOS 스와이프와 안드로이드 하드웨어 버튼도 같은 이벤트를 타므로 함께 처리된다.
+   * ⚠️ **iOS 스와이프는 이 이벤트로 막을 수 없다.** Expo Router의 `Stack`은 네이티브 스택이라
+   * 스와이프로 밀어낸 화면은 이미 네이티브에서 사라진 뒤다 — `preventDefault()`가 닿지 않는다
+   * (`usePreventRemove`는 SDK 58부터다). 그래서 **연 코스가 있는 동안에는 스와이프 자체를
+   * 잠근다**(아래 `gestureEnabled`). 헤더 뒤로가기와 안드로이드 하드웨어 버튼은 JS를 거치므로
+   * 이 이벤트로 잡힌다.
    */
   const navigation = useNavigation();
   useEffect(() => {
@@ -394,11 +398,20 @@ export default function CourseScreen() {
    * 옮기지 않으면 저장하는 순간 시간이 사라진 것처럼 보인다(키가 코스 ID로 바뀌므로).
    */
   const saveBuilderCourse = async () => {
-    if (stopFacilities.length === 0) return;
+    if (stopIds.length === 0) return;
     // 이름은 `saveCourse`가 스톱 내용으로 짓는다 — 아래 값은 스톱 이름을 모를 때의 대비책이다
     // 지금 보고 있는 일정의 키를 먼저 잡아둔다 — 아래에서 openedCourse를 비우면 키가 바뀐다
     const fromKey = planKey;
-    const newId = await saveCourse(BUILDER_PLAN_KEY, '내가 만든 코스', stopFacilities);
+    /**
+     * **저장의 원본은 `stopIds`다.** `stopFacilities`는 상세를 못 받은 장소가 걸러진 목록이라,
+     * 그걸로 저장하면 네트워크가 한 번 흔들린 것만으로 **스톱이 조용히 사라진 코스**가 저장된다.
+     * 이름만 아는 만큼 채워 넣고, ID는 하나도 빠뜨리지 않는다.
+     */
+    const stops = stopIds.map((id) => {
+      const f = facilityById(id);
+      return f ? { facilityId: id, name: f.name } : { facilityId: id };
+    });
+    const newId = await saveCourse(BUILDER_PLAN_KEY, '내가 만든 코스', stops);
     if (newId === null) return;
     adoptPlan(fromKey, newId);
     setOpenedCourse(null);
@@ -479,7 +492,14 @@ export default function CourseScreen() {
 
   return (
     <SafeAreaView edges={['bottom']} style={[styles.safe, { backgroundColor: p.bg }]}>
-      <Stack.Screen options={{ title: '여행 코스', headerBackButtonDisplayMode: 'minimal'}} />
+      <Stack.Screen
+        options={{
+          title: '여행 코스',
+          headerBackButtonDisplayMode: 'minimal',
+          // 연 코스가 있으면 스와이프로 화면을 통째로 빠져나가지 못하게 한다 — 위 beforeRemove 주석 참고
+          gestureEnabled: !openedCourse,
+        }}
+      />
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
           <View style={styles.head}>
@@ -1118,7 +1138,8 @@ export default function CourseScreen() {
 
       <StopReorderSheet
         visible={reordering}
-        stops={stopFacilities}
+        stopIds={stopIds}
+        facilityOf={facilityById}
         onClose={() => setReordering(false)}
         onConfirm={(ids) => {
           setStopIds(ids);

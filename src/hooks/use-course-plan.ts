@@ -19,15 +19,26 @@ export function useCoursePlan() {
 
   useEffect(() => {
     let alive = true;
-    loadCoursePlans().then((p) => {
+    loadCoursePlans().then((stored) => {
       if (!alive) return;
-      setPlans(p);
+      /**
+       * 디스크에서 온 값을 **덮어쓰지 않고 밑에 깐다.**
+       *
+       * 로드는 비동기라, 그 사이에 사용자가 시간을 정할 수 있다. `setPlans(stored)`로 그냥
+       * 갈아끼우면 방금 입력한 시간이 사라진다 — 화면에 떴다가 없어지므로 사용자는 앱이
+       * 먹었다고 느낀다. 이미 만진 코스는 화면 값이 이긴다.
+       */
+      setPlans((cur) => ({ ...stored, ...cur }));
       loaded.current = true;
     });
     return () => {
       alive = false;
     };
   }, []);
+
+  /** 저장 대기 중인 최신 값. 화면을 나갈 때 마지막으로 한 번 더 쓰려고 들고 있는다 */
+  const latest = useRef(plans);
+  latest.current = plans;
 
   useEffect(() => {
     if (!loaded.current) return;
@@ -37,6 +48,20 @@ export function useCoursePlan() {
       if (timer.current) clearTimeout(timer.current);
     };
   }, [plans]);
+
+  /**
+   * 화면을 나갈 때 **마지막 한 번을 더 쓴다.**
+   *
+   * 디바운스가 500ms라, 시간을 고치고 바로 뒤로가기를 누르면 위 effect의 cleanup이 타이머를
+   * 취소한 채 끝난다. 그 뒤로 저장할 사람이 없어 **마지막 수정이 그대로 사라진다.**
+   * 언마운트에만 도는 effect라 의존성은 비워 둔다.
+   */
+  useEffect(
+    () => () => {
+      if (loaded.current) void saveCoursePlans(latest.current);
+    },
+    [],
+  );
 
   /**
    * 한 스톱의 시간을 정한다. `null`을 주면 지운다.
