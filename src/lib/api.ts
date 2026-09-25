@@ -1,5 +1,6 @@
 import type {
   Category,
+  CourseStopRef,
   Facility,
   FacilityReviewData,
   CheckResult,
@@ -1498,17 +1499,61 @@ function personalQuery(params: CoursePersonalParams): string {
   return q.toString();
 }
 
+/**
+ * 서버가 보내는 스톱 한 건.
+ *
+ * 2026-09-25 배포로 코스 응답이 `stopIds: number[]`에서 `stops: {facilityId, visitTime}[]`로
+ * **바뀌었다**(`api-specs/course.md`에는 아직 반영 전). 옛 서버도 받아들이게 둘 다 읽는다 —
+ * 한쪽만 보면 배포 순서에 따라 코스가 통째로 빈 목록이 된다.
+ */
+type ServerStop = { facilityId?: number; visitTime?: string | null };
+
+/**
+ * 방문 시각을 `"HH:MM"`으로 맞춘다.
+ *
+ * 서버 명세에 형식이 적혀 있지 않아(샘플이 전부 `null`이다) 들어올 수 있는 모양을 넓게 받는다.
+ * `"09:30"`·`"09:30:00"`·ISO 날짜시간 전부 앞의 시:분만 쓴다. 못 읽으면 "안 정함"으로 둔다 —
+ * 엉뚱한 시각을 그리는 것보다 비어 있는 게 낫다.
+ */
+function toVisitTime(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const m = /(\d{1,2}):(\d{2})/.exec(v);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+/** 보낼 때 — 시각을 안 정한 스톱은 키 자체를 빼서 보낸다 */
+function toStopBody(stops: CourseStopRef[]) {
+  return stops.map((s) => (s.visitTime ? { facilityId: s.facilityId, visitTime: s.visitTime } : { facilityId: s.facilityId }));
+}
+
+/** `stops`(신) 또는 `stopIds`(구) 어느 쪽이 와도 같은 모양으로 만든다 */
+function toStops(stops: ServerStop[] | null | undefined, legacyIds: number[] | null | undefined): CourseStopRef[] {
+  if (Array.isArray(stops)) {
+    return stops
+      .filter((s): s is ServerStop & { facilityId: number } => typeof s?.facilityId === 'number')
+      .map((s) => ({ facilityId: s.facilityId, visitTime: toVisitTime(s.visitTime) }));
+  }
+  return (legacyIds ?? []).map((facilityId) => ({ facilityId, visitTime: null }));
+}
+
 /** 서버가 보내는 모양. 필드별로 빠질 수 있음을 타입에 적어야 방어가 실제로 필요한지 드러난다. */
 type ServerPublicCourse = {
   courseId: number;
   name: string | null;
   description: string | null;
   ownerNickname: string | null;
-  stopIds: number[] | null;
+  stops?: ServerStop[] | null;
+  /** 옛 서버 */
+  stopIds?: number[] | null;
   createdAt: string;
 };
 
 function toPublicCourse(c: ServerPublicCourse): PublicCourse {
+  const stops = toStops(c.stops, c.stopIds);
   return {
     courseId: c.courseId,
     // 이름이 비면 행이 아이콘과 "N곳"만 남은 빈 줄이 된다. 소유자와 같은 기준으로 막는다.
@@ -1516,17 +1561,25 @@ function toPublicCourse(c: ServerPublicCourse): PublicCourse {
     description: c.description ?? null,
     // 소유자를 못 채워 보내도 목록이 깨지지 않게 한다. 빈 문자열이면 화면에서 숨긴다
     ownerNickname: c.ownerNickname ?? '',
-    stopIds: c.stopIds ?? [],
+    stops,
+    stopIds: stops.map((s) => s.facilityId),
     createdAt: c.createdAt,
   };
 }
 
-function toSavedCourse(c: SavedCourse): SavedCourse {
+type ServerSavedCourse = Omit<SavedCourse, 'stops' | 'stopIds'> & {
+  stops?: ServerStop[] | null;
+  stopIds?: number[] | null;
+};
+
+function toSavedCourse(c: ServerSavedCourse): SavedCourse {
+  const stops = toStops(c.stops, c.stopIds);
   return {
     courseId: c.courseId,
     name: c.name,
     description: c.description ?? null,
-    stopIds: c.stopIds ?? [],
+    stops,
+    stopIds: stops.map((s) => s.facilityId),
     createdAt: c.createdAt,
     isPublic: c.isPublic ?? false,
   };
@@ -1622,18 +1675,28 @@ export const coursesApi = {
 
   /** 내 CUSTOM 코스 전체. 페이지네이션이 없다(많이 쌓일 자원이 아니라는 판단). */
   list: async (): Promise<SavedCourse[]> => {
-    const r = await request<SavedCourse[] | null>('GET', '/api/v1/courses', { auth: true });
+    const r = await request<ServerSavedCourse[] | null>('GET', '/api/v1/courses', { auth: true });
     return (r ?? []).map(toSavedCourse);
   },
 
-  /** 추천으로 받은 stops의 facilityId를 그대로 넣으면 내 코스가 된다. 1~10개. */
+  /**
+   * 코스를 만든다. 1~10개.
+   *
+   * 요청 본문은 `stops: [{facilityId, visitTime}]`다 — 2026-09-25 배포로 `stopIds`에서 바뀌었다.
+   * 방문 시각을 안 정했으면 `visitTime`을 빼고 보낸다(`null`을 넣지 않는 쪽이 안전하다).
+   */
   create: async (input: {
     name: string;
     description?: string;
-    stopIds: number[];
+    stops: CourseStopRef[];
     isPublic?: boolean;
   }): Promise<SavedCourse> =>
-    toSavedCourse(await request<SavedCourse>('POST', '/api/v1/courses', { body: input, auth: true })),
+    toSavedCourse(
+      await request<ServerSavedCourse>('POST', '/api/v1/courses', {
+        body: { ...input, stops: toStopBody(input.stops) },
+        auth: true,
+      }),
+    ),
 
   /**
    * stopIds **전체를 교체**한다. 한 곳만 바꾸려면 replaceStop을 쓴다.
@@ -1645,10 +1708,13 @@ export const coursesApi = {
    */
   update: async (
     courseId: number,
-    input: { name: string; description?: string; stopIds: number[]; isPublic?: boolean },
+    input: { name: string; description?: string; stops: CourseStopRef[]; isPublic?: boolean },
   ): Promise<SavedCourse> =>
     toSavedCourse(
-      await request<SavedCourse>('PUT', `/api/v1/courses/${courseId}`, { body: input, auth: true }),
+      await request<ServerSavedCourse>('PUT', `/api/v1/courses/${courseId}`, {
+        body: { ...input, stops: toStopBody(input.stops) },
+        auth: true,
+      }),
     ),
 
   /**
@@ -1662,7 +1728,7 @@ export const coursesApi = {
    */
   setVisibility: async (courseId: number, isPublic: boolean): Promise<SavedCourse> =>
     toSavedCourse(
-      await request<SavedCourse>('PATCH', `/api/v1/courses/${courseId}/visibility`, {
+      await request<ServerSavedCourse>('PATCH', `/api/v1/courses/${courseId}/visibility`, {
         body: { isPublic },
         auth: true,
       }),
@@ -1674,7 +1740,7 @@ export const coursesApi = {
    */
   replaceStop: async (courseId: number, stopOrder: number, facilityId: number): Promise<SavedCourse> =>
     toSavedCourse(
-      await request<SavedCourse>('PUT', `/api/v1/courses/${courseId}/stops/${stopOrder}`, {
+      await request<ServerSavedCourse>('PUT', `/api/v1/courses/${courseId}/stops/${stopOrder}`, {
         body: { facilityId },
         auth: true,
       }),
@@ -1686,7 +1752,7 @@ export const coursesApi = {
   /** 이름만 바꾼다(백엔드 PR #97). PUT처럼 스톱을 다시 보내지 않아도 된다. 본인 코스만. */
   rename: async (courseId: number, name: string): Promise<SavedCourse> =>
     toSavedCourse(
-      await request<SavedCourse>('PATCH', `/api/v1/courses/${courseId}/name`, { body: { name }, auth: true }),
+      await request<ServerSavedCourse>('PATCH', `/api/v1/courses/${courseId}/name`, { body: { name }, auth: true }),
     ),
 
   /**
