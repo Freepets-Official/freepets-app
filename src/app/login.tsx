@@ -70,24 +70,47 @@ export default function LoginScreen() {
             <View style={styles.form}>
               <View style={[styles.field, { backgroundColor: p.surface, borderColor: p.line }]}>
                 <Ionicons name="mail-outline" size={18} color={p.muted} />
+                {/*
+                  `textContentType`으로 **여기가 아이디 칸임을 iOS에 알린다.**
+
+                  이게 없으면 iOS는 아래 비밀번호 칸이 무엇인지 스스로 추측해야 하고, 아이디
+                  칸을 못 찾으면 **새 비밀번호를 만드는 자리로 본다**(자동 강력 암호). 그때
+                  칸의 내용이 통째로 선택된 상태가 되어, 한 글자 지우려고 백스페이스를 누르면
+                  **전부 지워진다** — 실기기에서 보고된 그 문제다.
+                */}
                 <TextInput
                   value={email}
                   onChangeText={setEmail}
                   placeholder="이메일"
                   placeholderTextColor={p.muted}
                   autoCapitalize="none"
+                  autoCorrect={false}
                   keyboardType="email-address"
+                  textContentType="username"
+                  autoComplete="email"
                   style={[styles.input, { color: p.ink }]}
                 />
               </View>
               <View style={[styles.field, { backgroundColor: p.surface, borderColor: p.line }]}>
                 <Ionicons name="lock-closed-outline" size={18} color={p.muted} />
+                {/*
+                  **이미 있는 비밀번호**(`password`)라고 못박는다. `newPassword`나 미지정이면
+                  iOS가 강력 암호를 제안하며 칸을 장악한다.
+
+                  자동완성·맞춤법도 끈다. 가린 글자를 iOS가 한 덩어리 단어로 보고, 지울 때
+                  그 덩어리를 통째로 갈아치우는 경로가 따로 있다.
+                */}
                 <TextInput
                   value={pw}
                   onChangeText={setPw}
                   placeholder="비밀번호"
                   placeholderTextColor={p.muted}
                   secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  textContentType="password"
+                  autoComplete="current-password"
                   style={[styles.input, { color: p.ink }]}
                 />
               </View>

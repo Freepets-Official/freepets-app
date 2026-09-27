@@ -80,12 +80,23 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.form}>
+              {/*
+                `textContentType`으로 **어느 칸이 무엇인지 iOS에 알린다.**
+
+                안 알려주면 iOS가 추측하는데, 추측이 틀리면 칸의 내용이 통째로 선택된 채로
+                놓여 백스페이스 한 번에 전부 지워진다(로그인 화면에서 실제로 겪은 문제).
+                여기는 가입이라 비밀번호가 `newPassword`다 — iOS가 강력 암호를 제안하는 것이
+                이 자리에서는 맞는 동작이다. 확인 칸도 같은 값이어야 둘이 함께 채워진다.
+              */}
               <Field
                 icon="mail-outline"
                 value={email}
                 onChangeText={setEmail}
                 placeholder="이메일"
                 keyboardType="email-address"
+                autoCorrect={false}
+                textContentType="username"
+                autoComplete="email"
                 hint={email.length > 0 && !emailOk ? '올바른 이메일 형식이 아니에요' : undefined}
               />
               <Field
@@ -94,6 +105,10 @@ export default function SignupScreen() {
                 onChangeText={setPw}
                 placeholder="비밀번호 (8~64자)"
                 secureTextEntry
+                autoCorrect={false}
+                spellCheck={false}
+                textContentType="newPassword"
+                autoComplete="new-password"
                 maxLength={64}
                 hint={pw.length > 0 && !pwOk ? '8~64자로 입력해주세요' : undefined}
               />
@@ -103,6 +118,10 @@ export default function SignupScreen() {
                 onChangeText={setPw2}
                 placeholder="비밀번호 확인"
                 secureTextEntry
+                autoCorrect={false}
+                spellCheck={false}
+                textContentType="newPassword"
+                autoComplete="new-password"
                 maxLength={64}
                 hint={pw2.length > 0 && !matchOk ? '비밀번호가 일치하지 않아요' : undefined}
               />
