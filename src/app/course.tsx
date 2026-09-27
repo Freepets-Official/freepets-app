@@ -426,10 +426,16 @@ export default function CourseScreen() {
    *
    * 시간만 바로잡을 때가 많은데, 그때마다 같은 동선이 목록에 하나씩 늘어나면 곤란하다.
    * 대신 원본이 바뀌므로, 남에게 공유한 코스라면 새로 담는 쪽을 고르면 된다 — 둘 다 둔다.
+   *
+   * 고친 뒤에도 **그 코스를 계속 열어둔 채로** 둔다. 닫아 버리면 같은 스톱이 남아 있는
+   * 빌더가 되어, 이어서 「이 코스로 저장」을 누르면 방금 고친 코스가 하나 더 생긴다.
    */
   const saveOverOpenedCourse = async () => {
     if (!openedCourse || stops.length === 0) return;
-    if (await updateCourse(openedCourse, stops)) setOpenedCourse(null);
+    const updated = await updateCourse(openedCourse, stops);
+    if (!updated) return;
+    setOpenedCourse(updated);
+    setStops(updated.stops);
   };
 
   const MAX_STOPS = 10;

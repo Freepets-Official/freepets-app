@@ -222,8 +222,8 @@ export function useCourseLibrary() {
    * 공개 여부는 **지금 값을 그대로 다시 실어 보낸다.** `PUT`은 코스 전체를 교체하므로
    * 빼먹으면 공개해 둔 코스가 조용히 비공개로 돌아간다.
    */
-  const updateCourse = async (course: SavedCourse, stops: CourseStopRef[]): Promise<boolean> => {
-    if (stops.length === 0) return false;
+  const updateCourse = async (course: SavedCourse, stops: CourseStopRef[]): Promise<SavedCourse | null> => {
+    if (stops.length === 0) return null;
     setSavingKey(String(course.courseId));
     setSaveMessage(null);
     try {
@@ -236,10 +236,11 @@ export function useCourseLibrary() {
       setSavedCourses((prev) => prev.map((c) => (c.courseId === updated.courseId ? updated : c)));
       setSaveMessage({ text: `'${course.name}'을(를) 고쳤어요`, failed: false });
       reloadSaved().catch(() => {});
-      return true;
+      // 서버가 정리해 준 코스를 그대로 돌려준다 — 부르는 쪽이 열어둔 코스를 이걸로 갈아끼운다
+      return updated;
     } catch (e) {
       setSaveMessage({ text: e instanceof Error ? e.message : '코스를 고치지 못했어요', failed: true });
-      return false;
+      return null;
     } finally {
       setSavingKey(null);
     }
