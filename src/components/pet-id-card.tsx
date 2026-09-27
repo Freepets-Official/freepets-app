@@ -22,12 +22,17 @@ import {
 import { useAppStore } from '@/store/app-store';
 
 /**
- * 반려동물 주민등록증 — 홈의 아이 카드.
+ * 반려동물 여권 — 홈의 아이 카드.
  *
- * 등록한 정보가 그대로 신분증 서식에 얹힌다. 게임 네임플레이트였던 예전 카드와 달리
- * "이 아이가 어떤 아이인지"가 한 장에 정리돼, 매장에서 보여주기도 자연스럽다.
+ * **펼쳐 놓은 여권**의 모양이다. 왼쪽 면에는 사진과 이 아이의 정보가, 오른쪽 면에는
+ * 최애 장소·보호자·발급일이 들어간다. 뒤에 두 장이 어긋나게 깔려 책이 두께를 가진
+ * 것처럼 보인다.
  *
- * 색은 **양쪽 테마에서 같다.** 신분증이라는 물건 자체가 종이 질감이라, 다크 모드에서
+ * 이름을 「주민등록증」에서 「여권」으로 바꾼 이유는 탭 이름과 어긋나서다 — 도장첩도
+ * 출입증도 전부 여권이라 부르는데 홈의 이 카드만 신분증이었다. 한 물건을 두 이름으로
+ * 부르면 사용자는 다른 기능으로 읽는다.
+ *
+ * 색은 **양쪽 테마에서 같다.** 여권이라는 물건 자체가 종이 질감이라, 다크 모드에서
  * 회색으로 뒤집으면 카드가 아니라 패널로 보인다. 대신 모든 색을 여기서 직접 정해
  * 어느 배경에 놓여도 대비가 유지되게 한다.
  */
@@ -59,10 +64,16 @@ function SecurityPattern() {
   );
 }
 
+/**
+ * 여권 면의 한 줄. 라벨을 값 위에 두는 실제 여권 서식 그대로다.
+ *
+ * 면이 좁아 두 칸을 나란히 놓을 수 없다 — 폭이 좁은 기기에서 「생년월일」 같은 라벨이
+ * 줄바꿈되면 줄 높이가 제각각이 되어 두 면의 높이가 어긋난다.
+ */
 function Field({ label, en, value, strong }: { label: string; en: string; value: string; strong?: boolean }) {
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>
+      <Text style={styles.fieldLabel} numberOfLines={1}>
         {label} <Text style={styles.fieldLabelEn}>{en}</Text>
       </Text>
       <Text style={[styles.fieldValue, strong && styles.fieldValueStrong]} numberOfLines={1}>
@@ -103,114 +114,137 @@ export function PetIdCard({ pet }: { pet: Pet }) {
   return (
     <View style={styles.card}>
       <SecurityPattern />
+      {/*
+        책 두께. 카드 **안쪽** 가장자리에 종이 층을 그린다.
+        홈 카드를 감싸는 쪽이 `overflow: hidden`이라 바깥으로 깔면 잘려서 안 보인다.
+        펼친 책을 위에서 보면 두께가 드러나는 곳이 바로 양옆(배지) 가장자리다.
+      */}
+      <View style={[styles.edge, styles.edgeLeft]} pointerEvents="none" />
+      <View style={[styles.edge, styles.edgeLeftInner]} pointerEvents="none" />
+      <View style={[styles.edge, styles.edgeRight]} pointerEvents="none" />
+      <View style={[styles.edge, styles.edgeRightInner]} pointerEvents="none" />
 
-      <View style={styles.head}>
-        <View style={styles.headTexts}>
-          <Text style={styles.title}>반려동물 주민등록증</Text>
-          <Text style={styles.titleEn}>Pet Resident Registration Card</Text>
+        <View style={styles.head}>
+          <View style={styles.headTexts}>
+            <Text style={styles.title}>반려동물 여권</Text>
+            <Text style={styles.titleEn}>PET PASSPORT</Text>
+          </View>
+          {/* 홀로그램 씰 자리 — 레벨 배지(발바닥). 레벨이 오르면 색·선명도가 바뀐다 */}
+          {gamification && <TierPaw gamification={gamification} size={48} />}
         </View>
-        {/* 홀로그램 씰 자리 — 레벨 배지(발바닥). 레벨이 오르면 색·선명도가 바뀐다 */}
-        {gamification && <TierPaw gamification={gamification} size={54} />}
-      </View>
 
-      <View style={styles.body}>
-        <View style={styles.photoCol}>
-          <View style={styles.photoRing}>
-            <View style={styles.photoInner}>
-              <PetAvatar pet={pet} size={72} />
+        <View style={styles.spread}>
+          {/* ── 왼쪽 면 — 사진과 이 아이 ───────────────────────────── */}
+          <View style={styles.page}>
+            <View style={styles.photoRing}>
+              <View style={styles.photoInner}>
+                <PetAvatar pet={pet} size={64} />
+              </View>
             </View>
-          </View>
-          <Text style={styles.kind}>{PET_KIND_LABEL[pet.kind]}</Text>
-        </View>
+            <Text style={styles.kind}>{PET_KIND_LABEL[pet.kind]}</Text>
 
-        <View style={styles.fields}>
-          <Field label="이름" en="NAME" value={pet.name} strong />
-          <View style={styles.fieldRow}>
-            <Field label="성별" en="SEX" value={pet.gender ? PET_GENDER_LABEL[pet.gender] : '미등록'} />
-            <Field label="나이" en="AGE" value={ageText} />
-          </View>
-          <View style={styles.fieldRow}>
+            <Field label="이름" en="NAME" value={pet.name} strong />
+            {/* 면이 좁아 한 줄에 둘씩 못 놓는다. 성별과 나이는 짧아 한 칸에 같이 적는다 */}
+            <Field
+              label="성별 · 나이"
+              en="SEX / AGE"
+              value={`${pet.gender ? PET_GENDER_LABEL[pet.gender] : '미등록'} · ${ageText}`}
+            />
             <Field label="품종" en="BREED" value={pet.species || '미등록'} />
             <Field label="몸무게" en="WEIGHT" value={`${pet.weight}kg · ${BREED_SIZE_LABEL[pet.breedSize]}`} />
-          </View>
-          <View style={styles.fieldRow}>
             <Field label="생년월일" en="DATE OF BIRTH" value={birthText} />
             <Field label="예방접종" en="VACCINATION" value={vaccinationText} />
-          </View>
-          <View style={styles.footprints}>
-            <Ionicons name="paw" size={12} color={CARD.gold} />
-            <Text style={styles.footprintsText}>
-              {pet.name}와 함께한 발자국 <Text style={styles.footprintsCount}>{footprintTotal.toLocaleString()}</Text>개
-            </Text>
-          </View>
-        </View>
-      </View>
 
-      <View style={styles.favBlock}>
-        <Text style={styles.favTitle}>
-          최애 장소 <Text style={styles.fieldLabelEn}>TOP 3</Text>
-        </Text>
-        {top.length === 0 ? (
-          <Text style={styles.favEmpty}>아직 기록이 없어요. 다녀온 곳에서 만족도를 남기면 여기에 채워져요.</Text>
-        ) : (
-          top.map((item, i) => (
-            <View
-              key={item.facility.facilityId}
-              onTouchEnd={() => router.push({ pathname: '/facility/[id]', params: { id: String(item.facility.facilityId) } })}
-              style={styles.favRow}>
-              <Text style={styles.medal}>{medal[i]}</Text>
-              <Text style={styles.favName} numberOfLines={1}>
-                {item.facility.name}
-              </Text>
-              <Text style={styles.favCat}>{CATEGORY_LABEL[item.facility.category]}</Text>
-              <Text style={styles.favScore}>
-                {satisfactionMood(item.score).emoji} {item.score.toFixed(1)}
+            <View style={styles.footprints}>
+              <Ionicons name="paw" size={11} color={CARD.gold} />
+              <Text style={styles.footprintsText}>
+                함께한 발자국 <Text style={styles.footprintsCount}>{footprintTotal.toLocaleString()}</Text>개
               </Text>
             </View>
-          ))
-        )}
-      </View>
+          </View>
 
-      {/*
-        레벨·XP·티어는 **계정(집사) 값**이다. 아이가 여럿이어도 같은 숫자라, 아이 정보 사이에
-        두면 이 아이의 레벨로 읽힌다. 신분증의 "발급기관" 자리처럼 보호자 칸으로 분리한다.
-      */}
-      {gamification && progress && (
-        <View style={styles.guardian}>
-          <View style={styles.guardianHead}>
-            <Text style={styles.guardianLabel}>
-              보호자 <Text style={styles.fieldLabelEn}>GUARDIAN</Text>
-            </Text>
-            <Text style={styles.guardianName} numberOfLines={1}>
-              {account.nickname}
-            </Text>
+          {/* 가운데 접힘선 — 실 꿰맨 자국까지 넣어야 두 면으로 읽힌다 */}
+          <View style={styles.spine}>
+            <View style={styles.spineLine} />
+            {[0, 1, 2, 3, 4].map((i) => (
+              <View key={i} style={styles.stitch} />
+            ))}
           </View>
-          <View style={styles.guardianLevel}>
-            <Text style={styles.guardianLv}>집사 Lv.{progress.level}</Text>
-            <View style={styles.xpTrack}>
-              <View style={[styles.xpFill, { width: `${Math.max(5, progress.ratio * 100)}%` }]} />
-            </View>
-            <Text style={styles.xpText}>
-              {progress.maxed ? '최고 레벨' : `${progress.into.toLocaleString()}/${progress.step.toLocaleString()}`}
+
+          {/* ── 오른쪽 면 — 다닌 곳과 보호자 ───────────────────────── */}
+          <View style={styles.page}>
+            <Text style={styles.favTitle}>
+              최애 장소 <Text style={styles.fieldLabelEn}>TOP 3</Text>
             </Text>
+            {top.length === 0 ? (
+              <Text style={styles.favEmpty}>
+                아직 기록이 없어요.{'\n'}다녀온 곳에서 만족도를 남기면 채워져요.
+              </Text>
+            ) : (
+              top.map((item, i) => (
+                <View
+                  key={item.facility.facilityId}
+                  onTouchEnd={() => router.push({ pathname: '/facility/[id]', params: { id: String(item.facility.facilityId) } })}
+                  style={styles.favRow}>
+                  <Text style={styles.medal}>{medal[i]}</Text>
+                  <Text style={styles.favName} numberOfLines={1}>
+                    {item.facility.name}
+                  </Text>
+                  <Text style={styles.favScore}>{item.score.toFixed(1)}</Text>
+                </View>
+              ))
+            )}
+
+            {/*
+              레벨·XP·티어는 **계정(집사) 값**이다. 아이가 여럿이어도 같은 숫자라, 왼쪽
+              면(아이 정보)에 두면 이 아이의 레벨로 읽힌다. 여권의 발급기관 자리처럼
+              오른쪽 면으로 분리한다.
+            */}
+            {gamification && progress && (
+              <View style={styles.guardian}>
+                <Text style={styles.fieldLabel} numberOfLines={1}>
+                  보호자 <Text style={styles.fieldLabelEn}>GUARDIAN</Text>
+                </Text>
+                <Text style={styles.guardianName} numberOfLines={1}>
+                  {account.nickname}
+                </Text>
+                <View style={styles.guardianLevel}>
+                  <Text style={styles.guardianLv}>Lv.{progress.level}</Text>
+                  <View style={styles.xpTrack}>
+                    <View style={[styles.xpFill, { width: `${Math.max(5, progress.ratio * 100)}%` }]} />
+                  </View>
+                </View>
+                <Text style={styles.guardianTier} numberOfLines={1}>
+                  {tierName(gamification, settings.pawAnimal || gamification.tierAnimal).replace(/^.* 발바닥 /, '발바닥 ')}
+                </Text>
+              </View>
+            )}
+
+          <View style={styles.strip}>
+            <Text style={styles.stripLabel}>발급일 ISSUED</Text>
+            <Text style={styles.stripValue}>{issuedText}</Text>
+            <Text style={styles.stripValue}>No. {serial}</Text>
           </View>
-          <Text style={styles.guardianTier} numberOfLines={1}>
-            우리 가족 발바닥 · {tierName(gamification, settings.pawAnimal || gamification.tierAnimal).replace(/^.* 발바닥 /, '')}
-          </Text>
         </View>
-      )}
-
-      <View style={styles.strip}>
-        <Text style={styles.stripLabel}>발급일 ISSUED</Text>
-        <Text style={styles.stripValue}>
-          {issuedText} · 반갑꼬리 No. {serial}
-        </Text>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  /**
+   * 책 두께 — 카드 안쪽 양옆에 종이 층을 그린다.
+   *
+   * 바깥으로 장을 깔지 않는 이유는 홈의 카드 래퍼가 `overflow: hidden`이라서다.
+   * 밖으로 나가면 잘려서 아무것도 안 보인다. 펼친 책을 위에서 보면 두께가 드러나는 곳은
+   * 어차피 양옆 배지 가장자리다.
+   */
+  edge: { position: 'absolute', top: 10, bottom: 10, width: 4, backgroundColor: CARD.paperDeep },
+  edgeLeft: { left: 0, opacity: 0.9 },
+  edgeLeftInner: { left: 4, width: 2.5, opacity: 0.55, top: 15, bottom: 15 },
+  edgeRight: { right: 0, opacity: 0.9 },
+  edgeRightInner: { right: 4, width: 2.5, opacity: 0.55, top: 15, bottom: 15 },
+
   card: { backgroundColor: CARD.paper, borderRadius: Radius.xl, overflow: 'hidden' },
   head: {
     flexDirection: 'row',
@@ -223,64 +257,111 @@ const styles = StyleSheet.create({
   },
   headTexts: { flex: 1, gap: 1 },
   title: { fontSize: 19, fontWeight: '900', color: CARD.ink, letterSpacing: -0.6 },
-  titleEn: { fontSize: 10, fontWeight: '700', color: CARD.sub, letterSpacing: 0.2 },
-  body: { flexDirection: 'row', gap: Spacing.lg, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md },
-  photoCol: { alignItems: 'center', gap: 6 },
+  titleEn: { fontSize: 10, fontWeight: '700', color: CARD.sub, letterSpacing: 1.2 },
+
+  /** 두 면. 높이를 맞추려고 `alignItems: stretch`(기본)를 그대로 쓴다 */
+  spread: { flexDirection: 'row', paddingHorizontal: Spacing.md, paddingBottom: Spacing.lg },
+  page: { flex: 1, gap: 7, paddingHorizontal: Spacing.xs },
+
+  /** 가운데 접힘선 + 실 꿰맨 자국 */
+  spine: {
+    width: 15,
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    paddingVertical: 6,
+  },
+  spineLine: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: CARD.line,
+  },
+  stitch: { width: 1.5, height: 7, borderRadius: 1, backgroundColor: CARD.sub, opacity: 0.55 },
+
+  /** 사진 — 여권 사진처럼 테를 두른다 */
   photoRing: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    alignSelf: 'center',
+    padding: 3,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: CARD.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: CARD.paperDeep,
+    backgroundColor: '#FFFFFF',
   },
-  photoInner: { borderWidth: 2, borderColor: CARD.paper, borderRadius: 38, overflow: 'hidden' },
-  kind: { fontSize: 10.5, fontWeight: '800', color: CARD.sub },
-  fields: { flex: 1, gap: 9 },
-  fieldRow: { flexDirection: 'row', gap: Spacing.md },
-  field: { flex: 1, gap: 1 },
-  fieldLabel: { fontSize: 10, fontWeight: '800', color: CARD.sub },
-  fieldLabelEn: { fontSize: 9, fontWeight: '700', color: CARD.sub, opacity: 0.8 },
-  fieldValue: { fontSize: 13.5, fontWeight: '800', color: CARD.ink },
-  fieldValueStrong: { fontSize: 18, fontWeight: '900', color: CARD.ink, letterSpacing: -0.4 },
-  xpTrack: { flex: 1, height: 6, borderRadius: 3, backgroundColor: CARD.paperDeep, overflow: 'hidden' },
-  xpFill: { height: '100%', borderRadius: 3, backgroundColor: CARD.gold },
-  xpText: { fontSize: 10, fontWeight: '700', color: CARD.sub, fontVariant: ['tabular-nums'] },
-  guardian: {
-    borderTopWidth: 1,
-    borderTopColor: CARD.line,
-    marginHorizontal: Spacing.lg,
-    paddingTop: 9,
-    paddingBottom: Spacing.md,
-    gap: 5,
+  photoInner: { borderRadius: Radius.sm, overflow: 'hidden' },
+  kind: {
+    alignSelf: 'center',
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: CARD.sub,
+    marginBottom: 2,
   },
-  guardianHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  guardianLabel: { fontSize: 10, fontWeight: '800', color: CARD.sub },
-  guardianName: { flexShrink: 1, fontSize: 13, fontWeight: '900', color: CARD.ink },
-  guardianLevel: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  guardianLv: { fontSize: 13, fontWeight: '900', color: CARD.ink, fontVariant: ['tabular-nums'] },
-  guardianTier: { fontSize: 10.5, fontWeight: '700', color: CARD.gold },
-  footprints: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
-  footprintsText: { fontSize: 11.5, fontWeight: '700', color: CARD.sub },
-  footprintsCount: { fontSize: 13, fontWeight: '900', color: CARD.ink },
-  favBlock: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md, gap: 5 },
-  favTitle: { fontSize: 10.5, fontWeight: '800', color: CARD.sub },
-  favEmpty: { fontSize: 11.5, lineHeight: 17, color: CARD.sub },
-  favRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  medal: { fontSize: 12 },
-  favName: { flexShrink: 1, fontSize: 12.5, fontWeight: '800', color: CARD.ink },
-  favCat: { fontSize: 10.5, fontWeight: '700', color: CARD.sub },
-  favScore: { marginLeft: 'auto', fontSize: 11.5, fontWeight: '800', color: CARD.ink, fontVariant: ['tabular-nums'] },
-  strip: {
+
+  field: { gap: 1 },
+  fieldLabel: { fontSize: 9, fontWeight: '800', color: CARD.sub, letterSpacing: 0.2 },
+  fieldLabelEn: { fontSize: 8, fontWeight: '700', color: CARD.sub, opacity: 0.75 },
+  fieldValue: { fontSize: 12.5, fontWeight: '800', color: CARD.ink },
+  fieldValueStrong: { fontSize: 16, fontWeight: '900', color: CARD.ink, letterSpacing: -0.3 },
+
+  footprints: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: CARD.strip,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 9,
+    gap: 4,
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: CARD.line,
   },
-  stripLabel: { fontSize: 9.5, fontWeight: '800', color: CARD.stripInk, opacity: 0.7 },
-  stripValue: { fontSize: 11.5, fontWeight: '800', color: CARD.stripInk, fontVariant: ['tabular-nums'] },
+  footprintsText: { flexShrink: 1, fontSize: 10, fontWeight: '700', color: CARD.sub },
+  footprintsCount: { fontSize: 12, fontWeight: '900', color: CARD.ink },
+
+  favTitle: { fontSize: 10, fontWeight: '800', color: CARD.sub, letterSpacing: 0.2 },
+  favEmpty: { fontSize: 10.5, lineHeight: 15, color: CARD.sub },
+  favRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  medal: { fontSize: 11 },
+  favName: { flexShrink: 1, fontSize: 11.5, fontWeight: '800', color: CARD.ink },
+  favScore: {
+    marginLeft: 'auto',
+    fontSize: 11,
+    fontWeight: '800',
+    color: CARD.ink,
+    fontVariant: ['tabular-nums'],
+  },
+
+  guardian: {
+    gap: 2,
+    marginTop: 'auto',
+    paddingTop: 7,
+    borderTopWidth: 1,
+    borderTopColor: CARD.line,
+  },
+  guardianName: { fontSize: 13, fontWeight: '900', color: CARD.ink },
+  guardianLevel: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  guardianLv: { fontSize: 11, fontWeight: '900', color: CARD.ink, fontVariant: ['tabular-nums'] },
+  xpTrack: {
+    flex: 1,
+    height: 4,
+    borderRadius: Radius.full,
+    backgroundColor: CARD.line,
+    overflow: 'hidden',
+  },
+  xpFill: { height: '100%', borderRadius: Radius.full, backgroundColor: CARD.gold },
+  guardianTier: { fontSize: 9.5, fontWeight: '700', color: CARD.gold },
+
+  /** 발급 정보 — 여권 아래쪽 기계판독 영역 자리 */
+  strip: {
+    gap: 1,
+    marginTop: 7,
+    borderRadius: Radius.sm,
+    backgroundColor: CARD.strip,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  stripLabel: { fontSize: 8, fontWeight: '800', color: CARD.stripInk, opacity: 0.7, letterSpacing: 0.3 },
+  stripValue: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: CARD.stripInk,
+    fontVariant: ['tabular-nums'],
+  },
 });

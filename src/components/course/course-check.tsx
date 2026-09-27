@@ -91,14 +91,11 @@ export function CourseCheckPanel({ result }: { result: CourseCheckResult }) {
    * 응답에는 원문이 없다(FacilitySummary는 id·이름·카테고리뿐). 그래서 지금까지는
    * 코스를 벗어나 시설을 다시 검색해 들어갔다가 돌아와야 했다. 뒤로가기로 코스에
    * 그대로 돌아오므로 판별 결과도 남는다.
-   *
-   * `from: 'course'`는 시설 상세의 뒤로가기가 **반드시 코스로 돌아오게** 하는 표시다
-   * (시설 상세의 CourseBack 주석 참고).
    */
   const openFacility = (facilityId: number) =>
     router.push({
       pathname: '/facility/[id]',
-      params: { id: String(facilityId), from: 'course' },
+      params: { id: String(facilityId) },
     });
   const tone =
     result.overall === 'DENIED' ? p.danger : result.overall === 'CONDITIONAL' ? p.warn : p.success;
