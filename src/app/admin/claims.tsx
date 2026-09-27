@@ -475,7 +475,6 @@ const styles = StyleSheet.create({
   more: { alignItems: 'center', borderWidth: 1, borderRadius: Radius.full, paddingVertical: 11 },
   moreText: { fontSize: Type.footnote, fontWeight: '800' },
 
-
   notice: {
     position: 'absolute',
     left: Spacing.lg,
