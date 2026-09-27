@@ -378,10 +378,30 @@ export interface CourseStop {
  * 저장한 내 코스(CUSTOM). **`stopIds`만 남는다** — 추천 당시의 이름·카테고리·점수·isMealStop은
  * 저장되지 않으므로, 목록을 그리려면 이 ID들로 시설을 다시 조회해야 한다.
  */
+/** 코스의 한 스톱. 서버가 주는 원본 모양이다 */
+export interface CourseStopRef {
+  facilityId: number;
+  /**
+   * 방문 시각 `"HH:MM"`. 안 정했으면 null.
+   *
+   * 2026-09-25 서버에 생긴 필드다. 그전에는 앱이 기기에만 들고 있어서 기기를 바꾸면
+   * 사라지고 코스를 공유해도 같이 가지 않았다.
+   */
+  visitTime: string | null;
+}
+
 export interface SavedCourse {
   courseId: number;
   name: string;
   description: string | null;
+  /** 서버 원본. 방문 시각까지 들어 있다 */
+  stops: CourseStopRef[];
+  /**
+   * `stops`에서 ID만 뽑은 것. **경계에서 만들어 넣는 파생값이다.**
+   *
+   * 화면 스무 곳 넘게가 ID 배열만 쓰고 있어서, 서버가 `stopIds`를 `stops`로 바꿨을 때
+   * 그 전부를 고치는 대신 여기서 같이 들고 있기로 했다. 둘은 **항상 같은 순서**다.
+   */
   stopIds: number[];
   createdAt: string;
   /** true면 `GET /courses/public`으로 다른 사용자에게 노출된다 */
@@ -401,6 +421,9 @@ export interface PublicCourse {
   description: string | null;
   /** 코스를 공개한 사람의 닉네임 */
   ownerNickname: string;
+  /** 서버 원본. 공개한 사람이 정해둔 방문 시각까지 따라온다 */
+  stops: CourseStopRef[];
+  /** `stops`에서 ID만 뽑은 파생값 — `SavedCourse.stopIds` 주석 참고 */
   stopIds: number[];
   createdAt: string;
 }
