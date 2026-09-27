@@ -190,8 +190,9 @@ export function useCourseLibrary() {
     try {
       // 서버는 1~10개만 받는다. stops의 facilityId를 순서 그대로 넣으면 내 코스가 된다.
       const created = await coursesApi.create({
+        // 이름은 스톱 내용으로 짓고(courseName), 스톱은 새 계약(stops)으로 보낸다
         name: courseName(name, stops),
-        stopIds: stops.slice(0, 10).map((st) => st.facilityId),
+        stops: stops.slice(0, 10).map((st) => ({ facilityId: st.facilityId, visitTime: null })),
       });
       // 저장 결과로 목록을 먼저 갱신한다. 목록 재조회가 실패해도 방금 담은 코스는 보여야 한다 —
       // 저장은 됐는데 목록에 없으면 사용자는 실패한 줄 안다.
@@ -252,7 +253,8 @@ export function useCourseLibrary() {
       const created = await coursesApi.create({
         name: course.ownerNickname ? `${course.name} (${course.ownerNickname})` : course.name,
         description: course.description ?? undefined,
-        stopIds: course.stopIds.slice(0, 10),
+        // 남의 코스를 담을 때 **그 사람이 정해둔 방문 시각도 함께** 가져온다
+        stops: course.stops.slice(0, 10),
       });
       setSavedCourses((prev) => [created, ...prev.filter((c) => c.courseId !== created.courseId)]);
       setCopiedIds((prev) => new Set(prev).add(course.courseId));
