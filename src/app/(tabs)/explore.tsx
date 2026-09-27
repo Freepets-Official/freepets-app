@@ -43,11 +43,12 @@ const regionCache = new Map<string, { items: Facility[]; total: number }>();
 
 async function regionList(params: {
   sidoCode: string;
-  sigunguCode: string;
+  /** 생략하면 시도 전체 */
+  sigunguCode?: string;
   category?: Category;
   petAllowed?: 'ALLOWED';
 }): Promise<{ items: Facility[]; total: number }> {
-  const key = `${params.sidoCode}/${params.sigunguCode}/${params.category ?? ''}/${params.petAllowed ?? ''}`;
+  const key = `${params.sidoCode}/${params.sigunguCode ?? ''}/${params.category ?? ''}/${params.petAllowed ?? ''}`;
   const hit = regionCache.get(key);
   if (hit) return hit;
   const res = await facilitiesApi.byRegion({ ...params, size: 30 });
@@ -115,25 +116,25 @@ export default function ExploreScreen() {
   // 좌표·검색어·카테고리·반경·모드가 바뀌면 재검색(입력 타이핑은 400ms 디바운스).
   // 전체 모드는 위치 없이도 되도록 기본 중심을 쓰고 반경을 전국으로 넓힌다.
   /**
-   * 시군구까지 고르면 **관광공사 실시간 목록**(`facilitiesApi.byRegion`)으로 간다.
+   * 지역을 고르면 **지역 목록**(`facilitiesApi.byRegion`)으로 간다. 시도만 골라도 된다.
    *
-   * 시도만 고른 상태는 이 API를 부를 수 없다 — 시군구가 필수다. 그때는 목록을 그대로 두고
-   * 아래 안내 줄로 시군구를 고르라고 알린다. 시도 단위(경기도 9,438건)는 서버가 관광공사에서
-   * 전량을 받아 거르는 구조라 애초에 감당이 안 되기도 한다.
+   * 예전에는 시군구가 필수라, 시도만 고른 상태는 목록이 멈춘 채 "시·군·구까지 골라 주세요"
+   * 안내만 떴다. 「경기도 전체」를 보려던 사용자에게는 고를 것이 27개 더 남은 셈이었다.
+   * 서버가 시도 단위를 적재해둔 DB로 답하게 되면서(2026-09-27 실측: 경기 9,469건 0.11초)
+   * 그 한 걸음이 필요 없어졌다.
    */
-  const byRegion = mode === 'all' && sidoCode !== null && sigunguCode !== null;
-  const regionPending = mode === 'all' && sidoCode !== null && sigunguCode === null;
+  const byRegion = mode === 'all' && sidoCode !== null;
   /**
    * 「구가 있는 시」를 골랐는데 0건인 경우.
    *
    * 규칙으로 못 박지 않고 **실제 결과가 0일 때만** 켠다 — 화성시는 구가 2026년에 신설돼
    * 자료가 아직 시 단위에 남아 있다(시 304건, 구 합계 78건). 같은 모양인데 반대로 동작한다.
    */
-  const districtHint = byRegion && sigunguHasDistricts(regions, sidoCode, sigunguCode);
+  const districtHint =
+    byRegion && sigunguCode !== null && sigunguHasDistricts(regions, sidoCode, sigunguCode);
 
   useEffect(() => {
     if (mode === 'ranking') return;
-    if (regionPending) return; // 시군구를 고를 때까지 직전 목록을 지우지 않는다
     const center = mode === 'all' ? coords ?? DEFAULT_CENTER : coords;
     if (!byRegion && !center) return; // 내 주변인데 위치 권한이 없으면 검색하지 않는다
     // 디바운스 타이머만 취소하면 '이미 날아간' 요청은 못 막는다. 모드·검색어를 빠르게
@@ -146,7 +147,7 @@ export default function ExploreScreen() {
         const res = byRegion
           ? await regionList({
               sidoCode: sidoCode as string,
-              sigunguCode: sigunguCode as string,
+              sigunguCode: sigunguCode ?? undefined,
               category: category ?? undefined,
               petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
             })
@@ -185,7 +186,7 @@ export default function ExploreScreen() {
       active = false;
       clearTimeout(t);
     };
-  }, [mode, coords, keyword, category, settings.searchRadiusKm, settings.onlyPetInfo, retryKey, registerFacilities, byRegion, regionPending, sidoCode, sigunguCode]);
+  }, [mode, coords, keyword, category, settings.searchRadiusKm, settings.onlyPetInfo, retryKey, registerFacilities, byRegion, sidoCode, sigunguCode]);
 
   // 동반 불가 시설을 숨기지 않는다. 헛걸음 방지가 목적인 앱에서 '여긴 안 된다'는 가장 확실한
   // 정보라, 감추는 것보다 보여주는 쪽이 값어치가 있다(전국 5건뿐이라 목록을 어지럽히지도 않는다).
@@ -260,7 +261,7 @@ export default function ExploreScreen() {
             ))}
           </ScrollView>
 
-          {/* 지역 — '전체'에서만. 시군구까지 고르면 관광공사 실시간 목록으로 바뀐다 */}
+          {/* 지역 — '전체'에서만. 시도만 골라도 그 시도 전체가 바로 뜬다 */}
           {mode === 'all' && (
             <RegionChips
               sidoCode={sidoCode}
@@ -270,16 +271,6 @@ export default function ExploreScreen() {
                 setSigunguCode(sg);
               }}
             />
-          )}
-
-          {/* 시도만 고른 상태 — 목록은 그대로 두고 한 걸음 더 가라고 알린다 */}
-          {regionPending && (
-            <View style={[styles.regionHint, { borderColor: p.accent, backgroundColor: p.accentSoft }]}>
-              <Ionicons name="information-circle" size={15} color={p.accent} />
-              <Text style={[styles.regionHintText, { color: p.accent }]}>
-                시·군·구까지 고르면 그 지역을 관광공사에서 바로 불러와요
-              </Text>
-            </View>
           )}
 
           {/* 여행 코스 판별 진입점 — 낱개 시설이 아니라 하루 동선 전체를 검증한다 */}
@@ -306,7 +297,9 @@ export default function ExploreScreen() {
             caption={
               // 지역 목록은 거리순이 아니라 가나다순이다. 왜 가까운 순이 아닌지 묻기 전에 밝힌다.
               byRegion
-                ? `${total.toLocaleString()}곳 · 가나다순 · 관광공사 실시간`
+                ? // 시군구까지 좁혔을 때만 관광공사를 실시간으로 부른다. 시도 단위는 적재해둔
+                  // DB라, 출처를 똑같이 적으면 거짓이 된다
+                  `${total.toLocaleString()}곳 · 가나다순${sigunguCode ? ' · 관광공사 실시간' : ''}`
                 : mode === 'all'
                   ? `${total.toLocaleString()}곳 · 전국`
                   : locState === 'ok'
@@ -411,14 +404,4 @@ const styles = StyleSheet.create({
   courseText: { flex: 1, gap: 2 },
   courseTitle: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
   courseBody: { fontSize: Type.footnote, lineHeight: 17 },
-  regionHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 9,
-  },
-  regionHintText: { flex: 1, fontSize: Type.footnote, fontWeight: '700' },
 });
