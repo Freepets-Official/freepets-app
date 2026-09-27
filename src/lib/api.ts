@@ -1517,12 +1517,22 @@ type ServerStop = { facilityId?: number; visitTime?: string | null };
  */
 function toVisitTime(v: unknown): string | null {
   if (typeof v !== 'string') return null;
-  const m = /(\d{1,2}):(\d{2})/.exec(v);
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 23 || min > 59) return null;
-  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+  const t = v.trim();
+  // **전체를 검사한다.** 부분 일치로 두면 `invalid09:30`이나 `2026-13-44T09:30`도 통과한다
+  const clock = /^(\d{1,2}):([0-5]\d)(?::[0-5]\d)?$/.exec(t);
+  if (clock) {
+    const h = Number(clock[1]);
+    return h <= 23 ? `${String(h).padStart(2, '0')}:${clock[2]}` : null;
+  }
+  // ISO 날짜시간이면 날짜가 실제로 존재하는지까지 본다 — 2026-13-44는 시각만 뽑아 쓰면 안 된다
+  const iso = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):([0-5]\d)(?::[0-5]\d)?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/.exec(t);
+  if (!iso) return null;
+  const [, y, mo, d, h, mi] = iso;
+  const dt = new Date(`${y}-${mo}-${d}T00:00:00Z`);
+  const realDate =
+    dt.getUTCFullYear() === Number(y) && dt.getUTCMonth() + 1 === Number(mo) && dt.getUTCDate() === Number(d);
+  if (!realDate || Number(h) > 23) return null;
+  return `${h}:${mi}`;
 }
 
 /** 보낼 때 — 시각을 안 정한 스톱은 키 자체를 빼서 보낸다 */
