@@ -122,8 +122,16 @@ export default function ExploreScreen() {
    * 안내만 떴다. 「경기도 전체」를 보려던 사용자에게는 고를 것이 27개 더 남은 셈이었다.
    * 서버가 시도 단위를 적재해둔 DB로 답하게 되면서(2026-09-27 실측: 경기 9,469건 0.11초)
    * 그 한 걸음이 필요 없어졌다.
+   *
+   * **검색어가 있으면 지역 조회로 가지 않는다.** 이 API는 키워드를 받지 않아서(`sidoCode`·
+   * `sigunguCode`·`category`·`petAllowed`뿐), 지역을 고른 채로 검색어를 치면 글자가
+   * 통째로 버려진다. 검색어 쪽을 살리고 — 그쪽은 전국을 훑는다 — 지역이 꺼졌다는 것을
+   * 아래 안내 줄로 밝힌다. 조용히 무시하는 것이 가장 나쁘다.
    */
-  const byRegion = mode === 'all' && sidoCode !== null;
+  const searching = keyword.trim().length > 0;
+  const byRegion = mode === 'all' && sidoCode !== null && !searching;
+  /** 지역을 골라 뒀는데 검색어 때문에 그 필터가 꺼져 있는 상태 */
+  const regionMuted = mode === 'all' && sidoCode !== null && searching;
   /**
    * 「구가 있는 시」를 골랐는데 0건인 경우.
    *
@@ -273,6 +281,16 @@ export default function ExploreScreen() {
             />
           )}
 
+          {/* 검색어가 지역 필터를 덮는다 — 왜 고른 지역이 안 먹는지 여기서 밝힌다 */}
+          {regionMuted && (
+            <View style={[styles.regionHint, { borderColor: p.accent, backgroundColor: p.accentSoft }]}>
+              <Ionicons name="information-circle" size={15} color={p.accent} />
+              <Text style={[styles.regionHintText, { color: p.accent }]}>
+                검색 중에는 지역 필터가 꺼져요 · 전국에서 찾는 중
+              </Text>
+            </View>
+          )}
+
           {/* 여행 코스 판별 진입점 — 낱개 시설이 아니라 하루 동선 전체를 검증한다 */}
           <Pressable
             onPress={() => router.push('/course')}
@@ -404,4 +422,14 @@ const styles = StyleSheet.create({
   courseText: { flex: 1, gap: 2 },
   courseTitle: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
   courseBody: { fontSize: Type.footnote, lineHeight: 17 },
+  regionHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 9,
+  },
+  regionHintText: { flex: 1, fontSize: Type.footnote, fontWeight: '700' },
 });
