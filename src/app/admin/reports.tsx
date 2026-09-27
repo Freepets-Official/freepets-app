@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
 import { Stack } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -51,15 +51,40 @@ export default function AdminReportsScreen() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ text: string; failed: boolean } | null>(null);
 
+  /**
+   * 목록을 부를 때마다 올라가는 번호. **지금 화면에 떠 있는 목록이 몇 번째 것인지**를 가린다.
+   *
+   * 두 가지 어긋남을 같은 번호 하나로 막는다.
+   *
+   * ① **늦게 온 옛 응답.** 「대기」를 열고 바로 「숨김」을 누르면 요청이 겹친다. 대기 응답이
+   *    나중에 도착하면 숨김 탭에 대기 신고가 채워지는데, 카드에는 `status={filter}`(=ACCEPTED)가
+   *    들어가 **숨긴 적 없는 리뷰에 「다시 노출」 버튼이 붙는다.** 눌러도 409로 끝나지만,
+   *    화면이 거짓을 말하는 것 자체가 문제다.
+   *
+   * ② **처리 뒤 사라지는 엉뚱한 줄.** 숨김 처리를 보내고 바로 「숨김」 탭으로 옮기면, 응답이
+   *    왔을 때 `drop`이 **새 탭의 목록에서** 지운다. 방금 숨긴 리뷰가 숨김 탭에 제대로
+   *    나타났는데 그 줄이 사라지고 `total`까지 줄어든다.
+   *
+   * 번호는 둘이다. `reqSeq`는 **요청**마다, `listGen`은 **목록을 갈아끼울 때만** 올라간다.
+   * ①은 요청 단위로 봐야 하고(늦게 온 응답 하나를 버리는 일), ②는 목록 단위로 봐야 한다 —
+   * 「더 보기」는 요청이지만 목록을 갈아끼우지 않으므로, 그때 시작한 처리는 그대로 지워야 한다.
+   */
+  const reqSeq = useRef(0);
+  const listGen = useRef(0);
+
   const load = useCallback(
     async (nextPage: number, append: boolean) => {
+      const seq = ++reqSeq.current;
       if (append) setLoadingMore(true);
       else {
+        // 목록을 통째로 갈아끼운다 — 여기서 시작한 처리만 이 목록에 반영해야 한다
+        listGen.current++;
         setReviews(null);
         setFailed(null);
       }
       try {
         const r = await adminApi.reviewReports({ status: filter, page: nextPage, size: PAGE_SIZE });
+        if (seq !== reqSeq.current) return; // 그 사이 탭·페이지가 바뀌었다 — 이 응답은 버린다
         setReviews((prev) => {
           if (!append || !prev) return r.reviews;
           // 이미 들고 있는 것은 거른다 — 아래 `더 보기`가 겹치는 페이지를 일부러 다시 받는다
@@ -69,13 +94,14 @@ export default function AdminReportsScreen() {
         setTotal(r.totalElements);
         setHasNext(r.hasNext);
       } catch (e) {
+        if (seq !== reqSeq.current) return;
         setFailed({
           message: e instanceof Error ? e.message : '목록을 불러오지 못했어요',
           forbidden: e instanceof ApiError && e.status === 403,
         });
         if (!append) setReviews([]);
       } finally {
-        setLoadingMore(false);
+        if (seq === reqSeq.current) setLoadingMore(false);
       }
     },
     [filter],
@@ -92,7 +118,9 @@ export default function AdminReportsScreen() {
    * 그 리뷰는 지금 보고 있는 목록의 조건에 더 이상 맞지 않고(대기 → 숨김/반려), 남겨 두면 다음
    * 페이지를 더 불러올 때 같은 리뷰가 두 번 그려진다. 무엇을 처리했는지는 아래 알림이 말해 준다.
    */
-  const drop = (reviewId: number) => {
+  const drop = (reviewId: number, gen: number) => {
+    // 그 사이 목록이 통째로 바뀌었으면(탭 변경·재조회) 건드리지 않는다 — 남의 줄을 지우게 된다
+    if (gen !== listGen.current) return;
     setReviews((prev) => (prev ?? []).filter((r) => r.reviewId !== reviewId));
     setTotal((t) => Math.max(0, t - 1));
   };
@@ -123,6 +151,8 @@ export default function AdminReportsScreen() {
     doneText: string,
   ) => {
     if (!(await confirmDialog(confirmTitle, confirmBody, confirmLabel))) return;
+    // 어느 목록을 보며 시작한 일인지 붙잡아 둔다. 응답이 올 때쯤엔 바뀌어 있을 수 있다
+    const gen = listGen.current;
     setBusyId(r.reviewId);
     setNotice(null);
     try {
@@ -132,12 +162,12 @@ export default function AdminReportsScreen() {
           : kind === 'reject'
             ? await adminApi.rejectReport(r.reviewId)
             : await adminApi.revertReport(r.reviewId);
-      drop(r.reviewId);
+      drop(r.reviewId, gen);
       setNotice({ text: `${r.facilityName} · ${doneText} (신고 ${count}건)`, failed: false });
     } catch (e) {
       // 409면 이미 처리된 신고다 — 다른 운영자가 먼저 눌렀다. 코드로 본다:
       // 서버 문구는 언제든 바뀌고, 문자열로 맞히면 바뀐 날 조용히 틀린다
-      if (e instanceof ApiError && e.status === 409) drop(r.reviewId);
+      if (e instanceof ApiError && e.status === 409) drop(r.reviewId, gen);
       setNotice({ text: e instanceof Error ? e.message : '처리하지 못했어요', failed: true });
     } finally {
       setBusyId(null);
