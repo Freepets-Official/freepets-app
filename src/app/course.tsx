@@ -24,7 +24,7 @@ import {
   SaveCourseAction,
 } from '@/components/course/course-check';
 import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
-import { BUILDER_PLAN_KEY, outOfOrderStops } from '@/data/course-plan';
+import { outOfOrderStops } from '@/data/visit-time';
 import {
   PRESET_COURSES,
   recommendCourse,
@@ -41,13 +41,13 @@ import {
   CATEGORY_LABEL,
   type CourseCheckResult,
   type CourseStop,
+  type CourseStopRef,
   type Facility,
   type SavedCourse,
 } from '@/data/types';
 import { ApiError, aiApi, coursesApi } from '@/lib/api';
 import { useCourseLibrary } from '@/hooks/use-course-library';
 import { useCourseRecommendations } from '@/hooks/use-course-recommendations';
-import { useCoursePlan } from '@/hooks/use-course-plan';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
@@ -78,7 +78,16 @@ export default function CourseScreen() {
   } = useAppStore();
 
   const [selectedPetIds, setSelectedPetIds] = useState<number[]>(pets.map((x) => x.petId));
-  const [stopIds, setStopIds] = useState<number[]>([]);
+  /**
+   * 빌더에 올라와 있는 스톱. **방문 시각까지 함께 들고 있다.**
+   *
+   * 예전에는 ID 배열만 두고 시간은 기기 SecureStore에 따로 남겼다. 그러면 기기를 바꾸면
+   * 시간이 사라지고 코스를 공유해도 받는 사람에게 가지 않았다. 서버가 `stops[].visitTime`을
+   * 받게 된 뒤로는 시간이 스톱의 일부라, 상태도 하나로 둔다.
+   */
+  const [stops, setStops] = useState<CourseStopRef[]>([]);
+  /** ID만 필요한 곳이 많다. `stops`와 **항상 같은 순서**다 */
+  const stopIds = useMemo(() => stops.map((s) => s.facilityId), [stops]);
 
   /**
    * 서버 추천(지역×테마 · 개인화)은 한 훅에 묶여 있다(`use-course-recommendations`).
@@ -134,6 +143,7 @@ export default function CourseScreen() {
     saveMessage,
     setSaveMessage,
     saveCourse,
+    updateCourse,
     removeCourse,
     renameCourse,
     otherCourses,
@@ -302,7 +312,8 @@ export default function CourseScreen() {
   };
 
   const loadCourse = (course: Course) => {
-    setStopIds(course.stopIds);
+    // 목 추천 코스에는 시간이 없다 — 사용자가 빌더에서 정하면 그때 붙는다
+    setStops(course.stopIds.map((facilityId) => ({ facilityId, visitTime: null })));
     setPicking(false);
   };
 
@@ -319,7 +330,7 @@ export default function CourseScreen() {
    *
    * ① 빌더 머리에 "무엇을 보고 있는지"를 적는다 — 예전에는 코스를 눌러도 화면이 그대로인 것
    *    처럼 보였다. 스톱은 실제로 바뀌는데 빌더가 한참 아래에 있어 눈에 안 띄었기 때문이다.
-   * ② 스톱별 시간을 어느 코스 것으로 저장할지 가른다(저장 전 빌더는 `BUILDER_PLAN_KEY`).
+   * ② 고친 내용을 **그 코스에 덮어쓸지** 새로 담을지 가른다 — 열어둔 코스가 있을 때만 덮어쓰기가 뜬다.
    */
   const [openedCourse, setOpenedCourse] = useState<SavedCourse | null>(null);
 
@@ -351,7 +362,7 @@ export default function CourseScreen() {
       off?.();
       off = null;
       setOpenedCourse(null);
-      setStopIds([]);
+      setStops([]);
       setCourseCheck(null);
       setCourseCheckError(null);
     });
@@ -360,13 +371,9 @@ export default function CourseScreen() {
   /** 순서 바꾸기 시트가 열렸는가 */
   const [reordering, setReordering] = useState(false);
 
-  /**
-   * 스톱별 방문 시각. **서버에 시간 필드가 없어 기기에 남는다**(`data/course-plan.ts`).
-   * 저장 전 빌더와 저장된 코스를 다른 키로 나눈다 — 저장하면 빌더 일정이 그 코스로 옮겨간다.
-   */
-  const { planOf, setStopTime, adoptPlan } = useCoursePlan();
-  const planKey = openedCourse ? String(openedCourse.courseId) : BUILDER_PLAN_KEY;
-  const plan = planOf(planKey);
+  /** 한 스톱의 방문 시각을 정한다. `null`이면 지운다 */
+  const setStopVisitTime = (facilityId: number, visitTime: string | null) =>
+    setStops((prev) => prev.map((s) => (s.facilityId === facilityId ? { ...s, visitTime } : s)));
   const scrollRef = useRef<ScrollView>(null);
   /** 빌더 블록의 y 좌표. 코스를 열면 그 자리로 데려간다 */
   const builderY = useRef(0);
@@ -374,12 +381,13 @@ export default function CourseScreen() {
   const openSavedCourse = async (course: SavedCourse) => {
     setOpeningCourseId(course.courseId);
     try {
-      const missing = course.stopIds.filter((id) => !facilityById(id));
+      const missing = course.stops.map((s) => s.facilityId).filter((id) => !facilityById(id));
       await Promise.all(missing.map((id) => loadFacility(id)));
     } finally {
       setOpeningCourseId(null);
     }
-    setStopIds(course.stopIds);
+    // 서버에 저장해둔 방문 시각까지 그대로 올라온다
+    setStops(course.stops);
     setOpenedCourse(course);
     setPicking(false);
     // 바뀐 것을 보게 한다. 레이아웃이 자리를 잡은 뒤에 움직여야 엉뚱한 곳으로 가지 않는다
@@ -394,33 +402,40 @@ export default function CourseScreen() {
    * 담는 단계에서 막고 이유를 알린다.
    */
   /**
-   * 빌더 코스를 담는다. 담은 뒤 **빌더에 짜둔 시간을 새 코스로 옮긴다** —
-   * 옮기지 않으면 저장하는 순간 시간이 사라진 것처럼 보인다(키가 코스 ID로 바뀌므로).
+   * **저장의 원본은 `stops`다.** `stopFacilities`는 상세를 못 받은 장소가 걸러진 목록이라,
+   * 그걸로 저장하면 네트워크가 한 번 흔들린 것만으로 **스톱이 조용히 사라진 코스**가 저장된다.
+   * 이름은 아는 만큼만 채워 넣고(코스 이름을 짓는 데 쓴다), ID와 시간은 하나도 빠뜨리지 않는다.
    */
-  const saveBuilderCourse = async () => {
-    if (stopIds.length === 0) return;
-    // 이름은 `saveCourse`가 스톱 내용으로 짓는다 — 아래 값은 스톱 이름을 모를 때의 대비책이다
-    // 지금 보고 있는 일정의 키를 먼저 잡아둔다 — 아래에서 openedCourse를 비우면 키가 바뀐다
-    const fromKey = planKey;
-    /**
-     * **저장의 원본은 `stopIds`다.** `stopFacilities`는 상세를 못 받은 장소가 걸러진 목록이라,
-     * 그걸로 저장하면 네트워크가 한 번 흔들린 것만으로 **스톱이 조용히 사라진 코스**가 저장된다.
-     * 이름만 아는 만큼 채워 넣고, ID는 하나도 빠뜨리지 않는다.
-     */
-    const stops = stopIds.map((id) => {
-      const f = facilityById(id);
-      return f ? { facilityId: id, name: f.name } : { facilityId: id };
+  const stopsToSave = () =>
+    stops.map((st) => {
+      const f = facilityById(st.facilityId);
+      return f ? { ...st, name: f.name } : st;
     });
-    const newId = await saveCourse(BUILDER_PLAN_KEY, '내가 만든 코스', stops);
+
+  /** 빌더 코스를 새 코스로 담는다. 정해둔 방문 시각도 함께 저장된다 */
+  const saveBuilderCourse = async () => {
+    if (stops.length === 0) return;
+    // 이름은 `saveCourse`가 스톱 내용으로 짓는다 — 아래 값은 스톱 이름을 모를 때의 대비책이다
+    const newId = await saveCourse(BUILDER_KEY, '내가 만든 코스', stopsToSave());
     if (newId === null) return;
-    adoptPlan(fromKey, newId);
     setOpenedCourse(null);
+  };
+
+  /**
+   * 열어둔 코스를 **그 자리에서** 고친다.
+   *
+   * 시간만 바로잡을 때가 많은데, 그때마다 같은 동선이 목록에 하나씩 늘어나면 곤란하다.
+   * 대신 원본이 바뀌므로, 남에게 공유한 코스라면 새로 담는 쪽을 고르면 된다 — 둘 다 둔다.
+   */
+  const saveOverOpenedCourse = async () => {
+    if (!openedCourse || stops.length === 0) return;
+    if (await updateCourse(openedCourse, stops)) setOpenedCourse(null);
   };
 
   const MAX_STOPS = 10;
   const addStop = (facilityId: number) => {
-    setStopIds((prev) => {
-      if (prev.includes(facilityId)) return prev;
+    setStops((prev) => {
+      if (prev.some((s) => s.facilityId === facilityId)) return prev;
       if (prev.length >= MAX_STOPS) {
         setSaveMessage({
           text: `코스에는 ${MAX_STOPS}곳까지 담을 수 있어요. 빼고 다시 담아 주세요.`,
@@ -428,16 +443,16 @@ export default function CourseScreen() {
         });
         return prev;
       }
-      return [...prev, facilityId];
+      return [...prev, { facilityId, visitTime: null }];
     });
   };
 
   const removeStop = (facilityId: number) => {
-    setStopIds((prev) => prev.filter((x) => x !== facilityId));
+    setStops((prev) => prev.filter((s) => s.facilityId !== facilityId));
   };
 
   const moveStop = (index: number, dir: -1 | 1) => {
-    setStopIds((prev) => {
+    setStops((prev) => {
       const next = [...prev];
       const target = index + dir;
       if (target < 0 || target >= next.length) return prev;
@@ -447,7 +462,8 @@ export default function CourseScreen() {
   };
 
   const swapToAlternative = (fromId: number, toId: number) => {
-    setStopIds((prev) => prev.map((x) => (x === fromId ? toId : x)));
+    // 그 자리에 가려던 시각은 남긴다 — 바꾸는 것은 갈 곳이지 일정이 아니다
+    setStops((prev) => prev.map((s) => (s.facilityId === fromId ? { ...s, facilityId: toId } : s)));
   };
 
   /**
@@ -469,7 +485,7 @@ export default function CourseScreen() {
 
   // 스토어 캐시에서 찾는다 — 서버 시설과 목 시설을 모두 아는 건 여기뿐이다
   /** 앞 스톱보다 이른 시각인 곳. 막지 않고 표시만 한다 */
-  const outOfOrder = useMemo(() => outOfOrderStops(stopIds, plan), [stopIds, plan]);
+  const outOfOrder = useMemo(() => outOfOrderStops(stops), [stops]);
 
   const stopFacilities = stopIds
     .map((id) => facilityById(id))
@@ -646,7 +662,7 @@ export default function CourseScreen() {
                           {c.name}
                         </Text>
                         <Text style={[styles.savedMeta, { color: p.muted, marginLeft: 'auto' }]}>
-                          {c.stopIds.length}곳
+                          {c.stops.length}곳
                         </Text>
                       </Pressable>
                       <Pressable onPress={() => void renameCourse(c)} hitSlop={8} accessibilityLabel="코스 이름 바꾸기">
@@ -775,7 +791,7 @@ export default function CourseScreen() {
                           )}
                         </View>
                         <Text style={[styles.savedMeta, { color: p.muted, marginLeft: 'auto' }]}>
-                          {c.stopIds.length}곳
+                          {c.stops.length}곳
                         </Text>
                         {copyingId === c.courseId ? (
                           <ActivityIndicator size="small" color={p.muted} />
@@ -907,12 +923,12 @@ export default function CourseScreen() {
                   </Text>
                   {openedCourse && (
                     <Text style={[styles.builderSub, { color: p.muted }]} numberOfLines={1}>
-                      담아둔 코스를 열었어요 · 고치면 「이 코스로 저장」으로 새로 담겨요
+                      담아둔 코스를 열었어요 · 고친 뒤 「이 코스 수정」이나 「새로 담기」를 고르세요
                     </Text>
                   )}
                 </View>
                 <Pressable
-                  onPress={() => { setStopIds([]); setOpenedCourse(null); setCourseCheck(null); setCourseCheckError(null); }}>
+                  onPress={() => { setStops([]); setOpenedCourse(null); setCourseCheck(null); setCourseCheckError(null); }}>
                   <Text style={[styles.clear, { color: p.muted }]}>비우기</Text>
                 </Pressable>
               </View>
@@ -977,9 +993,9 @@ export default function CourseScreen() {
                     */}
                     <View style={styles.stopTime}>
                       <StopTimeField
-                        value={plan[String(f.facilityId)]}
+                        value={stops.find((st) => st.facilityId === f.facilityId)?.visitTime ?? undefined}
                         outOfOrder={outOfOrder.has(f.facilityId)}
-                        onChange={(t) => setStopTime(planKey, f.facilityId, t)}
+                        onChange={(t) => setStopVisitTime(f.facilityId, t)}
                       />
                     </View>
 
@@ -1024,29 +1040,50 @@ export default function CourseScreen() {
                 빌더로 짠 코스를 담는다. 예전에는 추천 카드에만 저장 버튼이 있어서, 직접
                 고른 코스는 화면을 떠나는 순간 사라졌다 — 스톱 순서와 시간까지 정해 놓고도.
 
-                담은 코스를 열어 고친 경우에도 **새 코스로** 담긴다. 서버의 덮어쓰기
-                (`PUT /courses/{id}`)는 스톱을 전부 다시 실어야 하는데, 원본을 바꿔버리면
-                남이 담아간 코스와 어긋난다. 원본은 두고 새로 담는 쪽이 덜 놀랍다.
+                담아둔 코스를 열었을 때는 **두 갈래를 다 준다.** 스톱을 바꿨다면 원본을 두고
+                새로 담는 쪽이 덜 놀랍지만(남이 담아간 코스와 어긋난다), 방문 시각 하나
+                바로잡자고 같은 동선이 목록에 둘이 되는 것은 더 놀랍다. 어느 쪽인지는
+                사용자가 안다.
               */}
-              <Pressable
-                onPress={() => void saveBuilderCourse()}
-                disabled={savingKey === BUILDER_PLAN_KEY}
-                style={({ pressed }) => [
-                  styles.saveCourseBtn,
-                  {
-                    borderColor: p.accent,
-                    backgroundColor: pressed || savingKey === BUILDER_PLAN_KEY ? p.accentSoft : 'transparent',
-                  },
-                ]}>
-                {savingKey === BUILDER_PLAN_KEY ? (
-                  <ActivityIndicator color={p.accent} size="small" />
-                ) : (
-                  <Ionicons name="bookmark-outline" size={16} color={p.accent} />
+              <View style={styles.saveRow}>
+                {openedCourse && (
+                  <Pressable
+                    onPress={() => void saveOverOpenedCourse()}
+                    disabled={savingKey !== null}
+                    // 원본을 바꾸는 쪽이라 채워서 그린다 — 두 버튼이 같은 무게면 무엇이
+                    // 원본을 건드리는지 눌러 보기 전에는 알 수 없다
+                    style={({ pressed }) => [
+                      styles.saveCourseBtn,
+                      { borderColor: p.accent, backgroundColor: p.accent, opacity: pressed ? 0.85 : 1 },
+                    ]}>
+                    {savingKey === String(openedCourse.courseId) ? (
+                      <ActivityIndicator color={p.card} size="small" />
+                    ) : (
+                      <Ionicons name="checkmark" size={16} color={p.card} />
+                    )}
+                    <Text style={[styles.saveCourseText, { color: p.card }]}>이 코스 수정</Text>
+                  </Pressable>
                 )}
-                <Text style={[styles.saveCourseText, { color: p.accent }]}>
-                  {openedCourse ? '고친 대로 새로 담기' : '이 코스로 저장'}
-                </Text>
-              </Pressable>
+                <Pressable
+                  onPress={() => void saveBuilderCourse()}
+                  disabled={savingKey !== null}
+                  style={({ pressed }) => [
+                    styles.saveCourseBtn,
+                    {
+                      borderColor: p.accent,
+                      backgroundColor: pressed || savingKey === BUILDER_KEY ? p.accentSoft : 'transparent',
+                    },
+                  ]}>
+                  {savingKey === BUILDER_KEY ? (
+                    <ActivityIndicator color={p.accent} size="small" />
+                  ) : (
+                    <Ionicons name="bookmark-outline" size={16} color={p.accent} />
+                  )}
+                  <Text style={[styles.saveCourseText, { color: p.accent }]}>
+                    {openedCourse ? '새로 담기' : '이 코스로 저장'}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           )}
 
@@ -1142,7 +1179,8 @@ export default function CourseScreen() {
         facilityOf={facilityById}
         onClose={() => setReordering(false)}
         onConfirm={(ids) => {
-          setStopIds(ids);
+          // 순서만 바뀐다. 각 곳에 정해둔 시각은 그 곳을 따라간다
+          setStops((prev) => ids.map((id) => prev.find((s) => s.facilityId === id) ?? { facilityId: id, visitTime: null }));
           setReordering(false);
           // 순서가 바뀌면 이전 판별 결과는 더 이상 이 코스의 답이 아니다
           setCourseCheck(null);
@@ -1263,7 +1301,9 @@ const styles = StyleSheet.create({
   stopCat: { fontSize: Type.micro, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' },
   stopName: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
   stopMeta: { fontSize: Type.footnote },
+  saveRow: { flexDirection: 'row', gap: Spacing.sm },
   saveCourseBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

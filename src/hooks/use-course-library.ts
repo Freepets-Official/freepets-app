@@ -7,7 +7,7 @@ import { ApiError, coursesApi } from '@/lib/api';
 import { copyText } from '@/lib/clipboard';
 import { confirmDialog, promptText } from '@/lib/notify';
 import { useAppStore } from '@/store/app-store';
-import type { CourseStop, PublicCourse, SavedCourse } from '@/data/types';
+import type { CourseStop, CourseStopRef, PublicCourse, SavedCourse } from '@/data/types';
 
 /**
  * 코스 보관함 — 내 코스 · 둘러보기 · 공유.
@@ -26,8 +26,9 @@ import type { CourseStop, PublicCourse, SavedCourse } from '@/data/types';
  * 순서까지 같아야 같은 코스로 본다 — A→B→C와 C→B→A는 하루가 완전히 다르다.
  * 이름은 보지 않는다. 담을 때 `(닉네임)`이 붙어 원본과 달라지기 때문이다.
  */
-function sameStops(a: number[], b: number[]): boolean {
-  return a.length === b.length && a.every((id, i) => id === b[i]);
+function sameStops(a: CourseStopRef[], b: CourseStopRef[]): boolean {
+  // 방문 시각은 보지 않는다 — 시간만 다른 코스는 같은 동선을 두 번 담은 것이다
+  return a.length === b.length && a.every((s, i) => s.facilityId === b[i].facilityId);
 }
 
 /**
@@ -55,8 +56,8 @@ export function useCourseLibrary() {
   const { session, restoring, refreshGamification } = useAppStore();
 
   // ── 내 코스 저장 ────────────────────────────────────────────────────
-  // 서버는 stopIds만 저장한다. 추천 당시의 이름·카테고리·점수는 안 남으므로 목록을 그릴 땐
-  // 그 ID로 시설을 다시 조회해야 한다 — 지금은 개수만 보여주고 상세는 다음 작업으로 둔다.
+  // 서버는 시설 ID와 방문 시각만 저장한다. 추천 당시의 이름·카테고리·점수는 안 남으므로
+  // 목록을 그릴 땐 그 ID로 시설을 다시 조회해야 한다 — 지금은 개수만 보여준다.
   const [savedCourses, setSavedCourses] = useState<SavedCourse[]>([]);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   /**
@@ -100,7 +101,7 @@ export function useCourseLibrary() {
       (c) =>
         !mine.has(c.courseId) &&
         !copiedIds.has(c.courseId) &&
-        !savedCourses.some((s2) => sameStops(s2.stopIds, c.stopIds)),
+        !savedCourses.some((s2) => sameStops(s2.stops, c.stops)),
     );
   }, [publicCourses, savedCourses, copiedIds]);
 
@@ -174,25 +175,26 @@ export function useCourseLibrary() {
   }, []);
 
   /**
-   * 코스를 내 것으로 담는다. `stops`에서 쓰는 것은 `facilityId`뿐이다 — 서버가 그것만 받는다.
+   * 코스를 내 것으로 담는다.
    *
-   * 저장에 성공하면 새 `courseId`를 돌려준다. 빌더에서 짠 스톱별 시간을 그 코스로 옮기려면
-   * 호출하는 쪽이 이 값을 알아야 한다(시간은 서버에 없어 기기에 코스별로 남는다).
+   * 스톱에 `visitTime`이 있으면 **그대로 함께 저장한다.** 빌더에서 시간까지 정해둔 코스를
+   * 담으면 그 일정이 코스의 일부가 되고, 남이 이 코스를 복사할 때도 따라간다.
+   * 추천 카드처럼 시간 개념이 없는 곳에서는 `visitTime`을 빼고 부르면 된다.
    */
   const saveCourse = async (
     key: string,
     name: string,
-    stops: Pick<CourseStop, 'facilityId'>[],
+    stops: (Pick<CourseStop, 'facilityId'> & { visitTime?: string | null })[],
   ): Promise<number | null> => {
     if (stops.length === 0) return null;
     setSavingKey(key);
     setSaveMessage(null);
     try {
-      // 서버는 1~10개만 받는다. stops의 facilityId를 순서 그대로 넣으면 내 코스가 된다.
+      // 서버는 1~10개만 받는다. stops를 순서 그대로 넣으면 내 코스가 된다.
       const created = await coursesApi.create({
         // 이름은 스톱 내용으로 짓고(courseName), 스톱은 새 계약(stops)으로 보낸다
         name: courseName(name, stops),
-        stops: stops.slice(0, 10).map((st) => ({ facilityId: st.facilityId, visitTime: null })),
+        stops: stops.slice(0, 10).map((st) => ({ facilityId: st.facilityId, visitTime: st.visitTime ?? null })),
       });
       // 저장 결과로 목록을 먼저 갱신한다. 목록 재조회가 실패해도 방금 담은 코스는 보여야 한다 —
       // 저장은 됐는데 목록에 없으면 사용자는 실패한 줄 안다.
@@ -204,6 +206,40 @@ export function useCourseLibrary() {
     } catch (e) {
       setSaveMessage({ text: e instanceof Error ? e.message : '코스를 저장하지 못했어요', failed: true });
       return null;
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  /**
+   * 이미 담아둔 코스를 **그 자리에서 고친다**(`PUT /courses/{id}`).
+   *
+   * 「새로 담기」와 나란히 두는 이유가 있다. 스톱을 바꾸면 남이 담아간 코스와 어긋나므로
+   * 원본을 두고 새로 담는 쪽이 대체로 덜 놀랍지만, **방문 시각만 고쳤을 때는 반대다** —
+   * 시간 하나 바로잡자고 같은 동선이 목록에 둘이 되면 그게 더 놀랍다. 어느 쪽인지는
+   * 사용자가 안다. 그래서 고르게 한다.
+   *
+   * 공개 여부는 **지금 값을 그대로 다시 실어 보낸다.** `PUT`은 코스 전체를 교체하므로
+   * 빼먹으면 공개해 둔 코스가 조용히 비공개로 돌아간다.
+   */
+  const updateCourse = async (course: SavedCourse, stops: CourseStopRef[]): Promise<boolean> => {
+    if (stops.length === 0) return false;
+    setSavingKey(String(course.courseId));
+    setSaveMessage(null);
+    try {
+      const updated = await coursesApi.update(course.courseId, {
+        name: course.name,
+        description: course.description ?? undefined,
+        stops: stops.slice(0, 10),
+        isPublic: course.isPublic,
+      });
+      setSavedCourses((prev) => prev.map((c) => (c.courseId === updated.courseId ? updated : c)));
+      setSaveMessage({ text: `'${course.name}'을(를) 고쳤어요`, failed: false });
+      reloadSaved().catch(() => {});
+      return true;
+    } catch (e) {
+      setSaveMessage({ text: e instanceof Error ? e.message : '코스를 고치지 못했어요', failed: true });
+      return false;
     } finally {
       setSavingKey(null);
     }
@@ -241,7 +277,7 @@ export function useCourseLibrary() {
      * 그래서 기억이 아니라 **실제 내 코스의 스톱 구성**으로 판단한다. 담은 코스는 새
      * courseId를 받으므로 ID로는 영영 못 찾는다.
      */
-    const already = savedCourses.find((c) => sameStops(c.stopIds, course.stopIds));
+    const already = savedCourses.find((c) => sameStops(c.stops, course.stops));
     if (already) {
       setCopiedIds((prev) => new Set(prev).add(course.courseId));
       setSaveMessage({ text: `이미 담은 코스예요 — 내 코스의 '${already.name}'`, failed: false });
@@ -279,7 +315,7 @@ export function useCourseLibrary() {
     setSaveMessage(null);
     try {
       const code = await coursesApi.share(course.courseId);
-      const message = `반갑꼬리 여행 코스 '${course.name}' (${course.stopIds.length}곳)\n${courseShareUrl(code)}\n\n앱에서 담기 → 여행 코스 → 공유 코드: ${code}`;
+      const message = `반갑꼬리 여행 코스 '${course.name}' (${course.stops.length}곳)\n${courseShareUrl(code)}\n\n앱에서 담기 → 여행 코스 → 공유 코드: ${code}`;
       try {
         await Share.share({ message });
       } catch {
@@ -422,6 +458,7 @@ export function useCourseLibrary() {
      */
     setSaveMessage,
     saveCourse,
+    updateCourse,
     removeCourse,
     renameCourse,
     // 둘러보기
