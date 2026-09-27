@@ -965,25 +965,34 @@ export const facilitiesApi = {
   },
 
   /**
-   * 시군구 시설 목록 — **관광공사를 실시간으로 부른다**(`api-specs/facility.md` 5번).
+   * 지역 시설 목록 — 시군구까지 좁히면 **관광공사를 실시간으로 부른다**(`api-specs/facility.md` 5번).
    *
    * `search`(1번)와 데이터 출처가 다르다. 저쪽은 우리가 적재해둔 DB를 거리순으로 읽고,
-   * 이쪽은 요청할 때마다 관광공사에서 받아 서버가 거른 뒤 가나다순으로 준다. 그래서
-   * **첫 호출이 1초 안팎 느릴 수 있고, 거리(distanceM)가 없다**(좌표를 받지 않는다).
+   * 이쪽은 관광공사에서 받아 서버가 거른 뒤 가나다순으로 준다. 그래서 **거리(distanceM)가
+   * 없다**(좌표를 받지 않는다).
    *
-   * **시도·시군구가 둘 다 필수다.** 관광공사에서 조건에 맞는 전량을 받아오는 구조라
-   * 범위를 좁히지 않으면 전국 49,679건이 한 요청에 딸려 온다. 시군구까지 좁히면 최대 736건이다.
-   * 그래서 '전국'과 '시도만' 상태는 이 API를 부르지 않고 `search`(DB)로 간다.
+   * **`sigunguCode`는 이제 선택이다.** 예전에는 둘 다 필수여서, 시도만 고른 상태는 이 API를
+   * 부를 수 없었고 화면이 "시·군·구까지 골라 주세요"로 멈춰 있었다. 관광공사에서 조건에 맞는
+   * 전량을 받아오는 구조라 시도 단위는 감당이 안 된다는 이유였는데, 서버가 시도 단위를
+   * 적재해둔 DB로 답하게 되면서 해결됐다(2026-09-27 실측: 서울 8,019건·경기 9,469건이 0.11초).
+   *
+   * 셋 다 생략하면 전국이다(48,786건). 다만 **앱은 그 경로를 쓰지 않는다** — 지역을 안 고른
+   * 「전체」 모드는 `search`로 가고, 그쪽은 같은 전국을 **거리순으로** 준다. `nationwide=true`도
+   * 지역을 생략한 것과 결과가 같아 보낼 이유가 없다.
+   *
+   * ⚠️ `sigunguCode`만 단독으로 보내면 400이다. 시도 없이 시군구 코드는 뜻이 없다.
    */
   byRegion: async (params: {
     sidoCode: string;
-    sigunguCode: string;
+    /** 생략하면 시도 전체 */
+    sigunguCode?: string;
     category?: Category;
     petAllowed?: 'ALLOWED' | 'DENIED' | 'PENDING';
     page?: number;
     size?: number;
   }): Promise<{ items: Facility[]; total: number }> => {
-    const q = new URLSearchParams({ sidoCode: params.sidoCode, sigunguCode: params.sigunguCode });
+    const q = new URLSearchParams({ sidoCode: params.sidoCode });
+    if (params.sigunguCode) q.set('sigunguCode', params.sigunguCode);
     if (params.category) q.set('category', params.category);
     if (params.petAllowed) q.set('petAllowed', params.petAllowed);
     q.set('page', String(params.page ?? 0));
