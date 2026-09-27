@@ -224,17 +224,25 @@ export function useCourseLibrary() {
    */
   const updateCourse = async (course: SavedCourse, stops: CourseStopRef[]): Promise<SavedCourse | null> => {
     if (stops.length === 0) return null;
+    /**
+     * 이름·공개 여부는 **목록에 있는 가장 새 값**을 쓴다.
+     *
+     * 부르는 쪽은 코스를 열던 시점의 객체를 들고 있는데, 그 사이에 목록에서 이름을 바꾸거나
+     * 공개를 토글했을 수 있다. 전체 교체(`PUT`)라 옛 값을 그대로 실어 보내면 **방금 바꾼 것이
+     * 조용히 되돌아간다.**
+     */
+    const latest = savedCourses.find((c) => c.courseId === course.courseId) ?? course;
     setSavingKey(String(course.courseId));
     setSaveMessage(null);
     try {
       const updated = await coursesApi.update(course.courseId, {
-        name: course.name,
-        description: course.description ?? undefined,
+        name: latest.name,
+        description: latest.description ?? undefined,
         stops: stops.slice(0, 10),
-        isPublic: course.isPublic,
+        isPublic: latest.isPublic,
       });
       setSavedCourses((prev) => prev.map((c) => (c.courseId === updated.courseId ? updated : c)));
-      setSaveMessage({ text: `'${course.name}'을(를) 고쳤어요`, failed: false });
+      setSaveMessage({ text: `'${latest.name}'을(를) 고쳤어요`, failed: false });
       reloadSaved().catch(() => {});
       // 서버가 정리해 준 코스를 그대로 돌려준다 — 부르는 쪽이 열어둔 코스를 이걸로 갈아끼운다
       return updated;

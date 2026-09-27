@@ -332,7 +332,16 @@ export default function CourseScreen() {
    *    처럼 보였다. 스톱은 실제로 바뀌는데 빌더가 한참 아래에 있어 눈에 안 띄었기 때문이다.
    * ② 고친 내용을 **그 코스에 덮어쓸지** 새로 담을지 가른다 — 열어둔 코스가 있을 때만 덮어쓰기가 뜬다.
    */
-  const [openedCourse, setOpenedCourse] = useState<SavedCourse | null>(null);
+  const [openedCourseId, setOpenedCourseId] = useState<number | null>(null);
+  /**
+   * ID로 들고 **목록에서 찾아 쓴다.** 객체를 그대로 담아두면 목록과 어긋난다 — 코스를 열어둔 채
+   * 위에서 이름을 바꾸거나 공개를 토글하면 빌더 머리에는 옛 이름이 남고, 「이 코스 수정」이
+   * 그 옛 값을 다시 실어 보내 **방금 바꾼 것을 되돌린다.** 지운 코스면 저절로 닫힌다.
+   */
+  const openedCourse = useMemo(
+    () => (openedCourseId === null ? null : savedCourses.find((c) => c.courseId === openedCourseId) ?? null),
+    [openedCourseId, savedCourses],
+  );
 
   /**
    * 담아둔 코스를 열면 **뒤로가기가 그것부터 닫는다.**
@@ -353,7 +362,8 @@ export default function CourseScreen() {
    */
   const navigation = useNavigation();
   useEffect(() => {
-    if (!openedCourse) return;
+    // 객체가 아니라 ID를 본다 — 목록이 갱신될 때마다 리스너를 붙였다 뗐다 할 이유가 없다
+    if (openedCourseId === null) return;
     let off: (() => void) | null = null;
     off = navigation.addListener('beforeRemove', (e) => {
       e.preventDefault();
@@ -361,13 +371,13 @@ export default function CourseScreen() {
       // 스스로 떨어진다 — 두 번째 뒤로가기는 화면을 정말로 떠나야 한다.
       off?.();
       off = null;
-      setOpenedCourse(null);
+      setOpenedCourseId(null);
       setStops([]);
       setCourseCheck(null);
       setCourseCheckError(null);
     });
     return () => off?.();
-  }, [navigation, openedCourse]);
+  }, [navigation, openedCourseId]);
   /** 순서 바꾸기 시트가 열렸는가 */
   const [reordering, setReordering] = useState(false);
 
@@ -388,7 +398,7 @@ export default function CourseScreen() {
     }
     // 서버에 저장해둔 방문 시각까지 그대로 올라온다
     setStops(course.stops);
-    setOpenedCourse(course);
+    setOpenedCourseId(course.courseId);
     setPicking(false);
     // 바뀐 것을 보게 한다. 레이아웃이 자리를 잡은 뒤에 움직여야 엉뚱한 곳으로 가지 않는다
     setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(builderY.current - 12, 0), animated: true }), 60);
@@ -418,7 +428,7 @@ export default function CourseScreen() {
     // 이름은 `saveCourse`가 스톱 내용으로 짓는다 — 아래 값은 스톱 이름을 모를 때의 대비책이다
     const newId = await saveCourse(BUILDER_KEY, '내가 만든 코스', stopsToSave());
     if (newId === null) return;
-    setOpenedCourse(null);
+    setOpenedCourseId(null);
   };
 
   /**
@@ -434,7 +444,8 @@ export default function CourseScreen() {
     if (!openedCourse || stops.length === 0) return;
     const updated = await updateCourse(openedCourse, stops);
     if (!updated) return;
-    setOpenedCourse(updated);
+    // openedCourse는 목록에서 찾아 쓰므로 따로 갈아끼울 것이 없다. 스톱만 서버가 정리해 준
+    // 것으로 맞춘다
     setStops(updated.stops);
   };
 
@@ -934,7 +945,7 @@ export default function CourseScreen() {
                   )}
                 </View>
                 <Pressable
-                  onPress={() => { setStops([]); setOpenedCourse(null); setCourseCheck(null); setCourseCheckError(null); }}>
+                  onPress={() => { setStops([]); setOpenedCourseId(null); setCourseCheck(null); setCourseCheckError(null); }}>
                   <Text style={[styles.clear, { color: p.muted }]}>비우기</Text>
                 </Pressable>
               </View>
