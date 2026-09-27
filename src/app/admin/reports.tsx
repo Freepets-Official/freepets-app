@@ -10,7 +10,7 @@ import { LoadState } from '@/components/load-state';
 import { Text } from '@/components/text';
 import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { usePalette } from '@/hooks/use-theme';
-import { adminApi, type ReportedReview, type ReportStatus } from '@/lib/api';
+import { ApiError, adminApi, type ReportedReview, type ReportStatus } from '@/lib/api';
 import { confirmDialog } from '@/lib/notify';
 import { REVIEW_REPORT_REASON_LABEL } from '@/store/app-store';
 
@@ -44,9 +44,9 @@ export default function AdminReportsScreen() {
   const [reviews, setReviews] = useState<ReportedReview[] | null>(null);
   const [total, setTotal] = useState(0);
   const [hasNext, setHasNext] = useState(false);
-  const [page, setPage] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
+  /** 실패는 문구만이 아니라 **왜 실패했는지**까지 들고 있어야 한다 — 403은 재시도가 소용없다 */
+  const [failed, setFailed] = useState<{ message: string; forbidden: boolean } | null>(null);
   /** 처리 중인 리뷰. 버튼을 두 번 눌러 같은 리뷰가 두 번 처리되지 않게 한다 */
   const [busyId, setBusyId] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ text: string; failed: boolean } | null>(null);
@@ -60,12 +60,19 @@ export default function AdminReportsScreen() {
       }
       try {
         const r = await adminApi.reviewReports({ status: filter, page: nextPage, size: PAGE_SIZE });
-        setReviews((prev) => (append && prev ? [...prev, ...r.reviews] : r.reviews));
+        setReviews((prev) => {
+          if (!append || !prev) return r.reviews;
+          // 이미 들고 있는 것은 거른다 — 아래 `더 보기`가 겹치는 페이지를 일부러 다시 받는다
+          const seen = new Set(prev.map((x) => x.reviewId));
+          return [...prev, ...r.reviews.filter((x) => !seen.has(x.reviewId))];
+        });
         setTotal(r.totalElements);
         setHasNext(r.hasNext);
-        setPage(r.page);
       } catch (e) {
-        setFailed(e instanceof Error ? e.message : '목록을 불러오지 못했어요');
+        setFailed({
+          message: e instanceof Error ? e.message : '목록을 불러오지 못했어요',
+          forbidden: e instanceof ApiError && e.status === 403,
+        });
         if (!append) setReviews([]);
       } finally {
         setLoadingMore(false);
@@ -89,6 +96,16 @@ export default function AdminReportsScreen() {
     setReviews((prev) => (prev ?? []).filter((r) => r.reviewId !== reviewId));
     setTotal((t) => Math.max(0, t - 1));
   };
+
+  /**
+   * 「더 보기」가 받아올 페이지. **`page + 1`이 아니라 지금 들고 있는 개수로 센다.**
+   *
+   * 처리한 줄은 목록에서 빠지는데, 서버 목록에서도 같이 빠진다(대기 → 숨김/반려). 20건을
+   * 받아 3건을 처리했으면 서버의 21번째였던 항목이 18번째로 당겨져 있어, `page=1`(21번째부터)을
+   * 부르면 **세 건을 건너뛴다.** 들고 있는 17건을 기준으로 page 0을 다시 받고 겹치는 것은
+   * 위에서 걸러낸다 — 17건을 덤으로 받지만 빠뜨리는 것보다 낫다.
+   */
+  const nextPage = Math.floor((reviews?.length ?? 0) / PAGE_SIZE);
 
   /**
    * 승인·반려·되돌리기가 전부 같은 모양이다 — 본문 없는 POST 하나에 처리된 신고 수가 온다.
@@ -118,10 +135,10 @@ export default function AdminReportsScreen() {
       drop(r.reviewId);
       setNotice({ text: `${r.facilityName} · ${doneText} (신고 ${count}건)`, failed: false });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '처리하지 못했어요';
-      // 이미 처리된 신고 — 다른 운영자가 먼저 눌렀다
-      if (/4006|4007|이미|없음/.test(msg)) drop(r.reviewId);
-      setNotice({ text: msg, failed: true });
+      // 409면 이미 처리된 신고다 — 다른 운영자가 먼저 눌렀다. 코드로 본다:
+      // 서버 문구는 언제든 바뀌고, 문자열로 맞히면 바뀐 날 조용히 틀린다
+      if (e instanceof ApiError && e.status === 409) drop(r.reviewId);
+      setNotice({ text: e instanceof Error ? e.message : '처리하지 못했어요', failed: true });
     } finally {
       setBusyId(null);
     }
@@ -187,9 +204,9 @@ export default function AdminReportsScreen() {
             // 403은 장애가 아니라 "당신 화면이 아니다"다. 다시 눌러도 그대로라 재시도를 권하지 않는다
             <LoadState
               kind="failed"
-              icon={failed.includes('권한') ? 'lock-closed-outline' : undefined}
-              message={failed}
-              onRetry={failed.includes('권한') ? undefined : () => void load(0, false)}
+              icon={failed.forbidden ? 'lock-closed-outline' : undefined}
+              message={failed.message}
+              onRetry={failed.forbidden ? undefined : () => void load(0, false)}
             />
           ) : reviews.length === 0 ? (
             <LoadState
@@ -213,7 +230,7 @@ export default function AdminReportsScreen() {
 
               {hasNext && (
                 <Pressable
-                  onPress={() => void load(page + 1, true)}
+                  onPress={() => void load(nextPage, true)}
                   disabled={loadingMore}
                   style={({ pressed }) => [
                     styles.more,
