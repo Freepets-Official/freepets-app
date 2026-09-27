@@ -40,6 +40,12 @@ import { OWNER_AMENITY_LABEL, REVIEW_TAG_LABEL } from '@/data/types';
 import type { Gamification, TierAnimal, TierColor } from '@/data/level';
 import { MAX_LEVEL, TIER_ANIMAL_LABEL, TIER_COLOR_LABEL } from '@/data/level';
 
+/**
+ * 신고 사유는 `store/app-store`가 원본이다(라벨과 같은 자리에 둬야 어긋나지 않는다).
+ * app-store가 이 파일을 import하므로 **타입만** 가져온다 — 값을 가져오면 순환 참조가 된다.
+ */
+import type { ReviewReportReason } from '@/store/app-store';
+
 import { API_URL, DEV_TOKEN } from './config';
 
 export type { OwnerAmenity } from '@/data/types';
@@ -2386,6 +2392,84 @@ function toAdminClaim(c: ServerAdminClaim): AdminClaim | null {
   };
 }
 
+/** 신고 처리 상태. 목록 필터와 처리 결과가 같은 값을 쓴다 */
+export type ReportStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED';
+
+/**
+ * 신고된 리뷰 한 건.
+ *
+ * 서버는 **신고 1건이 아니라 신고된 리뷰 1건** 단위로 묶어 준다. 운영자가 판단하는 대상은
+ * 신고가 아니라 리뷰이기 때문이다 — 같은 리뷰에 신고가 셋 달렸으면 항목 하나에
+ * `reportCount: 3`으로 온다.
+ */
+export type ReportedReview = {
+  reviewId: number;
+  facilityId: number;
+  facilityName: string;
+  authorUserId: number | null;
+  authorNickname: string;
+  content: string;
+  photoUrl: string | null;
+  ratingSpace: number | null;
+  ratingStaff: number | null;
+  ratingAmenity: number | null;
+  reviewCreatedAt: string;
+  /** 요청한 `status`에 해당하는 신고 수만 센 값이다 */
+  reportCount: number;
+  /** 사유별 건수. 신고가 없는 사유는 **키 자체가 없다** */
+  reasonCounts: Partial<Record<ReviewReportReason, number>>;
+  /** 가장 먼저 신고된 시각. 목록은 이 값 오름차순(가장 오래 방치된 것부터)이다 */
+  firstReportedAt: string;
+};
+
+export type ReportedReviewPage = {
+  reviews: ReportedReview[];
+  page: number;
+  totalElements: number;
+  hasNext: boolean;
+};
+
+type ServerReportedReview = Partial<Omit<ReportedReview, 'reasonCounts'>> & { reasonCounts?: unknown };
+
+/**
+ * 사유별 건수를 **아는 사유만** 남긴다.
+ *
+ * 서버가 사유를 새로 추가하면 앱이 모르는 키가 섞여 들어온다. 그대로 그리면 화면에
+ * `NEW_REASON 2` 같은 영문 코드가 뜬다 — 운영자가 읽을 수 없는 값이다. 대신 합계
+ * (`reportCount`)는 서버 값을 그대로 쓰므로 건수가 사라지지는 않는다.
+ */
+function toReasonCounts(v: unknown): Partial<Record<ReviewReportReason, number>> {
+  if (typeof v !== 'object' || v === null) return {};
+  const known: ReviewReportReason[] = ['FALSE_INFO', 'SPAM', 'ABUSE', 'PRIVACY', 'IRRELEVANT'];
+  const out: Partial<Record<ReviewReportReason, number>> = {};
+  for (const [k, n] of Object.entries(v as Record<string, unknown>)) {
+    if (known.includes(k as ReviewReportReason) && typeof n === 'number' && n > 0) {
+      out[k as ReviewReportReason] = n;
+    }
+  }
+  return out;
+}
+
+function toReportedReview(r: ServerReportedReview): ReportedReview | null {
+  if (typeof r?.reviewId !== 'number') return null;
+  return {
+    reviewId: r.reviewId,
+    facilityId: typeof r.facilityId === 'number' ? r.facilityId : 0,
+    facilityName: r.facilityName ?? '이름 없는 시설',
+    authorUserId: r.authorUserId ?? null,
+    authorNickname: r.authorNickname ?? '(닉네임 없음)',
+    content: r.content ?? '',
+    photoUrl: r.photoUrl ?? null,
+    ratingSpace: typeof r.ratingSpace === 'number' ? r.ratingSpace : null,
+    ratingStaff: typeof r.ratingStaff === 'number' ? r.ratingStaff : null,
+    ratingAmenity: typeof r.ratingAmenity === 'number' ? r.ratingAmenity : null,
+    reviewCreatedAt: r.reviewCreatedAt ?? '',
+    reportCount: typeof r.reportCount === 'number' ? r.reportCount : 0,
+    reasonCounts: toReasonCounts(r.reasonCounts),
+    firstReportedAt: r.firstReportedAt ?? '',
+  };
+}
+
 export const adminApi = {
   claims: async (params: { status?: ClaimStatus; page?: number; size?: number } = {}): Promise<AdminClaimPage> => {
     const q = new URLSearchParams();
@@ -2424,6 +2508,71 @@ export const adminApi = {
       auth: true,
     });
     return r.status ?? 'REVOKED';
+  },
+
+  /**
+   * 신고된 리뷰 목록. 기본은 아직 처리하지 않은 `PENDING`이다.
+   *
+   * `size`는 서버가 **50에서 자른다.** 더 큰 값을 보내면 조용히 50으로 줄어들어 `hasNext`와
+   * 실제 개수가 어긋나 보이므로, 앱에서 먼저 맞춘다.
+   */
+  reviewReports: async (
+    params: { status?: ReportStatus; page?: number; size?: number } = {},
+  ): Promise<ReportedReviewPage> => {
+    const q = new URLSearchParams();
+    if (params.status) q.set('status', params.status);
+    q.set('page', String(params.page ?? 0));
+    q.set('size', String(Math.min(params.size ?? 20, 50)));
+    const r = await request<{
+      reviews?: ServerReportedReview[];
+      pageInfo?: { page?: number; totalElements?: number; hasNext?: boolean };
+    }>('GET', `/api/v1/admin/reviews/reports?${q.toString()}`, { auth: true });
+    return {
+      reviews: (r.reviews ?? []).map(toReportedReview).filter((x): x is ReportedReview => x !== null),
+      page: r.pageInfo?.page ?? params.page ?? 0,
+      totalElements: r.pageInfo?.totalElements ?? 0,
+      hasNext: r.pageInfo?.hasNext === true,
+    };
+  },
+
+  /**
+   * 신고 승인 — 그 리뷰의 **대기 신고 전체**를 한 번에 처리하고 리뷰를 숨긴다.
+   *
+   * 숨기면 시설의 친화도·리뷰 수·발자국 등급 집계에서 빠지고 등급 캐시가 즉시 다시 계산된다.
+   * 리뷰 행은 지우지 않으므로 `revertReport`로 되살릴 수 있다.
+   */
+  acceptReport: async (reviewId: number): Promise<number> => {
+    const r = await request<{ processedReportCount?: number }>(
+      'POST',
+      `/api/v1/admin/reviews/${reviewId}/reports/accept`,
+      { auth: true },
+    );
+    return r.processedReportCount ?? 0;
+  },
+
+  /** 신고 반려 — 리뷰는 그대로 노출되고 등급 집계도 바뀌지 않는다. */
+  rejectReport: async (reviewId: number): Promise<number> => {
+    const r = await request<{ processedReportCount?: number }>(
+      'POST',
+      `/api/v1/admin/reviews/${reviewId}/reports/reject`,
+      { auth: true },
+    );
+    return r.processedReportCount ?? 0;
+  },
+
+  /**
+   * 승인 되돌리기 — 잘못 숨긴 리뷰를 다시 노출한다.
+   *
+   * 되돌린 신고는 **대기로 돌아간다.** 그대로 두면 리뷰는 보이는 채로 대기 목록에 남으므로,
+   * 운영자가 승인이나 반려로 한 번 더 끝맺어야 한다.
+   */
+  revertReport: async (reviewId: number): Promise<number> => {
+    const r = await request<{ processedReportCount?: number }>(
+      'POST',
+      `/api/v1/admin/reviews/${reviewId}/reports/revert`,
+      { auth: true },
+    );
+    return r.processedReportCount ?? 0;
   },
 };
 

@@ -211,6 +211,13 @@ export default function SettingsScreen() {
             sub="사장님 신청을 승인·반려해요"
             onPress={() => router.push('/admin/claims')}
             chevron
+          />
+          <Row
+            icon="flag-outline"
+            label="리뷰 신고 처리"
+            sub="신고된 리뷰를 읽고 숨기거나 반려해요"
+            onPress={() => router.push('/admin/reports')}
+            chevron
             last
           />
         </Group>
