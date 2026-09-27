@@ -473,6 +473,7 @@ export default function SettingsScreen() {
             <Text style={[styles.sheetBody, { color: p.muted }]}>{confirm?.body}</Text>
             {confirm?.askPassword && (
               <>
+                {/* 이미 있는 비밀번호를 다시 확인받는 자리다 — 로그인 칸과 같은 설정을 쓴다 */}
                 <TextInput
                   value={confirmPw}
                   onChangeText={setConfirmPw}
@@ -480,6 +481,10 @@ export default function SettingsScreen() {
                   placeholderTextColor={p.muted}
                   secureTextEntry
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  textContentType="password"
+                  autoComplete="current-password"
                   style={[styles.pwInput, { borderColor: p.line, backgroundColor: p.surface, color: p.ink }]}
                 />
                 {/* 소셜로 가입하면 비밀번호가 없다. 비워둘 수 있다는 걸 미리 말한다 */}
