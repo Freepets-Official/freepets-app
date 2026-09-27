@@ -41,17 +41,22 @@ const DEFAULT_CENTER = { latitude: 37.5665, longitude: 126.978 };
  */
 const regionCache = new Map<string, { items: Facility[]; total: number }>();
 
+/** 한 번에 받는 개수. 두 경로(지역·검색)가 같은 값을 써야 「더 보기」 계산이 한 가지로 끝난다 */
+const PAGE_SIZE = 30;
+
 async function regionList(params: {
   sidoCode: string;
   /** 생략하면 시도 전체 */
   sigunguCode?: string;
   category?: Category;
   petAllowed?: 'ALLOWED';
+  page: number;
 }): Promise<{ items: Facility[]; total: number }> {
-  const key = `${params.sidoCode}/${params.sigunguCode ?? ''}/${params.category ?? ''}/${params.petAllowed ?? ''}`;
+  // 캐시 키에 페이지가 들어가야 한다 — 빼면 2페이지를 1페이지 응답으로 돌려준다
+  const key = `${params.sidoCode}/${params.sigunguCode ?? ''}/${params.category ?? ''}/${params.petAllowed ?? ''}/${params.page}`;
   const hit = regionCache.get(key);
   if (hit) return hit;
-  const res = await facilitiesApi.byRegion({ ...params, size: 30 });
+  const res = await facilitiesApi.byRegion({ ...params, size: PAGE_SIZE });
   regionCache.set(key, res);
   return res;
 }
@@ -98,6 +103,15 @@ export default function ExploreScreen() {
   // 실제로 CORS 403을 반경 문제로 오해해 한참 헤맨 적이 있다.
   const [failed, setFailed] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  /**
+   * 「더 보기」로 이어 받은 페이지.
+   *
+   * 예전에는 어느 경로든 **30건만 받고 끝**이었다. 그런데 캡션에는 서버가 준 전체 건수를
+   * 적어서, 「48,786곳 · 전국」이라 말하고 30곳만 보여주고 있었다. 경기도를 고르면 9,469곳이라
+   * 적고 30곳을 주는 식이다 — 화면이 거짓을 말하는 쪽이 문제다.
+   */
+  const [page, setPage] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const locate = () => {
     setLocState('loading');
@@ -158,6 +172,7 @@ export default function ExploreScreen() {
               sigunguCode: sigunguCode ?? undefined,
               category: category ?? undefined,
               petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
+              page: 0,
             })
           : await facilitiesApi.search({
               latitude: center!.latitude,
@@ -175,11 +190,12 @@ export default function ExploreScreen() {
               // 클라이언트에서 거르지 않고 서버 필터를 쓴다 — 30건 받아와서 6건만 남기면
               // 페이지네이션과 total이 어긋난다.
               petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
-              size: 30,
+              size: PAGE_SIZE,
             });
         if (!active) return; // 그 사이 모드/조건이 바뀌었으면 이 응답은 버린다
         setItems(res.items);
         setTotal(res.total);
+        setPage(0); // 조건이 바뀌면 이어 받던 페이지도 처음으로 돌아간다
         registerFacilities(res.items);
       } catch {
         if (!active) return;
@@ -195,6 +211,61 @@ export default function ExploreScreen() {
       clearTimeout(t);
     };
   }, [mode, coords, keyword, category, settings.searchRadiusKm, settings.onlyPetInfo, retryKey, registerFacilities, byRegion, sidoCode, sigunguCode]);
+
+  /**
+   * 다음 30곳을 이어 받는다.
+   *
+   * 디바운스를 거치지 않는다 — 손으로 누른 동작이라 미룰 이유가 없다. 실패하면 목록을 비우지
+   * 않고 그대로 둔다(이미 받은 것은 멀쩡하다). 조건이 바뀌면 위 effect가 page를 0으로 되돌린다.
+   */
+  const loadMore = async () => {
+    if (loadingMore || loading) return;
+    const next = page + 1;
+    const center = mode === 'all' ? coords ?? DEFAULT_CENTER : coords;
+    if (!byRegion && !center) return;
+    setLoadingMore(true);
+    try {
+      const res = byRegion
+        ? await regionList({
+            sidoCode: sidoCode as string,
+            sigunguCode: sigunguCode ?? undefined,
+            category: category ?? undefined,
+            petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
+            page: next,
+          })
+        : await facilitiesApi.search({
+            latitude: center!.latitude,
+            longitude: center!.longitude,
+            keyword: keyword.trim() || undefined,
+            category: category ?? undefined,
+            radiusM: mode === 'all' ? undefined : settings.searchRadiusKm * 1000,
+            petAllowed: settings.onlyPetInfo ? 'ALLOWED' : undefined,
+            page: next,
+            size: PAGE_SIZE,
+          });
+      // 같은 시설이 두 번 그려지지 않게 ID로 거른다 — 가나다순·거리순 모두 경계에서 겹칠 수 있다
+      setItems((prev) => {
+        const seen = new Set(prev.map((f) => f.facilityId));
+        return [...prev, ...res.items.filter((f) => !seen.has(f.facilityId))];
+      });
+      setTotal(res.total);
+      setPage(next);
+      registerFacilities(res.items);
+    } catch {
+      // 이어 받기 실패는 목록을 지우지 않는다. 버튼이 그대로 남아 다시 누를 수 있다
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  /**
+   * 「9,469곳」이라고만 적으면 30곳만 보이는 화면과 어긋난다. 아직 다 안 받았으면 **받은 수를
+   * 함께** 적는다 — 「더 보기」 버튼이 아래에 있다는 것도 이 문구가 설명해 준다.
+   */
+  const hasMore = items.length < total;
+  const countText = hasMore
+    ? `${items.length.toLocaleString()} / ${total.toLocaleString()}`
+    : total.toLocaleString();
 
   // 동반 불가 시설을 숨기지 않는다. 헛걸음 방지가 목적인 앱에서 '여긴 안 된다'는 가장 확실한
   // 정보라, 감추는 것보다 보여주는 쪽이 값어치가 있다(전국 5건뿐이라 목록을 어지럽히지도 않는다).
@@ -317,11 +388,11 @@ export default function ExploreScreen() {
               byRegion
                 ? // 시군구까지 좁혔을 때만 관광공사를 실시간으로 부른다. 시도 단위는 적재해둔
                   // DB라, 출처를 똑같이 적으면 거짓이 된다
-                  `${total.toLocaleString()}곳 · 가나다순${sigunguCode ? ' · 관광공사 실시간' : ''}`
+                  `${countText}곳 · 가나다순${sigunguCode ? ' · 관광공사 실시간' : ''}`
                 : mode === 'all'
-                  ? `${total.toLocaleString()}곳 · 전국`
+                  ? `${countText}곳 · 전국`
                   : locState === 'ok'
-                    ? `${total.toLocaleString()}곳 · 내 위치 기준`
+                    ? `${countText}곳 · 내 위치 기준`
                     : '내 위치 기준'
             }
           />
@@ -341,6 +412,24 @@ export default function ExploreScreen() {
               {facilities.map((f) => (
                 <FacilityCard key={f.facilityId} facility={f} />
               ))}
+
+              {facilities.length > 0 && hasMore && (
+                <Pressable
+                  onPress={() => void loadMore()}
+                  disabled={loadingMore}
+                  style={({ pressed }) => [
+                    styles.more,
+                    { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
+                  ]}>
+                  {loadingMore ? (
+                    <ActivityIndicator color={p.accent} size="small" />
+                  ) : (
+                    <Text style={[styles.moreText, { color: p.accent }]}>
+                      {Math.min(PAGE_SIZE, total - items.length).toLocaleString()}곳 더 보기
+                    </Text>
+                  )}
+                </Pressable>
+              )}
               {facilities.length === 0 &&
                 (failed ? (
                   <LoadState
@@ -422,6 +511,8 @@ const styles = StyleSheet.create({
   courseText: { flex: 1, gap: 2 },
   courseTitle: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
   courseBody: { fontSize: Type.footnote, lineHeight: 17 },
+  more: { alignItems: 'center', borderWidth: 1, borderRadius: Radius.full, paddingVertical: 12 },
+  moreText: { fontSize: Type.footnote, fontWeight: '800' },
   regionHint: {
     flexDirection: 'row',
     alignItems: 'center',
