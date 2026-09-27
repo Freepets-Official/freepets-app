@@ -256,6 +256,10 @@ function RootNavigator() {
         name="report/[id]"
         options={{ title: '제보하기', headerBackButtonDisplayMode: 'minimal' }}
       />
+      <Stack.Screen
+        name="admin/claims"
+        options={{ title: '매장 소유권 심사', headerBackButtonDisplayMode: 'minimal' }}
+      />
     </Stack>
   );
 }

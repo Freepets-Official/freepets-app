@@ -39,6 +39,7 @@ import {
   type ServerDenialReport,
   stampsApi,
 } from '@/lib/api';
+import { resetAdminProbe } from '@/hooks/use-is-admin';
 import { DEV_TOKEN } from '@/lib/config';
 import {
   loadCalendarEvents,
@@ -2226,6 +2227,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     void clearStamps();
     setGamification(null);
     setLevelUp(null);
+    // 다음 계정이 앞 계정의 운영자 판정을 물려받으면 안 된다
+    resetAdminProbe();
   }, []);
   useLayoutEffect(() => {
     clearAccountStateRef.current = clearAccountState;

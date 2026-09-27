@@ -6,6 +6,7 @@ import { Linking, Modal, Platform, Pressable, StyleSheet, Switch, TextInput, Vie
 
 import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
+import { useIsAdmin } from '@/hooks/use-is-admin';
 import { Screen } from '@/components/screen';
 import { SUPPORT_EMAIL, SUPPORT_MAIL_SUBJECT } from '@/constants/contact';
 import { openStoreReview } from '@/lib/app-review';
@@ -74,6 +75,8 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { settings, updateSettings, businessRegs, session, account, availableProfiles, switchProfile, logout, gamification, setLevelUpNotification } =
     useAppStore();
+  // 로그인한 계정에만 물어본다 — 게스트는 운영자일 수 없고, 토큰 없이 부르면 401만 쌓인다
+  const isAdmin = useIsAdmin(session.authed);
   const regCount = Object.keys(businessRegs).length;
   const hasOwnerProfile = SHOW_BUSINESS && availableProfiles.includes('owner');
   /**
@@ -191,6 +194,26 @@ export default function SettingsScreen() {
           last
         />
       </Group>
+      )}
+
+      {/*
+        운영자 — 권한이 있는 계정에만 나타난다.
+
+        계정 응답에 운영자 값이 없어서(`profiles`는 CONSUMER·OWNER뿐) 목록을 한 번 불러보고
+        통했을 때만 켠다(`useIsAdmin`). 일반 사용자에게 눌러도 403이 뜨는 메뉴를 보여줄
+        이유가 없다.
+      */}
+      {isAdmin && (
+        <Group title="운영자" caption="권한이 있는 계정에만 보여요">
+          <Row
+            icon="shield-checkmark-outline"
+            label="매장 소유권 심사"
+            sub="사장님 신청을 승인·반려해요"
+            onPress={() => router.push('/admin/claims')}
+            chevron
+            last
+          />
+        </Group>
       )}
 
       {/* 글씨 크기 — 앱 전체 텍스트에 같은 배율로 걸린다 */}
