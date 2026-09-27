@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Text } from '@/components/text';
 import { Radius, Spacing, Type } from '@/constants/theme';
-import { formatTime, normalizeTime } from '@/data/course-plan';
+import { formatTime, normalizeTime } from '@/data/visit-time';
 import { usePalette } from '@/hooks/use-theme';
 
 /**

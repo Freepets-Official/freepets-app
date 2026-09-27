@@ -1578,12 +1578,11 @@ function toPublicCourse(c: ServerPublicCourse): PublicCourse {
     // 소유자를 못 채워 보내도 목록이 깨지지 않게 한다. 빈 문자열이면 화면에서 숨긴다
     ownerNickname: c.ownerNickname ?? '',
     stops,
-    stopIds: stops.map((s) => s.facilityId),
     createdAt: c.createdAt,
   };
 }
 
-type ServerSavedCourse = Omit<SavedCourse, 'stops' | 'stopIds'> & {
+type ServerSavedCourse = Omit<SavedCourse, 'stops'> & {
   stops?: ServerStop[] | null;
   stopIds?: number[] | null;
 };
@@ -1595,7 +1594,6 @@ function toSavedCourse(c: ServerSavedCourse): SavedCourse {
     name: c.name,
     description: c.description ?? null,
     stops,
-    stopIds: stops.map((s) => s.facilityId),
     createdAt: c.createdAt,
     isPublic: c.isPublic ?? false,
   };
@@ -1715,7 +1713,7 @@ export const coursesApi = {
     ),
 
   /**
-   * stopIds **전체를 교체**한다. 한 곳만 바꾸려면 replaceStop을 쓴다.
+   * 스톱 **전체를 교체**한다. 한 곳만 바꾸려면 replaceStop을 쓴다.
    *
    * ⚠️ 서버 스키마에 공개 여부가 `isPublic`과 `public` **두 이름으로** 노출돼 있다
    * (Jackson의 boolean 게터 네이밍 부작용). 지금은 `isPublic`으로 왕복을 확인했지만,
