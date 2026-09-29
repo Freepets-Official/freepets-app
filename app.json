@@ -62,6 +62,12 @@
       ],
       "expo-secure-store",
       [
+        "expo-font",
+        {
+          "fonts": ["./assets/fonts/Jua-Regular.ttf", "./assets/fonts/Fredoka-Bold.ttf"]
+        }
+      ],
+      [
         "expo-notifications",
         {
           "color": "#E86397",

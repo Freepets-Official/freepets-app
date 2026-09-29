@@ -59,7 +59,6 @@ import { FACILITIES, INITIAL_CAL_EVENTS, INITIAL_CHECKS, INITIAL_PETS, INITIAL_R
 import { isMockFacilityId } from '@/data/facility-id';
 import { eventOccursOn, nextVaccinationOf, pawGradeOf, vaccinationDday } from '@/data/types';
 import type { Gamification, TierAnimal } from '@/data/level';
-import { tierName } from '@/data/level';
 import { matchRegion, type Stamp } from '@/data/stamps';
 import type {
   CalendarEvent,
@@ -441,8 +440,11 @@ interface AppStore {
   gamificationNews: { kind: 'badge' | 'xp'; text: string } | null;
   /** XP를 주는 행동 뒤에 레벨·배지·경험치를 다시 받아온다. 화면을 막지 않는다 */
   refreshGamification: () => void;
-  /** 레벨업 순간. 토스트가 아니라 전체 화면 연출로 보여준다 */
-  levelUp: { level: number; tierName: string } | null;
+  /** 지금 재생할 레벨업. 토스트가 아니라 전체 화면 연출로 보여준다. 여럿이면 앞의 것부터 */
+  levelUp: { id: number; level: number } | null;
+  /** 레벨업 연출을 큐에 넣는다. 재생 중이면 끝난 뒤 차례로 */
+  showLevelUp: (level: number) => void;
+  /** 지금 연출을 끝내고 다음 차례로 넘어간다 */
   dismissLevelUp: () => void;
   dismissGamificationNews: () => void;
 
@@ -1357,18 +1359,26 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 레벨은 수십 번의 판별과 리뷰가 쌓여야 오르는 값인데, 배지·적립과 같은 크기로 스쳐 가면
    * 올랐다는 사실조차 놓친다. 화면을 한 번 멈춰 세우고 사용자가 닫게 한다.
    */
-  const [levelUp, setLevelUp] = useState<{ level: number; tierName: string } | null>(null);
-  const dismissLevelUp = useCallback(() => setLevelUp(null), []);
+  /**
+   * 한 번에 하나씩 재생한다. 퀘스트 보상과 판별 XP가 연달아 들어와 두 번 오르면, 뒤의 것이
+   * 앞의 연출을 끊고 덮어쓰지 않도록 줄을 세운다.
+   */
+  const [levelUpQueue, setLevelUpQueue] = useState<{ id: number; level: number }[]>([]);
+  const levelUpSeqRef = useRef(0);
+  const levelUp = levelUpQueue[0] ?? null;
+  const showLevelUp = useCallback(
+    (level: number) => setLevelUpQueue((q) => [...q, { id: ++levelUpSeqRef.current, level }]),
+    [],
+  );
+  const dismissLevelUp = useCallback(() => setLevelUpQueue((q) => q.slice(1)), []);
   const dismissGamificationNews = useCallback(() => setGamificationNews(null), []);
   const gamificationRef = useMirrorRef(gamification);
-  // 토스트 문구에 쓸 발바닥 모양 — 렌더마다 콜백을 새로 만들지 않으려고 ref로 읽는다
-  const pawAnimalRef = useMirrorRef(settings.pawAnimal);
   const applyGamification = useCallback((g: Gamification) => {
     const prev = gamificationRef.current;
     if (prev) {
       const newBadges = g.badges.filter((b) => !prev.badges.some((x) => x.code === b.code));
       if (g.level > prev.level) {
-        setLevelUp({ level: g.level, tierName: tierName(g, pawAnimalRef.current || g.tierAnimal) });
+        showLevelUp(g.level);
       } else if (newBadges.length > 0) {
         setGamificationNews({
           kind: 'badge',
@@ -1384,7 +1394,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setGamification((p) =>
       patching && p ? { ...g, levelUpNotificationEnabled: p.levelUpNotificationEnabled } : g,
     );
-  }, [gamificationRef]);
+  }, [gamificationRef, showLevelUp]);
   useEffect(() => {
     if (!session.authed) return;
     let alive = true;
@@ -2227,7 +2237,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setStamps([]);
     void clearStamps();
     setGamification(null);
-    setLevelUp(null);
+    setLevelUpQueue([]);
     // 다음 계정에 앞 계정의 오늘 진행률이 남으면 안 된다
     resetDailyQuests();
     // 다음 계정이 앞 계정의 운영자 판정을 물려받으면 안 된다
@@ -2786,6 +2796,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       dismissGamificationNews,
       refreshGamification,
       levelUp,
+      showLevelUp,
       dismissLevelUp,
       facilityById,
       registerFacilities,
@@ -2881,6 +2892,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       dismissGamificationNews,
       refreshGamification,
       levelUp,
+      showLevelUp,
       dismissLevelUp,
       facilityById,
       registerFacilities,

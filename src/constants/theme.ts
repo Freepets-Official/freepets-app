@@ -112,3 +112,25 @@ export const Spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as cons
 export const CardShadow = { boxShadow: '0 8px 22px rgba(232, 99, 151, 0.08)' } as const;
 
 export const MaxContentWidth = 620;
+
+/**
+ * 레벨업 「발도장 콩콩」 연출 색.
+ *
+ * 막 없이 지금 화면 위에 바로 찍히는 도장이라 **양 테마 동일**하다. 다크에서도 도장은 종이색
+ * 원판이고, 글자는 흰 외곽선을 둘러 어느 배경에서든 읽힌다. 시안(`stamp-reference.html`)의
+ * 값을 그대로 옮겼다.
+ */
+export const LevelUpColors = {
+  pink: '#FF8FB1', // 도장 테두리·원형 글자·퍼지는 고리
+  peach: '#FFB38A', // 발자국·하트의 짝 색, 도장 속 발바닥
+  stampInk: '#FF7FA3', // 도장 가운데 "Lv.N"
+  stampPaper: '#FFF7F9',
+  dotted: '#FFC2D3', // 안쪽 점선 원
+  title: '#5A3D34',
+  subtitle: '#8A6A5E',
+  outline: '#FFFFFF',
+  shadow: 'rgba(255,127,163,0.28)',
+} as const;
+
+/** 레벨업 연출 글꼴 — `assets/fonts`에 번들(OFL). 이름은 폰트의 PostScript 이름과 같게 맞췄다 */
+export const LevelUpFonts = { ko: 'Jua-Regular', latin: 'Fredoka-Bold' } as const;

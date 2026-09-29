@@ -14,6 +14,7 @@ import { CardShadow, Radius, Spacing, Type, type ThemeMode } from '@/constants/t
 import { FONT_SIZE_LABEL, type FontSizeMode } from '@/data/types';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { ApiError, accountApi } from '@/lib/api';
+import { DEBUG_TOOLS } from '@/lib/config';
 import type { LoginProvider } from '@/lib/token-store';
 import { notify } from '@/lib/notify';
 import { GuestPrompt } from '@/components/guest-prompt';
@@ -73,7 +74,7 @@ const PROVIDER_LABEL: Record<LoginProvider, string> = {
 export default function SettingsScreen() {
   const p = usePalette();
   const router = useRouter();
-  const { settings, updateSettings, businessRegs, session, account, availableProfiles, switchProfile, logout, gamification, setLevelUpNotification } =
+  const { settings, updateSettings, businessRegs, session, account, availableProfiles, switchProfile, logout, gamification, setLevelUpNotification, showLevelUp } =
     useAppStore();
   // 로그인한 계정에만 물어본다 — 게스트는 운영자일 수 없고, 토큰 없이 부르면 401만 쌓인다
   const isAdmin = useIsAdmin(session.authed);
@@ -131,6 +132,7 @@ export default function SettingsScreen() {
             last
           />
         </Group>
+        {DEBUG_TOOLS && <DevToolsGroup level={1} onLevelUp={showLevelUp} />}
       </Screen>
     );
   }
@@ -222,6 +224,8 @@ export default function SettingsScreen() {
           />
         </Group>
       )}
+
+      {DEBUG_TOOLS && <DevToolsGroup level={gamification?.level ?? 1} onLevelUp={showLevelUp} />}
 
       {/* 글씨 크기 — 앱 전체 텍스트에 같은 배율로 걸린다 */}
       <Group title="화면" caption="반갑꼬리 전용">
@@ -604,6 +608,30 @@ function Group({
         {children}
       </View>
     </View>
+  );
+}
+
+/**
+ * 개발자 — 개발 서버와 Ad Hoc 빌드에서만(`DEBUG_TOOLS`). 스토어 빌드엔 없다.
+ *
+ * 레벨업은 실제로 XP를 쌓아야 뜨는데, 테스트 계정으로 레벨을 올리기는 어렵다. 연출을
+ * 눈으로 확인할 길이 없어서 만들었다. 서버에는 아무것도 보내지 않는다. 둘러보기에서도 보인다.
+ */
+function DevToolsGroup({ level, onLevelUp }: { level: number; onLevelUp: (level: number) => void }) {
+  return (
+    <Group title="개발자" caption="개발·테스트 빌드에만 보여요">
+      <Row icon="sparkles-outline" label="레벨업 연출 보기" sub="지금 레벨 +1로 한 번 재생해요" onPress={() => onLevelUp(level + 1)} />
+      <Row
+        icon="albums-outline"
+        label="레벨업 연속 두 번"
+        sub="큐에 쌓여 차례로 재생되는지 확인해요"
+        onPress={() => {
+          onLevelUp(level + 1);
+          onLevelUp(level + 2);
+        }}
+        last
+      />
+    </Group>
   );
 }
 

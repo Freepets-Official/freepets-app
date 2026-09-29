@@ -21,3 +21,12 @@ export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://3.35.195.228.
  * ⚠️ 개발 편의 전용 — `authedFetch`에서 `__DEV__`일 때만 사용하고, 운영 빌드엔 실리지 않는다.
  */
 export const DEV_TOKEN = process.env.EXPO_PUBLIC_DEV_TOKEN ?? null;
+
+/**
+ * 개발 확인용 도구(설정 › 개발자)를 보일지.
+ *
+ * 개발 서버(`__DEV__`)만으로는 모자라다 — 실기기 확인은 Ad Hoc(`preview`) 빌드로 하는데 그건
+ * 릴리스 모드라 `__DEV__`가 거짓이다. 그래서 `eas.json`의 development·preview 프로파일에만
+ * `EXPO_PUBLIC_DEBUG_TOOLS=1`을 걸었다. production에는 없으므로 스토어 빌드엔 나타나지 않는다.
+ */
+export const DEBUG_TOOLS = __DEV__ || process.env.EXPO_PUBLIC_DEBUG_TOOLS === '1';

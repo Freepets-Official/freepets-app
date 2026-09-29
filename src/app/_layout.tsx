@@ -1,5 +1,6 @@
 import { DefaultTheme, Stack, ThemeProvider, useGlobalSearchParams, usePathname, useRouter, useSegments, type Href } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -10,8 +11,9 @@ import { AppSplash } from '@/components/app-splash';
 import { BiometricGate } from '@/components/biometric-gate';
 import { CallConfirmSheet } from '@/components/call-confirm-sheet';
 import { GamificationToast } from '@/components/gamification-toast';
-import { LevelUpBurst } from '@/components/level-up-burst';
+import { LevelUpStamp } from '@/components/level-up-stamp';
 import { PawTouches } from '@/components/paw-touches';
+import { LevelUpFonts } from '@/constants/theme';
 import { AppThemeProvider, usePalette, useColorScheme } from '@/hooks/use-theme';
 import { FontScaleProvider } from '@/components/text';
 import { onNotificationTap } from '@/lib/push';
@@ -272,8 +274,17 @@ function RootNavigator() {
  */
 function LevelUpOverlay() {
   const { levelUp, dismissLevelUp } = useAppStore();
+  /**
+   * 연출 전용 글꼴을 앱이 뜰 때 미리 받아 둔다. 레벨업 순간에 받기 시작하면 첫 도장이 기본
+   * 글꼴로 찍힌다. 네이티브는 빌드에 내장돼 있어(app.json `expo-font`) 사실상 웹을 위한 것이다
+   */
+  useFonts({
+    [LevelUpFonts.ko]: require('@/assets/fonts/Jua-Regular.ttf'),
+    [LevelUpFonts.latin]: require('@/assets/fonts/Fredoka-Bold.ttf'),
+  });
   if (!levelUp) return null;
-  return <LevelUpBurst level={levelUp.level} tierName={levelUp.tierName} onDone={dismissLevelUp} />;
+  // key — 같은 레벨이 연달아 와도(디버그 버튼 연타) 새로 마운트돼 처음부터 재생된다
+  return <LevelUpStamp key={`${levelUp.id}`} level={levelUp.level} onDone={dismissLevelUp} />;
 }
 
 export default function RootLayout() {
