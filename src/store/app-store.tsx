@@ -25,6 +25,7 @@ import {
   businessApi,
   calendarApi,
   bumpSessionEpoch,
+  getSessionEpoch,
   setAuthToken,
   setRefreshToken,
   setTokensRefreshedHandler,
@@ -1406,13 +1407,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       patching && p ? { ...g, levelUpNotificationEnabled: p.levelUpNotificationEnabled } : g,
     );
   }, [gamificationRef, showLevelUp]);
+  /**
+   * 조회를 시작한 세션에서만 반영한다.
+   *
+   * `request()`가 응답 도착 시점에 세대를 보긴 하지만, 그 뒤 본문을 읽고 모양을 검사하는 사이에
+   * 계정이 바뀔 수 있다. 그 A의 응답이 B에 반영되면 A의 레벨이 B 화면에 뜨고, A가 더 높으면
+   * `highestLevelRef`에 남아 B의 진짜 레벨업을 막는다.
+   */
+  const fetchGamification = useCallback(() => {
+    const epoch = getSessionEpoch();
+    return gamificationApi.me().then((g) => {
+      if (getSessionEpoch() === epoch) applyGamification(g);
+    });
+  }, [applyGamification]);
   useEffect(() => {
     if (!session.authed) return;
     let alive = true;
+    const epoch = getSessionEpoch();
     gamificationApi
       .me()
       .then((g) => {
-        if (alive) applyGamification(g);
+        if (alive && getSessionEpoch() === epoch) applyGamification(g);
       })
       .catch(() => {});
     return () => {
@@ -1433,8 +1448,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   const refreshGamification = useCallback(() => {
     if (!session.authed && !(__DEV__ && DEV_TOKEN)) return;
-    gamificationApi.me().then(applyGamification).catch(() => {});
-  }, [session.authed, applyGamification]);
+    fetchGamification().catch(() => {});
+  }, [session.authed, fetchGamification]);
   refreshGamificationRef.current = refreshGamification;
 
   /**
@@ -1690,16 +1705,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         .alerts()
         .then(setServerAlerts)
         .catch(() => {}),
-      gamificationApi
-        .me()
-        .then(applyGamification)
-        .catch(() => {}),
+      fetchGamification().catch(() => {}),
       businessApi
         .myClaims()
         .then(setMyClaims)
         .catch(() => {}),
     ]);
-  }, [session.authed, session.key]);
+  }, [session.authed, session.key, fetchGamification]);
 
   const loadFacility = useCallback(async (id: number) => {
     if (!Number.isInteger(id) || id <= 0) return; // 숫자가 아니면 서버가 400이 아니라 500을 낸다
