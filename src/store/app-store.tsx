@@ -25,6 +25,7 @@ import {
   businessApi,
   calendarApi,
   bumpSessionEpoch,
+  getSessionEpoch,
   setAuthToken,
   setRefreshToken,
   setTokensRefreshedHandler,
@@ -1373,11 +1374,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const dismissLevelUp = useCallback(() => setLevelUpQueue((q) => q.slice(1)), []);
   const dismissGamificationNews = useCallback(() => setGamificationNews(null), []);
   const gamificationRef = useMirrorRef(gamification);
+  /**
+   * 이 계정에서 지금까지 본 가장 높은 레벨.
+   *
+   * 직전 값(`gamificationRef`)만 보면 같은 레벨업을 두 번 축하할 수 있다. 조회는 로그인·새로고침·
+   * XP 행동 뒤 등 여러 곳에서 겹쳐 나가는데, ① 두 응답이 한 렌더 안에 도착하면 둘 다 옛 레벨과
+   * 비교하고, ② 늦게 출발한 옛 응답(Lv.4)이 새 응답(Lv.5) 뒤에 도착하면 그다음 조회가 5를 다시
+   * "올랐다"고 본다. 큐가 생기면서 이 중복이 실제로 두 번 재생되게 됐다. 최고치를 넘을 때만 띄운다.
+   */
+  const highestLevelRef = useRef(0);
   const applyGamification = useCallback((g: Gamification) => {
     const prev = gamificationRef.current;
+    const highest = Math.max(highestLevelRef.current, prev?.level ?? 0);
+    highestLevelRef.current = Math.max(highest, g.level);
     if (prev) {
       const newBadges = g.badges.filter((b) => !prev.badges.some((x) => x.code === b.code));
-      if (g.level > prev.level) {
+      if (g.level > highest) {
         showLevelUp(g.level);
       } else if (newBadges.length > 0) {
         setGamificationNews({
@@ -1395,13 +1407,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       patching && p ? { ...g, levelUpNotificationEnabled: p.levelUpNotificationEnabled } : g,
     );
   }, [gamificationRef, showLevelUp]);
+  /**
+   * 조회를 시작한 세션에서만 반영한다.
+   *
+   * `request()`가 응답 도착 시점에 세대를 보긴 하지만, 그 뒤 본문을 읽고 모양을 검사하는 사이에
+   * 계정이 바뀔 수 있다. 그 A의 응답이 B에 반영되면 A의 레벨이 B 화면에 뜨고, A가 더 높으면
+   * `highestLevelRef`에 남아 B의 진짜 레벨업을 막는다.
+   */
+  const fetchGamification = useCallback(() => {
+    const epoch = getSessionEpoch();
+    return gamificationApi.me().then((g) => {
+      if (getSessionEpoch() === epoch) applyGamification(g);
+    });
+  }, [applyGamification]);
   useEffect(() => {
     if (!session.authed) return;
     let alive = true;
+    const epoch = getSessionEpoch();
     gamificationApi
       .me()
       .then((g) => {
-        if (alive) applyGamification(g);
+        if (alive && getSessionEpoch() === epoch) applyGamification(g);
       })
       .catch(() => {});
     return () => {
@@ -1422,8 +1448,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   const refreshGamification = useCallback(() => {
     if (!session.authed && !(__DEV__ && DEV_TOKEN)) return;
-    gamificationApi.me().then(applyGamification).catch(() => {});
-  }, [session.authed, applyGamification]);
+    fetchGamification().catch(() => {});
+  }, [session.authed, fetchGamification]);
   refreshGamificationRef.current = refreshGamification;
 
   /**
@@ -1679,16 +1705,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         .alerts()
         .then(setServerAlerts)
         .catch(() => {}),
-      gamificationApi
-        .me()
-        .then(applyGamification)
-        .catch(() => {}),
+      fetchGamification().catch(() => {}),
       businessApi
         .myClaims()
         .then(setMyClaims)
         .catch(() => {}),
     ]);
-  }, [session.authed, session.key]);
+  }, [session.authed, session.key, fetchGamification]);
 
   const loadFacility = useCallback(async (id: number) => {
     if (!Number.isInteger(id) || id <= 0) return; // 숫자가 아니면 서버가 400이 아니라 500을 낸다
@@ -2238,6 +2261,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     void clearStamps();
     setGamification(null);
     setLevelUpQueue([]);
+    // 다음 계정의 첫 레벨업이 앞 계정의 최고 레벨에 막히면 안 된다
+    highestLevelRef.current = 0;
     // 다음 계정에 앞 계정의 오늘 진행률이 남으면 안 된다
     resetDailyQuests();
     // 다음 계정이 앞 계정의 운영자 판정을 물려받으면 안 된다

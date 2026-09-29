@@ -14,6 +14,7 @@ import { CardShadow, Radius, Spacing, Type, type ThemeMode } from '@/constants/t
 import { FONT_SIZE_LABEL, type FontSizeMode } from '@/data/types';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { ApiError, accountApi } from '@/lib/api';
+import { MAX_LEVEL } from '@/data/level';
 import { DEBUG_TOOLS } from '@/lib/config';
 import type { LoginProvider } from '@/lib/token-store';
 import { notify } from '@/lib/notify';
@@ -620,14 +621,15 @@ function Group({
 function DevToolsGroup({ level, onLevelUp }: { level: number; onLevelUp: (level: number) => void }) {
   return (
     <Group title="개발자" caption="개발·테스트 빌드에만 보여요">
-      <Row icon="sparkles-outline" label="레벨업 연출 보기" sub="지금 레벨 +1로 한 번 재생해요" onPress={() => onLevelUp(level + 1)} />
+      {/* 만렙(40) 계정에서 눌러도 실제로는 나올 수 없는 Lv.41을 찍지 않게 상한을 건다 */}
+      <Row icon="sparkles-outline" label="레벨업 연출 보기" sub="지금 레벨 +1로 한 번 재생해요" onPress={() => onLevelUp(Math.min(level + 1, MAX_LEVEL))} />
       <Row
         icon="albums-outline"
         label="레벨업 연속 두 번"
         sub="큐에 쌓여 차례로 재생되는지 확인해요"
         onPress={() => {
-          onLevelUp(level + 1);
-          onLevelUp(level + 2);
+          onLevelUp(Math.min(level + 1, MAX_LEVEL));
+          onLevelUp(Math.min(level + 2, MAX_LEVEL));
         }}
         last
       />
