@@ -278,11 +278,13 @@ function LevelUpOverlay() {
    * 연출 전용 글꼴을 앱이 뜰 때 미리 받아 둔다. 레벨업 순간에 받기 시작하면 첫 도장이 기본
    * 글꼴로 찍힌다. 네이티브는 빌드에 내장돼 있어(app.json `expo-font`) 사실상 웹을 위한 것이다
    */
-  useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     [LevelUpFonts.ko]: require('@/assets/fonts/Jua-Regular.ttf'),
     [LevelUpFonts.latin]: require('@/assets/fonts/Fredoka-Bold.ttf'),
   });
-  if (!levelUp) return null;
+  // 글꼴이 오기 전에 시작하면 첫 도장이 기본 글꼴로 찍힌 채 시간이 흘러간다. 받는 걸 실패했으면
+  // 기본 글꼴로라도 진행한다 — 여기서 멈추면 큐가 영영 비지 않는다
+  if (!levelUp || (!fontsLoaded && !fontError)) return null;
   // key — 같은 레벨이 연달아 와도(디버그 버튼 연타) 새로 마운트돼 처음부터 재생된다
   return <LevelUpStamp key={`${levelUp.id}`} level={levelUp.level} onDone={dismissLevelUp} />;
 }

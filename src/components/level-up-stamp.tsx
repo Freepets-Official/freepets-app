@@ -99,22 +99,24 @@ export function LevelUpStamp({ level, onDone }: { level: number; onDone: () => v
   } as const;
 
   return (
-    <View style={styles.fill} accessibilityViewIsModal accessibilityLabel={`레벨 ${level} 달성`}>
-      {/* 눌러서 먼저 닫을 수 있다. 막이 없으니 뒤 화면이 그대로 보인다 */}
-      <Pressable style={StyleSheet.absoluteFill} onPress={finish} accessibilityRole="button" accessibilityLabel="닫기" />
-
-      <Animated.View style={[styles.stage, stage, reduced ? reducedWhole : outWhole]} pointerEvents="none">
+    /**
+     * 막이 없는 연출이라 화면을 막지 않는다 — 도장 밖의 터치는 뒤 화면으로 그대로 간다.
+     * 화면 전체를 닫기 영역으로 두면, 연출 중에 누른 뒤 화면 버튼이 닫기로 먹혀 버린다.
+     * 퇴장(위로 20px)은 바깥 래퍼에, 작은 화면 축소는 안쪽 무대에 — 한 뷰에 두면 transform끼리 덮는다.
+     */
+    <Animated.View style={[styles.fill, reduced ? reducedWhole : outWhole]} pointerEvents="box-none">
+      <View style={[styles.stage, stage]} pointerEvents="box-none">
         {!reduced &&
           PRINTS.map(([left, top], i) => (
-            <Animated.View key={i} style={[styles.print, { left, top }, printAnim(i)]}>
+            <Animated.View key={i} style={[styles.print, { left, top }, printAnim(i)]} pointerEvents="none">
               <PawShape size={34} color={i % 2 === 0 ? C.peach : C.pink} />
             </Animated.View>
           ))}
 
-        {!reduced && <Animated.View style={[styles.ring, ringAnim]} />}
+        {!reduced && <Animated.View style={[styles.ring, ringAnim]} pointerEvents="none" />}
         {!reduced &&
           HEARTS.map((h, i) => (
-            <Animated.View key={i} style={[styles.heart, heartAnim(h.x, h.y)]}>
+            <Animated.View key={i} style={[styles.heart, heartAnim(h.x, h.y)]} pointerEvents="none">
               <Svg viewBox="0 0 24 24" width={22} height={22}>
                 <Path d="M12 21s-7-4.5-9.5-9A5.2 5.2 0 0 1 12 6a5.2 5.2 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z" fill={h.color} />
               </Svg>
@@ -123,18 +125,21 @@ export function LevelUpStamp({ level, onDone }: { level: number; onDone: () => v
 
         {/* 쾅(바깥)과 흔들림(안쪽)을 한 뷰에 겹치면 둘 다 transform이라 뒤의 것이 앞을 덮는다.
             나눠 두고, 안쪽은 쾅이 끝난 -8° 위에 더하는 상대값으로 흔든다 */}
+        {/* 도장만 눌러서 먼저 닫을 수 있다 */}
         <Animated.View style={[styles.stampPos, reduced ? rotated : slamAnim]}>
           <Animated.View style={reduced ? null : wiggleAnim}>
-            <Stamp level={level} />
+            <Pressable onPress={finish} accessibilityRole="button" accessibilityLabel={`레벨 ${level} 달성. 눌러서 닫기`}>
+              <Stamp level={level} />
+            </Pressable>
           </Animated.View>
         </Animated.View>
 
-        <Animated.View style={[styles.caption, reduced ? null : captionAnim]}>
+        <Animated.View style={[styles.caption, reduced ? null : captionAnim]} pointerEvents="none">
           <OutlinedLine text="콩! 레벨 업!" size={30} color={C.title} y={30} />
           <OutlinedLine text="새 발도장이 찍혔어요" size={17} color={C.subtitle} y={20} />
         </Animated.View>
-      </Animated.View>
-    </View>
+      </View>
+    </Animated.View>
   );
 }
 
@@ -247,7 +252,9 @@ const ringAnim = {
   animationDuration: '0.7s',
   animationTimingFunction: 'ease-out',
   animationDelay: '1.45s',
-  animationFillMode: 'both',
+  // 'both'면 지연 동안 첫 키프레임(불투명도 0.9)이 걸려, 도장이 오기 전부터 고리만 떠 있다.
+  // 시안 CSS도 같은 구멍이 있다. 기본 불투명도를 0으로 두고 충돌 순간부터만 그린다
+  animationFillMode: 'forwards',
 } as const;
 
 const heartAnim = (x: number, y: number) =>
@@ -313,6 +320,7 @@ const styles = StyleSheet.create({
     borderRadius: 115,
     borderWidth: 4,
     borderColor: C.pink,
+    opacity: 0,
   },
   heart: { position: 'absolute', left: CX - 11, top: CY - 11, width: 22, height: 22 },
   stampPos: { position: 'absolute', left: CX - 110, top: CY - 110, width: 220, height: 220 },
