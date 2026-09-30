@@ -309,6 +309,7 @@ export default function SettingsScreen() {
         />
         {/*
           레벨업 알림은 기기 설정이 아니라 **계정 설정**이다(서버가 보낼지 말지를 정한다).
+          푸시뿐 아니라 앱 안의 레벨업 연출도 이 값을 따른다(개발자 재생 버튼은 예외).
           그래서 다른 토글과 달리 updateSettings가 아니라 서버로 간다. 아직 레벨 정보를
           못 받았으면 줄 자체를 감춘다 — 켜고 꺼도 아무 데도 안 가는 스위치가 되기 때문이다.
         */}
@@ -316,7 +317,7 @@ export default function SettingsScreen() {
           <ToggleRow
             icon="trophy-outline"
             label="레벨업 알림"
-            sub="경험치가 쌓여 레벨이 오르면 알려드려요"
+            sub="레벨이 오르면 푸시와 화면 연출로 알려드려요"
             value={gamification.levelUpNotificationEnabled}
             onChange={(v) => {
               void setLevelUpNotification(v).then((ok) => {

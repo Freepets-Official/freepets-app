@@ -1346,6 +1346,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   const notifPatchSeqRef = useRef(0);
   const notifConfirmedRef = useRef<boolean | null>(null);
+  /** 토글을 바꾸는 중에 사용자가 방금 고른 값. 상태는 커밋 뒤에야 ref로 넘어와서 따로 들고 있다 */
+  const notifPendingRef = useRef<boolean | null>(null);
   /**
    * 레벨업·새 배지를 앱 안에서 알린다.
    *
@@ -1387,9 +1389,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const prev = gamificationRef.current;
     const highest = Math.max(highestLevelRef.current, prev?.level ?? 0);
     highestLevelRef.current = Math.max(highest, g.level);
+    const patching = notifPatchSeqRef.current > 0;
+    /**
+     * 「레벨업 알림」을 끄면 화면 연출도 띄우지 않는다(2026-09-30 결정). 사용자에게 이 스위치는
+     * "레벨업을 알려줄지"이지 "푸시만"이 아니다. 토글을 바꾸는 중이면 서버 응답보다 방금 누른
+     * 화면 값을 믿는다 — 끄자마자 도착한 옛 응답(켜짐)으로 연출이 뜨면 안 된다.
+     */
+    const levelUpOn = patching && notifPendingRef.current !== null ? notifPendingRef.current : g.levelUpNotificationEnabled;
     if (prev) {
       const newBadges = g.badges.filter((b) => !prev.badges.some((x) => x.code === b.code));
-      if (g.level > highest) {
+      // 꺼져 있으면 레벨업도 아래 배지·XP 토스트로 흘려보낸다 — 올랐다는 흔적까지 지우진 않는다
+      if (g.level > highest && levelUpOn) {
         showLevelUp(g.level);
       } else if (newBadges.length > 0) {
         setGamificationNews({
@@ -1401,7 +1411,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         setGamificationNews({ kind: 'xp', text: `+${g.totalXp - prev.totalXp} XP` });
       }
     }
-    const patching = notifPatchSeqRef.current > 0;
     if (!patching) notifConfirmedRef.current = g.levelUpNotificationEnabled;
     setGamification((p) =>
       patching && p ? { ...g, levelUpNotificationEnabled: p.levelUpNotificationEnabled } : g,
@@ -1461,6 +1470,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const setLevelUpNotification = useCallback(async (enabled: boolean) => {
     const seq = ++notifPatchSeqRef.current;
     const rev = sessionRev.current;
+    // 상태 갱신은 커밋 뒤에야 gamificationRef에 닿는다. 그 사이 도착한 조회가 옛 값(켜짐)으로
+    // 연출을 띄우지 않게, 고른 값을 지금 바로 남긴다
+    notifPendingRef.current = enabled;
     setGamification((g) => (g ? { ...g, levelUpNotificationEnabled: enabled } : g));
     try {
       const saved = await gamificationApi.setLevelUpNotification(enabled);
@@ -1475,7 +1487,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (back !== null) setGamification((g) => (g ? { ...g, levelUpNotificationEnabled: back } : g));
       return false;
     } finally {
-      if (seq === notifPatchSeqRef.current) notifPatchSeqRef.current = 0;
+      if (seq === notifPatchSeqRef.current) {
+        notifPatchSeqRef.current = 0;
+        notifPendingRef.current = null;
+      }
     }
   }, []);
 
