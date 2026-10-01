@@ -393,6 +393,10 @@ async function request<T>(method: Method, path: string, opts: RequestOpts = {}):
             .json()
             .catch(() => null)) as { code?: string } | null)?.code
         : undefined;
+    // 본문을 읽는 사이에도 계정이 바뀔 수 있다. 기다린 뒤에는 항상 세대를 다시 본다
+    if (guarded && startEpoch !== sessionEpoch) {
+      throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
+    }
     if (guarded && res.status === 401 && isSessionFailure(firstCode)) {
       /**
        * 토큰이 없었으면 재발급도, 만료 처리도 의미가 없다.
@@ -432,6 +436,10 @@ async function request<T>(method: Method, path: string, opts: RequestOpts = {}):
             .clone()
             .json()
             .catch(() => null)) as { code?: string } | null)?.code;
+          // 본문을 기다리는 사이 A 로그아웃 → B 로그인이 끼면, 여기서 정리하는 건 B의 세션이다
+          if (startEpoch !== sessionEpoch) {
+            throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
+          }
           if (isSessionFailure(retryCode)) {
             onUnauthorized?.();
             throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
