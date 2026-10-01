@@ -180,6 +180,17 @@ const TOKEN_DEAD_CODES = new Set([
   'MEMBER4007',
 ]);
 
+/**
+ * 일반 API의 401 가운데 **재발급으로 풀리지 않는** 것. 이것만 재발급 없이 바로 세션을 정리한다.
+ *
+ * `TOKEN_DEAD_CODES`를 그대로 쓰면 안 된다. 그건 **재발급 응답**을 판정하는 목록이다.
+ * 일반 API에서 `TOKEN4002`는 "**액세스** 토큰 만료"로, 서버가 앱더러 재발급하라고 일부러
+ * 내려 주는 코드다(백엔드 `SecurityFilterChainTest` · `JwtProvider.parseClaims`). 이걸 죽은
+ * 토큰으로 보고 재발급을 건너뛰어, 액세스 토큰 수명이 다하면 그대로 로그아웃되고 있었다.
+ * 나머지 TOKEN 코드도 재발급 응답이 판정하게 맡긴다 — 리프레시 토큰이 살아 있으면 풀린다.
+ */
+const REFRESH_WONT_HELP = new Set(['MEMBER4005', 'MEMBER4007']);
+
 async function refreshTokens(): Promise<RefreshOutcome> {
   const token = refreshToken;
   if (!token) return 'expired';
@@ -205,7 +216,8 @@ async function refreshTokens(): Promise<RefreshOutcome> {
      * 서버는 토큰 오류를 전부 401로 주고 코드로 갈라 준다.
      *   TOKEN4001 유효하지 않은 토큰 / TOKEN4002 만료된 토큰
      *   TOKEN4003 토큰 용도 불일치  / TOKEN4004 리프레시 토큰 만료
-     * 넷 다 리프레시 토큰 자체가 죽었다는 뜻이라 되살릴 방법이 없다 — 로그아웃한다.
+     * **재발급 응답에서는** 넷 다 리프레시 토큰 자체가 죽었다는 뜻이라 되살릴 방법이 없다 —
+     * 로그아웃한다. (일반 API의 TOKEN4002는 뜻이 다르다. `REFRESH_WONT_HELP` 참고)
      */
     if (json?.code && TOKEN_DEAD_CODES.has(json.code)) return 'expired';
     if (res.status === 401 || res.status === 403 || res.status === 400) return 'expired';
@@ -378,7 +390,7 @@ async function request<T>(method: Method, path: string, opts: RequestOpts = {}):
         .json()
         .catch(() => null)) as { code?: string } | null;
       const outcome =
-        deadBody?.code && TOKEN_DEAD_CODES.has(deadBody.code)
+        deadBody?.code && REFRESH_WONT_HELP.has(deadBody.code)
           ? ('expired' as const)
           : await refreshOnce(startEpoch);
 
