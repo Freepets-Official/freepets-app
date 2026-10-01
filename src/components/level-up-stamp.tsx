@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { cubicBezier, useReducedMotion } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Ellipse, Path, Text as SvgText, TextPath } from 'react-native-svg';
@@ -49,6 +49,8 @@ const REDUCED_FADE_MS = 300;
 const REDUCED_HOLD_MS = 2000;
 /** 도장이 바닥에 닿는 순간(쾅 시작 1.15s + 곡선이 가장 눌리는 지점). 고리·하트도 여기서 터진다 */
 const IMPACT_MS = 1450;
+/** 도장이 다 내려앉는 순간(쾅 1.15s + 0.45s). 이 전에는 도장을 눌러도 닫히지 않는다 */
+const SLAM_END_MS = 1600;
 
 export function LevelUpStamp({ level, onDone }: { level: number; onDone: () => void }) {
   const { width, height } = useWindowDimensions();
@@ -61,6 +63,21 @@ export function LevelUpStamp({ level, onDone }: { level: number; onDone: () => v
     doneRef.current = true;
     onDone();
   }, [onDone]);
+
+  /**
+   * 도장이 내려앉기 전에는 누를 수 없게 한다.
+   *
+   * 쾅의 첫 프레임은 투명도 0에 **2.6배 크기**라, 도장이 보이기도 전에 지름 570pt짜리 보이지
+   * 않는 영역이 화면 가운데 터치를 가로챘다. 그때 누르면 연출을 보기도 전에 닫히고 그 탭은
+   * 뒤 화면에도 가지 않는다. 움직임 줄이기에서는 처음부터 제자리라 바로 누를 수 있다.
+   */
+  const [landed, setLanded] = useState(false);
+  useEffect(() => {
+    if (reduced) return;
+    const t = setTimeout(() => setLanded(true), SLAM_END_MS);
+    return () => clearTimeout(t);
+  }, [reduced]);
+  const tappable = reduced || landed;
 
   // 작은 화면에서는 무대를 줄인다. 도장 중심을 축으로 줄여야 위치가 흔들리지 않는다
   const scale = Math.min(1, width / STAGE_W, height / STAGE_H);
@@ -126,7 +143,7 @@ export function LevelUpStamp({ level, onDone }: { level: number; onDone: () => v
         {/* 쾅(바깥)과 흔들림(안쪽)을 한 뷰에 겹치면 둘 다 transform이라 뒤의 것이 앞을 덮는다.
             나눠 두고, 안쪽은 쾅이 끝난 -8° 위에 더하는 상대값으로 흔든다 */}
         {/* 도장만 눌러서 먼저 닫을 수 있다 */}
-        <Animated.View style={[styles.stampPos, reduced ? rotated : slamAnim]}>
+        <Animated.View style={[styles.stampPos, reduced ? rotated : slamAnim]} pointerEvents={tappable ? 'box-none' : 'none'}>
           <Animated.View style={reduced ? null : wiggleAnim}>
             <Pressable onPress={finish} accessibilityRole="button" accessibilityLabel={`레벨 ${level} 달성. 눌러서 닫기`}>
               <Stamp level={level} />

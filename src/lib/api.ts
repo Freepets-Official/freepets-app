@@ -191,6 +191,22 @@ const TOKEN_DEAD_CODES = new Set([
  */
 const REFRESH_WONT_HELP = new Set(['MEMBER4005', 'MEMBER4007']);
 
+/**
+ * 401 가운데 **세션(토큰) 문제**인 것. 나머지 401은 업무 오류라 세션을 건드리지 않는다.
+ *
+ * 서버는 회원 탈퇴의 비밀번호 불일치(MEMBER4006)도 401로 준다(백엔드 `UserCommandService.withdraw`).
+ * 이걸 세션 문제로 보면 재발급 → 같은 비밀번호로 재시도 → 또 401 → "로그인이 만료됐어요"로
+ * 로그아웃됐다. 오타 한 번에 튕기고, 「비밀번호가 일치하지 않습니다」 대신 엉뚱한 안내가 떴다.
+ *
+ * 세션 문제로 보는 것: 토큰 오류(TOKEN*), 토큰이 안 실린 것(COMMON401), 재발급으로 안 풀리는
+ * 계정 상태(REFRESH_WONT_HELP). **본문 코드가 없는 401**(앱 envelope가 아닌 응답, 예: 프록시)도
+ * 예전처럼 세션 문제로 본다 — 모르는 401을 업무 오류로 흘리면 만료된 세션이 계속 살아 있게 된다.
+ */
+function isSessionFailure(code: string | undefined): boolean {
+  if (!code) return true;
+  return code.startsWith('TOKEN') || code === 'COMMON401' || REFRESH_WONT_HELP.has(code);
+}
+
 async function refreshTokens(): Promise<RefreshOutcome> {
   const token = refreshToken;
   if (!token) return 'expired';
@@ -368,7 +384,16 @@ async function request<T>(method: Method, path: string, opts: RequestOpts = {}):
      *
      * 재시도는 한 번만 한다 — 새 토큰으로도 401이면 토큰 문제가 아니다.
      */
-    if (guarded && res.status === 401) {
+    // 본문 코드로 세션 문제인지 가른다. 업무 오류 401(MEMBER4006 등)은 이 블록을 건너뛰어
+    // 아래 envelope 경로에서 서버 메시지 그대로 오류가 된다
+    const firstCode =
+      guarded && res.status === 401
+        ? ((await res
+            .clone()
+            .json()
+            .catch(() => null)) as { code?: string } | null)?.code
+        : undefined;
+    if (guarded && res.status === 401 && isSessionFailure(firstCode)) {
       /**
        * 토큰이 없었으면 재발급도, 만료 처리도 의미가 없다.
        *
@@ -385,14 +410,8 @@ async function request<T>(method: Method, path: string, opts: RequestOpts = {}):
        * 탈퇴한 계정(MEMBER4007)·없는 유저(MEMBER4005)는 토큰을 새로 받아도 같은 답이 온다.
        * 굳이 재발급을 한 번 돌고 실패하느니 바로 세션을 정리한다.
        */
-      const deadBody = (await res
-        .clone()
-        .json()
-        .catch(() => null)) as { code?: string } | null;
       const outcome =
-        deadBody?.code && REFRESH_WONT_HELP.has(deadBody.code)
-          ? ('expired' as const)
-          : await refreshOnce(startEpoch);
+        firstCode && REFRESH_WONT_HELP.has(firstCode) ? ('expired' as const) : await refreshOnce(startEpoch);
 
       // 기다리는 사이 로그아웃·재로그인이 있었다면 이 응답은 남의 세션 것이다.
       // 성공으로도 실패로도 취급하지 않고, 화면이 조용히 넘어가게 둔다.
@@ -407,9 +426,16 @@ async function request<T>(method: Method, path: string, opts: RequestOpts = {}):
           throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
         }
         if (res.status === 401) {
-          // 새 토큰으로도 401이면 토큰 문제가 아니다. 더 시도하지 않는다.
-          onUnauthorized?.();
-          throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
+          // 새 토큰으로도 세션 문제 401이면 더 시도하지 않고 정리한다. 업무 오류 401이면
+          // 아래 envelope 경로로 흘려 서버 메시지를 그대로 보여 준다
+          const retryCode = ((await res
+            .clone()
+            .json()
+            .catch(() => null)) as { code?: string } | null)?.code;
+          if (isSessionFailure(retryCode)) {
+            onUnauthorized?.();
+            throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
+          }
         }
       } else if (outcome === 'expired') {
         onUnauthorized?.();
