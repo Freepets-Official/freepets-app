@@ -15,7 +15,7 @@ import { FONT_SIZE_LABEL, type FontSizeMode } from '@/data/types';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { ApiError, accountApi } from '@/lib/api';
 import { MAX_LEVEL } from '@/data/level';
-import { DEBUG_TOOLS } from '@/lib/config';
+import { APP_VERSION, DEBUG_TOOLS } from '@/lib/config';
 import type { LoginProvider } from '@/lib/token-store';
 import { notify } from '@/lib/notify';
 import { GuestPrompt } from '@/components/guest-prompt';
@@ -416,7 +416,7 @@ export default function SettingsScreen() {
           onPress={() => router.push({ pathname: '/policy', params: { tab: 'privacy' } })}
           chevron
         />
-        <Row icon="information-circle-outline" label="앱 버전" sub="1.0.0" last />
+        <Row icon="information-circle-outline" label="앱 버전" sub={APP_VERSION ?? '확인할 수 없어요'} last />
       </Group>
 
       {/* 계정 관리 */}

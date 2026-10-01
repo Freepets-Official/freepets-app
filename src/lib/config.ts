@@ -1,3 +1,5 @@
+import Constants from 'expo-constants';
+
 /**
  * 앱 설정 — 환경변수(.env)에서 읽는다.
  *
@@ -30,3 +32,12 @@ export const DEV_TOKEN = process.env.EXPO_PUBLIC_DEV_TOKEN ?? null;
  * `EXPO_PUBLIC_DEBUG_TOOLS=1`을 걸었다. production에는 없으므로 스토어 빌드엔 나타나지 않는다.
  */
 export const DEBUG_TOOLS = __DEV__ || process.env.EXPO_PUBLIC_DEBUG_TOOLS === '1';
+
+/**
+ * 설정 화면에 보여 줄 앱 버전. `app.json`의 `version`이 빌드에 실린 값이다.
+ *
+ * 설정 화면에 "1.0.0"이 박혀 있어 1.1.x를 배포하는 내내 틀린 버전이 보였다. 손으로 고치면
+ * 다음 출시 때 또 어긋나므로 빌드에 실린 설정에서 읽는다. 빌드 번호는 EAS가 원격으로 매겨
+ * (`appVersionSource: remote`) 이 값과 어긋날 수 있어 보여 주지 않는다.
+ */
+export const APP_VERSION = Constants.expoConfig?.version ?? null;
