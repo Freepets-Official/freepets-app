@@ -1,4 +1,4 @@
-import { readRaw, writeRaw } from '@/lib/auth-log-storage';
+import { appendEntry, clearEntries, readEntries } from '@/lib/auth-log-storage';
 import { DEBUG_TOOLS } from '@/lib/config';
 
 /**
@@ -10,55 +10,40 @@ import { DEBUG_TOOLS } from '@/lib/config';
  *
  * - **개발·Ad Hoc 빌드에서만** 남긴다(`DEBUG_TOOLS`). 스토어 빌드는 아무것도 하지 않는다
  * - **토큰 값은 절대 남기지 않는다.** 만료 시각(exp)처럼 비밀이 아닌 것만 남긴다
- * - 앱을 다시 켜도 남아야 해서(재시작 복원이 핵심 구간) 기기에 저장한다. 최근 것만 둔다
+ * - 앱을 다시 켜도 남아야 해서(재시작 복원이 핵심 구간) 기기에 저장한다. 최근 40줄만 둔다
  */
 export type AuthLogEntry = { t: string; e: string };
 
-const MAX = 40;
-let cache: AuthLogEntry[] | null = null;
-// 읽고-붙이고-쓰기가 겹치면 기록이 서로 덮인다. 한 줄로 세운다
-let chain: Promise<void> = Promise.resolve();
+/**
+ * 쓰기·읽기·지우기를 한 줄로 세운다. 지우기가 줄 밖에서 돌면, 지우는 사이 들어온 새 기록이
+ * 먼저 저장되고 뒤늦게 끝난 지우기가 그것까지 날린다.
+ */
+let chain: Promise<unknown> = Promise.resolve();
+function enqueue<T>(job: () => Promise<T>): Promise<T> {
+  const next = chain.then(job, job);
+  chain = next.catch(() => {});
+  return next;
+}
 
 function stamp(d = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-async function load(): Promise<AuthLogEntry[]> {
-  if (cache) return cache;
-  try {
-    const raw = await readRaw();
-    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
-    cache = Array.isArray(parsed) ? (parsed as AuthLogEntry[]) : [];
-  } catch {
-    cache = [];
-  }
-  return cache;
-}
-
 /** 한 줄 남긴다. 기다리지 않아도 된다 — 순서는 내부에서 지킨다 */
 export function logAuth(event: string): void {
   if (!DEBUG_TOOLS) return;
   const entry = { t: stamp(), e: event };
-  chain = chain
-    .then(async () => {
-      const list = await load();
-      list.push(entry);
-      cache = list.slice(-MAX);
-      await writeRaw(JSON.stringify(cache));
-    })
-    .catch(() => {});
+  void enqueue(() => appendEntry(entry)).catch(() => {});
 }
 
-export async function readAuthLog(): Promise<AuthLogEntry[]> {
-  await chain;
-  return [...(await load())];
+/** 오래된 것부터 */
+export function readAuthLog(): Promise<AuthLogEntry[]> {
+  return enqueue(readEntries);
 }
 
-export async function clearAuthLog(): Promise<void> {
-  await chain;
-  cache = [];
-  await writeRaw(null);
+export function clearAuthLog(): Promise<void> {
+  return enqueue(clearEntries);
 }
 
 /**
