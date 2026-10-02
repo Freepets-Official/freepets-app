@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useRouter } from 'expo-router';
-import { useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { Linking, Modal, Platform, Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import { Text } from '@/components/text';
@@ -15,7 +15,8 @@ import { FONT_SIZE_LABEL, type FontSizeMode } from '@/data/types';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { ApiError, accountApi } from '@/lib/api';
 import { MAX_LEVEL } from '@/data/level';
-import { APP_VERSION, DEBUG_TOOLS } from '@/lib/config';
+import { clearAuthLog, readAuthLog, type AuthLogEntry } from '@/lib/auth-log';
+import { APP_VERSION, BUILD_COMMIT, BUILD_ID, BUILD_PROFILE, DEBUG_TOOLS } from '@/lib/config';
 import type { LoginProvider } from '@/lib/token-store';
 import { notify } from '@/lib/notify';
 import { GuestPrompt } from '@/components/guest-prompt';
@@ -620,8 +621,61 @@ function Group({
  * 눈으로 확인할 길이 없어서 만들었다. 서버에는 아무것도 보내지 않는다. 둘러보기에서도 보인다.
  */
 function DevToolsGroup({ level, onLevelUp }: { level: number; onLevelUp: (level: number) => void }) {
+  const p = usePalette();
+  /**
+   * 인증 진단 기록(`lib/auth-log`). 실기기에서 로그아웃 원인을 볼 다른 길이 없어서 화면에 꺼낸다.
+   * 펼칠 때마다 새로 읽는다 — 펼쳐 둔 채 앱을 오가면 그 사이 기록이 쌓인다.
+   */
+  const [logOpen, setLogOpen] = useState(false);
+  const [log, setLog] = useState<AuthLogEntry[] | null>(null);
+  useEffect(() => {
+    if (!logOpen) return;
+    let alive = true;
+    void readAuthLog().then((l) => alive && setLog(l));
+    return () => {
+      alive = false;
+    };
+  }, [logOpen]);
+
   return (
     <Group title="개발자" caption="개발·테스트 빌드에만 보여요">
+      {/* 실기기에 깔린 게 어느 빌드인지. Ad Hoc이 같은 버전·빌드 번호로 찍혀 화면으로는 못 가렸다 */}
+      <Row
+        icon="git-commit-outline"
+        label="이 빌드"
+        sub={`${APP_VERSION ?? '?'} · ${BUILD_PROFILE ?? '로컬 실행'} · 커밋 ${BUILD_COMMIT ?? '-'} · 빌드 ${BUILD_ID ?? '-'}`}
+      />
+      <Row
+        icon="document-text-outline"
+        label={logOpen ? '인증 기록 접기' : '인증 기록 보기'}
+        sub="로그인·재발급·로그아웃이 언제 왜 일어났는지(최근 40개)"
+        onPress={() => setLogOpen((v) => !v)}
+        chevron
+      />
+      {logOpen && (
+        <View style={[styles.block, { borderBottomWidth: 1, borderBottomColor: p.line }]}>
+          {log === null ? (
+            <Text style={[styles.logLine, { color: p.muted }]}>불러오는 중…</Text>
+          ) : log.length === 0 ? (
+            <Text style={[styles.logLine, { color: p.muted }]}>아직 기록이 없어요</Text>
+          ) : (
+            // 최근 것이 위로
+            [...log].reverse().map((l, i) => (
+              <Text key={`${l.t}-${i}`} style={[styles.logLine, { color: p.ink }]} selectable>
+                <Text style={{ color: p.muted }}>{l.t}  </Text>
+                {l.e}
+              </Text>
+            ))
+          )}
+          <Pressable
+            onPress={() => {
+              void clearAuthLog().then(() => setLog([]));
+            }}
+            accessibilityRole="button">
+            <Text style={[styles.logClear, { color: p.accent }]}>기록 지우기</Text>
+          </Pressable>
+        </View>
+      )}
       {/* 만렙(40) 계정에서 눌러도 실제로는 나올 수 없는 Lv.41을 찍지 않게 상한을 건다 */}
       <Row icon="sparkles-outline" label="레벨업 연출 보기" sub="지금 레벨 +1로 한 번 재생해요" onPress={() => onLevelUp(Math.min(level + 1, MAX_LEVEL))} />
       <Row
@@ -725,6 +779,8 @@ const styles = StyleSheet.create({
   blockHint: { fontSize: Type.footnote, marginTop: -4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 2 },
   footer: { fontSize: Type.caption, textAlign: 'center', paddingTop: Spacing.sm },
+  logLine: { fontSize: Type.caption, lineHeight: 17 },
+  logClear: { fontSize: Type.footnote, fontWeight: '700', paddingTop: Spacing.xs },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: Radius.xl,

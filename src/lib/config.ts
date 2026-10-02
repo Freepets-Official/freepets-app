@@ -41,3 +41,17 @@ export const DEBUG_TOOLS = __DEV__ || process.env.EXPO_PUBLIC_DEBUG_TOOLS === '1
  * (`appVersionSource: remote`) 이 값과 어긋날 수 있어 보여 주지 않는다.
  */
 export const APP_VERSION = Constants.expoConfig?.version ?? null;
+
+/**
+ * 이 빌드를 만든 커밋·EAS 프로파일. 설정 › 개발자에서 실기기에 깔린 빌드를 가리는 데 쓴다.
+ * EAS 빌드에서만 채워지고 로컬 실행(`expo start`)에서는 null이다.
+ */
+const extra = (Constants.expoConfig?.extra ?? {}) as Record<string, unknown>;
+// 설정 직렬화가 값을 다른 모양으로 바꿔 올 수 있다(빈 값 → {}). 문자열일 때만 믿는다
+const asText = (v: unknown) => (typeof v === 'string' && v ? v : null);
+export const BUILD_COMMIT = asText(extra.buildCommit)?.slice(0, 7) ?? null;
+export const BUILD_PROFILE = asText(extra.buildProfile);
+/** EAS 빌드 ID 앞 8자리 — 커밋이 같아도 빌드마다 다르다 */
+export const BUILD_ID = asText(extra.buildId)?.slice(0, 8) ?? null;
+/** 기록·화면에 붙이는 한 줄 표식 */
+export const BUILD_LABEL = `${BUILD_PROFILE ?? '로컬'} ${BUILD_COMMIT ?? '-'}/${BUILD_ID ?? '-'}`;
