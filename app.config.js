@@ -108,12 +108,16 @@ module.exports = ({ config }) => {
    */
   // 값이 없을 때 null을 넣으면 expo config가 {}로 직렬화한다 — 읽는 쪽이 문자열인 줄 알고
   // 다루다 터질 수 있어, 없으면 키 자체를 넣지 않는다
+  // 커밋만으로는 부족하다 — EAS는 작업 디렉터리를 그대로 올려서, 커밋하지 않은 변경으로 만든
+  // 빌드는 전부 같은 커밋으로 찍힌다. 빌드 ID는 빌드마다 다르다
   const commit = process.env.EAS_BUILD_GIT_COMMIT_HASH;
   const profile = process.env.EAS_BUILD_PROFILE;
+  const buildId = process.env.EAS_BUILD_ID;
   const extra = {
     ...(config.extra ?? {}),
     ...(commit ? { buildCommit: commit } : {}),
     ...(profile ? { buildProfile: profile } : {}),
+    ...(buildId ? { buildId } : {}),
   };
 
   return { ...config, ios, plugins, extra };

@@ -51,3 +51,7 @@ const extra = (Constants.expoConfig?.extra ?? {}) as Record<string, unknown>;
 const asText = (v: unknown) => (typeof v === 'string' && v ? v : null);
 export const BUILD_COMMIT = asText(extra.buildCommit)?.slice(0, 7) ?? null;
 export const BUILD_PROFILE = asText(extra.buildProfile);
+/** EAS 빌드 ID 앞 8자리 — 커밋이 같아도 빌드마다 다르다 */
+export const BUILD_ID = asText(extra.buildId)?.slice(0, 8) ?? null;
+/** 기록·화면에 붙이는 한 줄 표식 */
+export const BUILD_LABEL = `${BUILD_PROFILE ?? '로컬'} ${BUILD_COMMIT ?? '-'}/${BUILD_ID ?? '-'}`;

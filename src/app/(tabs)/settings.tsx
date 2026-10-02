@@ -16,7 +16,7 @@ import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { ApiError, accountApi } from '@/lib/api';
 import { MAX_LEVEL } from '@/data/level';
 import { clearAuthLog, readAuthLog, type AuthLogEntry } from '@/lib/auth-log';
-import { APP_VERSION, BUILD_COMMIT, BUILD_PROFILE, DEBUG_TOOLS } from '@/lib/config';
+import { APP_VERSION, BUILD_COMMIT, BUILD_ID, BUILD_PROFILE, DEBUG_TOOLS } from '@/lib/config';
 import type { LoginProvider } from '@/lib/token-store';
 import { notify } from '@/lib/notify';
 import { GuestPrompt } from '@/components/guest-prompt';
@@ -643,7 +643,7 @@ function DevToolsGroup({ level, onLevelUp }: { level: number; onLevelUp: (level:
       <Row
         icon="git-commit-outline"
         label="이 빌드"
-        sub={`${APP_VERSION ?? '?'} · ${BUILD_PROFILE ?? '로컬 실행'} · ${BUILD_COMMIT ?? '커밋 정보 없음'}`}
+        sub={`${APP_VERSION ?? '?'} · ${BUILD_PROFILE ?? '로컬 실행'} · 커밋 ${BUILD_COMMIT ?? '-'} · 빌드 ${BUILD_ID ?? '-'}`}
       />
       <Row
         icon="document-text-outline"

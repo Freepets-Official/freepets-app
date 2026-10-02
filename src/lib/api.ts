@@ -259,7 +259,7 @@ async function refreshTokens(): Promise<RefreshOutcome> {
     authToken = json.result.accessToken;
     refreshToken = json.result.refreshToken ?? refreshToken;
     onTokensRefreshed?.({ accessToken: authToken, refreshToken, userId: json.result.userId });
-    logAuth(`재발급 성공 · 새 액세스 ${tokenTimes(authToken)}`);
+    logAuth(`재발급 성공 · 새 액세스 ${tokenTimes(authToken)} · 새 리프레시 ${tokenTimes(refreshToken)}`);
     return 'ok';
   } catch (e) {
     // 타임아웃·네트워크 단절. 리프레시 토큰은 멀쩡하므로 세션을 지우지 않는다.

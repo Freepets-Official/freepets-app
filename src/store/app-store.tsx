@@ -43,7 +43,7 @@ import {
 } from '@/lib/api';
 import { resetDailyQuests } from '@/hooks/use-daily-quests';
 import { resetAdminProbe } from '@/hooks/use-is-admin';
-import { DEV_TOKEN } from '@/lib/config';
+import { BUILD_LABEL, DEV_TOKEN } from '@/lib/config';
 import {
   loadCalendarEvents,
   loadCalendarMigrated,
@@ -2121,11 +2121,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       const saved = await loadSession();
       if (stale()) return;
       if (!saved) {
-        logAuth('앱 시작: 저장된 세션 없음');
+        logAuth(`앱 시작[${BUILD_LABEL}]: 저장된 세션 없음`);
         setRestoring(false);
         return;
       }
-      logAuth(`앱 시작: 세션 복원 시도 · 액세스 ${tokenTimes(saved.accessToken)} · 리프레시 ${tokenTimes(saved.refreshToken)}`);
+      logAuth(`앱 시작[${BUILD_LABEL}]: 세션 복원 시도 · 액세스 ${tokenTimes(saved.accessToken)} · 리프레시 ${tokenTimes(saved.refreshToken)}`);
       restoredEmailRef.current = saved.email;
       // 복원 중 재발급 콜백이 세션을 다시 저장한다 — 그때 제공자가 비어 있으면 null로 덮인다
       providerRef.current = saved.provider ?? null;
@@ -2148,7 +2148,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         logAuth(`세션 복원 성공${refreshedRef.current ? '(재발급 거침)' : ''}`);
       } catch (e) {
         if (stale()) {
-          logAuth(`세션 복원 중단: 그 사이 세션이 바뀜(${e instanceof ApiError ? e.code ?? e.status : '오류'})`);
+          // 진짜 만료면 request()가 이미 세션을 정리해 여기로 온다 — "다른 무언가가 바꿨다"로 읽히지 않게 가른다
+          logAuth(
+            e instanceof ApiError && e.code === 'UNAUTHORIZED'
+              ? '세션 복원 실패: 만료 판정(바로 위 줄 참고)'
+              : `세션 복원 중단: 그 사이 다른 로그인·로그아웃(${e instanceof ApiError ? e.code ?? e.status : '오류'})`,
+          );
           return;
         }
         /**
@@ -2335,8 +2340,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * "2시간 뒤 열었더니 로그아웃"을 재현할 때 언제 깨어났고 그 뒤 무엇이 불렸는지 줄 세우려는 것이다.
    */
   useEffect(() => {
+    // 백그라운드를 거친 복귀만 남긴다. 제어센터·Face ID 창(inactive→active)까지 남기면 40줄이
+    // 금세 차서 정작 로그인 줄이 밀려난다
+    let wasBackground = false;
     const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active' || next === 'background') logAuth(`앱 ${next === 'active' ? '열림' : '백그라운드'}`);
+      if (next === 'background' && !wasBackground) {
+        wasBackground = true;
+        logAuth('앱 백그라운드');
+      } else if (next === 'active' && wasBackground) {
+        wasBackground = false;
+        logAuth('앱 다시 열림');
+      }
     });
     return () => sub.remove();
   }, []);

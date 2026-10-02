@@ -27,8 +27,10 @@ const KEY = 'freepets.session';
 export async function saveSession(s: StoredSession): Promise<void> {
   try {
     await SecureStore.setItemAsync(KEY, JSON.stringify(s));
-  } catch {
+  } catch (e) {
     // 저장에 실패해도 이번 세션은 메모리로 계속 쓸 수 있다. 로그인을 막지 않는다.
+    // 다만 다음 실행에서 옛 토큰으로 복원되므로, 그 뒤 로그아웃을 읽을 수 있게 남긴다
+    logAuth(`세션 저장 실패: ${e instanceof Error ? e.message.slice(0, 120) : '알 수 없음'}`);
   }
 }
 
