@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, createContext, type ReactNode, useContext } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { clearOwnerFacilitiesCache } from '@/hooks/use-owner-facilities';
 import { clearPetStatsCache } from '@/hooks/use-pet-stats';
 import { clearPushToken, loadPushToken, savePushToken } from '@/lib/push-token-store';
+import { logAuth, tokenTimes } from '@/lib/auth-log';
 import { clearSession, loadSession, saveSession, type LoginProvider } from '@/lib/token-store';
 import { clearStamps, loadStamps, saveStamps } from '@/lib/stamp-store';
 import { loadHiddenChecks, saveHiddenChecks } from '@/lib/hidden-checks';
@@ -2120,9 +2121,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       const saved = await loadSession();
       if (stale()) return;
       if (!saved) {
+        logAuth('앱 시작: 저장된 세션 없음');
         setRestoring(false);
         return;
       }
+      logAuth(`앱 시작: 세션 복원 시도 · 액세스 ${tokenTimes(saved.accessToken)} · 리프레시 ${tokenTimes(saved.refreshToken)}`);
       restoredEmailRef.current = saved.email;
       // 복원 중 재발급 콜백이 세션을 다시 저장한다 — 그때 제공자가 비어 있으면 null로 덮인다
       providerRef.current = saved.provider ?? null;
@@ -2142,12 +2145,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         setAccount(accountFrom(me));
         providerRef.current = saved.provider ?? null;
         setSession({ authed: true, email: saved.email, provider: saved.provider ?? null, key: sessionRev.current, activeProfile: 'consumer' });
+        logAuth(`세션 복원 성공${refreshedRef.current ? '(재발급 거침)' : ''}`);
       } catch (e) {
-        if (stale()) return;
-        // 인증 실패(만료·폐기)와 서버 장애를 구분한다. 502·네트워크 오류로 지워버리면
-        // 서버가 잠깐 흔들릴 때마다 모든 사용자가 로그아웃된다 — 이 서버는 실제로
-        // 502를 낸 적이 있다. 그런 경우엔 토큰을 그대로 두고 로그인 상태를 유지한다.
-        const authFailed = e instanceof ApiError && (e.status === 401 || e.status === 403);
+        if (stale()) {
+          logAuth(`세션 복원 중단: 그 사이 세션이 바뀜(${e instanceof ApiError ? e.code ?? e.status : '오류'})`);
+          return;
+        }
+        /**
+         * 인증 실패(만료·폐기)와 서버 장애를 구분한다. 502·네트워크 오류로 지워버리면
+         * 서버가 잠깐 흔들릴 때마다 모든 사용자가 로그아웃된다 — 이 서버는 실제로
+         * 502를 낸 적이 있다. 그런 경우엔 토큰을 그대로 두고 로그인 상태를 유지한다.
+         *
+         * **세션을 지우는 건 `UNAUTHORIZED`(재발급까지 실패)뿐이다.** 예전엔 401·403이면
+         * 다 지웠다. 그런데 403이나 `SESSION_CHANGED`·`NO_SESSION`(둘 다 status 401)은
+         * 토큰이 죽었다는 뜻이 아니다 — 그걸로 키체인까지 지우면 다음 실행에도 복원할
+         * 것이 없어 멀쩡한 사용자가 로그아웃된다(2026-10-01 출시 전 리뷰). 진짜 만료는
+         * `request()`가 이미 `expireSession`으로 정리하고, 여기 오기 전에 `stale()`로 빠진다.
+         */
+        const authFailed = e instanceof ApiError && e.code === 'UNAUTHORIZED';
+        logAuth(
+          `세션 복원 실패: ${e instanceof ApiError ? `${e.code ?? '코드 없음'}/${e.status ?? '-'}` : e instanceof Error ? e.name : '알 수 없음'} → ${authFailed ? '세션 삭제' : '세션 유지'}`,
+        );
         if (authFailed) {
           setAuthToken(null);
           await clearSession();
@@ -2178,6 +2196,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     ) => {
       providerRef.current = provider;
       setGuest(false);
+      logAuth(`로그인(${provider}) · 액세스 ${tokenTimes(tokens.accessToken)} · 리프레시 ${tokenTimes(tokens.refreshToken)}`);
       /**
        * 이미 다른 계정으로 들어와 있는 상태에서 인증이 끝났다(이메일·소셜 동시 진행).
        * 토큰만 바꾸면 A의 반려동물·판별 이력 위에 B가 얹힌다 — 먼저 비운다.
@@ -2295,6 +2314,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * 서버에 재발급 API가 없어 토큰을 되살릴 수 없으므로 로그인 화면으로 돌려보낸다.
    */
   const expireSession = useCallback(() => {
+    logAuth('세션 만료 처리 → 로그인 화면으로');
     // api 레이어의 세대도 올린다. 진행 중이던 재발급 응답이 이 세션을 되살리지 못하게.
     bumpSessionEpoch();
     refreshedRef.current = null;
@@ -2309,6 +2329,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     void clearSession();
     clearAccountState();
   }, [clearAccountState]);
+
+  /**
+   * 앱이 백그라운드로 갔다 돌아온 시각을 남긴다(진단 기록, 개발·Ad Hoc 빌드만).
+   * "2시간 뒤 열었더니 로그아웃"을 재현할 때 언제 깨어났고 그 뒤 무엇이 불렸는지 줄 세우려는 것이다.
+   */
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active' || next === 'background') logAuth(`앱 ${next === 'active' ? '열림' : '백그라운드'}`);
+    });
+    return () => sub.remove();
+  }, []);
 
   // request가 401을 만나면 이 함수를 부른다. api.ts는 React에 기대지 않으므로 등록으로 잇는다.
   useEffect(() => {
@@ -2364,6 +2395,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const notifPushRef = useMirrorRef(settings.notifPush);
 
   const finishLogout = useCallback(() => {
+    logAuth('로그아웃(사용자가 누름)');
     setGuest(false);
     bumpSessionEpoch();
     refreshedRef.current = null;

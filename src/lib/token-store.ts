@@ -1,5 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 
+import { logAuth } from '@/lib/auth-log';
+
 /**
  * 로그인 세션을 기기에 남긴다. 남기지 않으면 앱을 다시 열 때마다 로그인해야 한다.
  *
@@ -36,7 +38,10 @@ export async function loadSession(): Promise<StoredSession | null> {
     if (!raw) return null;
     const s = JSON.parse(raw) as StoredSession;
     return typeof s?.accessToken === 'string' && s.accessToken ? s : null;
-  } catch {
+  } catch (e) {
+    // 기기가 잠긴 채 앱이 깨어나면 키체인을 못 읽어 여기로 온다(저장분은 멀쩡하다).
+    // "없음"과 구분할 수 있게 진단 기록에 남긴다
+    logAuth(`키체인 읽기 실패: ${e instanceof Error ? e.message.slice(0, 120) : '알 수 없음'}`);
     return null;
   }
 }

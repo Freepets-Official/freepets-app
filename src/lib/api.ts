@@ -46,6 +46,7 @@ import { MAX_LEVEL, TIER_ANIMAL_LABEL, TIER_COLOR_LABEL } from '@/data/level';
  */
 import type { ReviewReportReason } from '@/store/app-store';
 
+import { logAuth, tokenTimes } from './auth-log';
 import { API_URL, DEV_TOKEN } from './config';
 
 export type { OwnerAmenity } from '@/data/types';
@@ -209,7 +210,10 @@ function isSessionFailure(code: string | undefined): boolean {
 
 async function refreshTokens(): Promise<RefreshOutcome> {
   const token = refreshToken;
-  if (!token) return 'expired';
+  if (!token) {
+    logAuth('재발급 불가: 리프레시 토큰이 비어 있음 → 로그아웃');
+    return 'expired';
+  }
   const epoch = sessionEpoch;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -222,7 +226,10 @@ async function refreshTokens(): Promise<RefreshOutcome> {
       signal: ctrl.signal,
     });
     // 세션이 바뀐 뒤 도착한 응답은 남의 것이다. 전역 토큰을 건드리지 않고 버린다.
-    if (epoch !== sessionEpoch) return 'stale';
+    if (epoch !== sessionEpoch) {
+      logAuth('재발급 응답 버림: 그 사이 세션이 바뀜');
+      return 'stale';
+    }
     const json = (await res.json().catch(() => null)) as ApiEnvelope<{
       accessToken: string;
       refreshToken: string;
@@ -235,19 +242,28 @@ async function refreshTokens(): Promise<RefreshOutcome> {
      * **재발급 응답에서는** 넷 다 리프레시 토큰 자체가 죽었다는 뜻이라 되살릴 방법이 없다 —
      * 로그아웃한다. (일반 API의 TOKEN4002는 뜻이 다르다. `REFRESH_WONT_HELP` 참고)
      */
-    if (json?.code && TOKEN_DEAD_CODES.has(json.code)) return 'expired';
-    if (res.status === 401 || res.status === 403 || res.status === 400) return 'expired';
+    const detail = `HTTP ${res.status} ${json?.code ?? '코드 없음'}`;
+    if ((json?.code && TOKEN_DEAD_CODES.has(json.code)) || res.status === 401 || res.status === 403 || res.status === 400) {
+      logAuth(`재발급 거부(${detail}) · 리프레시 ${tokenTimes(token)} → 로그아웃`);
+      return 'expired';
+    }
     if (!res.ok || !json?.isSuccess || !json.result?.accessToken) {
       // 5xx·형식 불량은 서버가 흔들린 것이다. 세션을 지우지 않는다.
+      logAuth(`재발급 일시 실패(${detail}) → 세션 유지`);
       return 'failed';
     }
-    if (epoch !== sessionEpoch) return 'stale';
+    if (epoch !== sessionEpoch) {
+      logAuth('재발급 응답 버림: 그 사이 세션이 바뀜');
+      return 'stale';
+    }
     authToken = json.result.accessToken;
     refreshToken = json.result.refreshToken ?? refreshToken;
     onTokensRefreshed?.({ accessToken: authToken, refreshToken, userId: json.result.userId });
+    logAuth(`재발급 성공 · 새 액세스 ${tokenTimes(authToken)}`);
     return 'ok';
-  } catch {
+  } catch (e) {
     // 타임아웃·네트워크 단절. 리프레시 토큰은 멀쩡하므로 세션을 지우지 않는다.
+    logAuth(`재발급 네트워크 오류(${e instanceof Error ? e.name : '알 수 없음'}) → 세션 유지`);
     return epoch === sessionEpoch ? 'failed' : 'stale';
   } finally {
     clearTimeout(timer);
@@ -414,8 +430,11 @@ async function request<T>(method: Method, path: string, opts: RequestOpts = {}):
        * 탈퇴한 계정(MEMBER4007)·없는 유저(MEMBER4005)는 토큰을 새로 받아도 같은 답이 온다.
        * 굳이 재발급을 한 번 돌고 실패하느니 바로 세션을 정리한다.
        */
-      const outcome =
-        firstCode && REFRESH_WONT_HELP.has(firstCode) ? ('expired' as const) : await refreshOnce(startEpoch);
+      // 경로만 남긴다 — 쿼리에는 좌표·검색어가 섞일 수 있다
+      const where = `${method} ${path.split('?')[0]}`;
+      const wontHelp = !!firstCode && REFRESH_WONT_HELP.has(firstCode);
+      logAuth(`401 ${firstCode ?? '코드 없음'} · ${where} → ${wontHelp ? '재발급 없이 정리' : '재발급 시도'}`);
+      const outcome = wontHelp ? ('expired' as const) : await refreshOnce(startEpoch);
 
       // 기다리는 사이 로그아웃·재로그인이 있었다면 이 응답은 남의 세션 것이다.
       // 성공으로도 실패로도 취급하지 않고, 화면이 조용히 넘어가게 둔다.
@@ -441,11 +460,13 @@ async function request<T>(method: Method, path: string, opts: RequestOpts = {}):
             throw new ApiError('세션이 바뀌었어요.', 'SESSION_CHANGED', 401);
           }
           if (isSessionFailure(retryCode)) {
+            logAuth(`재시도도 401 ${retryCode ?? '코드 없음'} · ${where} → 세션 정리`);
             onUnauthorized?.();
             throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
           }
         }
       } else if (outcome === 'expired') {
+        logAuth(`세션 정리(만료 판정) · ${where}`);
         onUnauthorized?.();
         throw new ApiError('로그인이 만료됐어요. 다시 로그인해 주세요.', 'UNAUTHORIZED', 401);
       } else {
