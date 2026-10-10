@@ -27,6 +27,7 @@ import {
   calendarApi,
   bumpSessionEpoch,
   getSessionEpoch,
+  issueCleanupToken,
   setAuthToken,
   setRefreshToken,
   setTokensRefreshedHandler,
@@ -2451,6 +2452,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // 등록이 아직 진행 중이면 큐가 그 등록을 먼저 끝내고 이 해제를 보낸다.
     // 이 계정의 토큰을 지금 잡아둔다 — finishLogout이 지운 뒤에 나가도 같은 토큰으로 간다.
     const withToken = accessTokenRef.current ?? undefined;
+    const withRefresh = refreshTokenRef.current;
     const unregister = enqueuePush(async () => {
       /**
        * 토큰은 **큐가 실행되는 시점**에 읽는다. 로그아웃을 부른 시점에 읽으면, 아직 시작도
@@ -2461,7 +2463,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       pushTokenRef.current = null;
       pushPendingRef.current = null;
       if (!token) return;
-      await pushApi.unregister(token, withToken);
+      try {
+        await pushApi.unregister(token, withToken);
+      } catch (e) {
+        /**
+         * 액세스 토큰이 만료됐으면(마지막 요청 뒤 2시간) 이 401을 그냥 넘기면 안 된다. 서버에
+         * 이 기기 토큰이 남아 **로그아웃한 계정의 푸시가 기기에 계속 온다.** 세션을 되살리지
+         * 않는 일회용 토큰을 받아 한 번만 다시 보낸다.
+         */
+        if (!(e instanceof ApiError && e.status === 401) || !withRefresh) throw e;
+        const cleanup = await issueCleanupToken(withRefresh);
+        if (!cleanup) throw e;
+        await pushApi.unregister(token, cleanup);
+      }
       await clearPushToken();
     }).catch(() => {});
     void Promise.race([
@@ -2703,6 +2717,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         // 해제가 성공해야 참조를 버린다. 먼저 지우면 실패했을 때 다시 시도할 정보가 없다
         const ok = await pushApi
           .unregister(registered, withToken)
+          .catch((e) => {
+            /**
+             * 예약한 토큰이 만료됐으면 명시 토큰 요청이라 재발급을 안 탄다 — 알림을 껐는데 서버엔
+             * 남는다. 세션이 그대로면 현재 토큰으로 한 번 더 보내 **정상 재발급 경로**를 태운다.
+             * 로그아웃용 일회용 토큰과 달리 살아 있는 세션이라 새 토큰을 남겨야 한다.
+             */
+            if (e instanceof ApiError && e.status === 401 && sessionRev.current === rev) {
+              return pushApi.unregister(registered);
+            }
+            throw e;
+          })
           .then(() => true)
           .catch(() => false);
         if (ok) {
