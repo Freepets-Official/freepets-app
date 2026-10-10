@@ -2432,10 +2432,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   /**
    * 푸시 해제에 허용하는 시간.
    *
-   * 해제는 **세션을 정리하기 전에** 끝나야 한다. 인증이 필요한 요청이라 토큰을 먼저
-   * 지우면 401을 받아도 재발급할 수단이 없어 영영 실패하고, 로그아웃한 계정의 등록이
-   * 서버에 남는다. 그렇다고 무한정 기다리면 네트워크가 느릴 때 로그아웃이 멈춘 것처럼
-   * 보이므로 짧게 끊고 진행한다. 못 지운 토큰은 서버의 무효 토큰 정리가 걷어간다.
+   * 해제는 로그아웃 시점에 잡아 둔 토큰으로 끝까지 가므로 세션 정리를 기다리게 할 필요는
+   * 없지만, 보통은 금방 끝나니 잠깐 기다려 순서를 맞춘다. 무한정 기다리면 네트워크가 느릴 때
+   * 로그아웃이 멈춘 것처럼 보이므로 짧게 끊고 진행한다 — 해제는 큐에서 마저 돈다.
    */
   const PUSH_UNREGISTER_WAIT_MS = 3000;
 
@@ -2467,14 +2466,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         await pushApi.unregister(token, withToken);
       } catch (e) {
         /**
-         * 액세스 토큰이 만료됐으면(마지막 요청 뒤 2시간) 이 401을 그냥 넘기면 안 된다. 서버에
-         * 이 기기 토큰이 남아 **로그아웃한 계정의 푸시가 기기에 계속 온다.** 세션을 되살리지
-         * 않는 일회용 토큰을 받아 한 번만 다시 보낸다.
+         * 401이면(대개 마지막 요청 뒤 2시간이 지나 액세스 토큰이 만료된 것) 그냥 넘기면 안 된다.
+         * 서버에 이 기기 토큰이 남아 **로그아웃한 계정의 푸시가 기기에 계속 온다.** 세션을
+         * 되살리지 않는 일회용 토큰을 받아 한 번만 다시 보낸다.
          */
         if (!(e instanceof ApiError && e.status === 401) || !withRefresh) throw e;
+        logAuth(`로그아웃 푸시 해제 401 ${e.code ?? '코드 없음'} → 일회용 재발급`);
         const cleanup = await issueCleanupToken(withRefresh);
-        if (!cleanup) throw e;
+        if (!cleanup) {
+          logAuth('로그아웃 푸시 해제: 일회용 재발급 실패 → 서버에 기기 토큰이 남음');
+          throw e;
+        }
         await pushApi.unregister(token, cleanup);
+        logAuth('로그아웃 푸시 해제: 일회용 토큰으로 성공');
       }
       await clearPushToken();
     }).catch(() => {});
@@ -2742,8 +2746,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       // 토큰을 받는 사이 로그아웃했으면 그 계정 이름으로 등록하지 않는다
       if (sessionRev.current !== rev) return;
       pushPendingRef.current = token;
+      const platform = Platform.OS === 'ios' ? 'IOS' : 'ANDROID';
       try {
-        await pushApi.register(token, Platform.OS === 'ios' ? 'IOS' : 'ANDROID', withToken);
+        await pushApi.register(token, platform, withToken).catch((e) => {
+          // 해제(OFF)와 같은 이유 — 예약한 토큰이 만료됐으면 현재 토큰으로 다시 보내 재발급을 태운다.
+          // 알림 스위치는 기기에만 저장돼, 여기서 끝나면 다른 요청이 재발급할 때까지 알림이 안 온다
+          if (e instanceof ApiError && e.status === 401 && sessionRev.current === rev) {
+            return pushApi.register(token, platform);
+          }
+          throw e;
+        });
       } catch {
         // 등록 실패는 알림이 안 오는 것으로 끝난다. 로그인·사용을 막지 않는다
         pushPendingRef.current = null;
