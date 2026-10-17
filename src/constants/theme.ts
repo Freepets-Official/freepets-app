@@ -1,27 +1,26 @@
 import '@/global.css';
 
 /**
- * 반갑꼬리 디자인 토큰 — 라이트(따뜻한 흰 바탕 + 파스텔 살구) / 다크(웜 다크 + 살구).
+ * 반갑꼬리 디자인 토큰 — 라이트(밝은 베이지 바탕 + 짙은 브라운 강조) / 다크(웜 다크 + 캐러멜).
  *
- * 2026-10 메인 색을 로즈핑크에서 살구로 바꿨다. 사용자가 "파스텔톤의 부드럽고 따뜻한 색"을
- * 원했고, 살구 `#DB7850`은 흰 바탕 대비가 3.0으로 예전 핑크(3.15)와 거의 같아 핑크가 쓰이던
- * 자리(글자·아이콘·흰 글씨 버튼)에 그대로 들어간다. 더 연한 살구는 글자로 읽히지 않는다.
- * 판별 의미색(초록·앰버·빨강)과 헷갈리지 않게 칠 배경(`accentSoft`)은 노랑기가 아니라
- * 분홍기 도는 살구로 뒀다 — 조건부의 `warnSoft`(노란 크림)와 나란히 놓여도 구분된다.
- * 실제 적용 팔레트는 설정의 화면 모드(라이트·다크·자동)로 결정된다(`hooks/use-theme`).
- * 판별 결과는 의미색으로 인코딩: 가능(초록) / 조건부(앰버) / 불가(빨강 채운 배경).
+ * 2026-10-18 메인 색을 살구에서 **밝은 베이지 + 짙은 브라운**으로 바꿨다. 사용자가 "탁하지 않은
+ * 밝은 베이지, 가끔 강조는 짙은 브라운"을 원했다. 베이지는 면(`surface`)과 칠(`accentSoft`)로
+ * 깔고, 글자·아이콘·버튼 같은 강조는 브라운(`accent`)이 맡는다. 브라운은 흰 글씨 대비가 6.8이라
+ * 살구(3.0)·예전 핑크(3.15)보다 훨씬 잘 읽힌다. 아주 센 강조는 더 짙은 `accentDark`(10.1).
+ * 베이지가 탁해지지 않게 회색기를 빼고 노랑·복숭아 쪽으로 살짝 데웠다.
+ * 판별 의미색(초록·앰버·빨강)은 그대로다.
  */
 export const Palette = {
   light: {
-    bg: '#FFFFFF',
-    surface: '#FFF6EF', // 살구빛 도는 면 — 회색보다 따뜻하고 귀엽게
+    bg: '#FFFDF9',
+    surface: '#FAF3E8', // 밝은 베이지 면 — 앱의 바탕색
     card: '#FFFFFF',
-    ink: '#2D2622', // 갈색 기운의 웜 블랙
-    muted: '#8C8079',
-    line: '#F1E4DA', // 살구빛 보더
-    accent: '#DB7850', // 살구 — 흰 배경에서 읽히는 가장 연한 값
-    accentDark: '#BC5F38', // 작은 글씨용. 흰 바탕 대비 4.3
-    accentSoft: '#FDE8DE', // 배지·칠 배경
+    ink: '#2B211A', // 갈색 기운의 웜 블랙
+    muted: '#857767', // 베이지 면 위에서도 읽히게(대비 3.9)
+    line: '#EEE3D3', // 베이지 보더
+    accent: '#7A5233', // 짙은 브라운 — 버튼·아이콘·강조 글씨
+    accentDark: '#5C3A22', // 더 센 강조(흰 바탕 대비 10.1)
+    accentSoft: '#F3E5CF', // 밝은 베이지 칠 — 배지·고른 칩 바탕
     onAccent: '#FFFFFF',
     // 동반 가능 — 진한 초록 볼드 글씨 + 연초록 배경
     success: '#0F7D45',
@@ -38,20 +37,19 @@ export const Palette = {
     // 달력의 토요일. 일요일은 danger(빨강)를 쓰는데 토요일만 팔레트 밖 값이 박혀 있었다
     saturday: '#4C8DF5',
   },
-  // 다크 테마 — 웜 다크(갈색 기운) 그라운드에 살구 액센트.
-  // 더 밝히면 어두운 바탕에선 예쁘지만 흰 글씨 버튼이 안 읽힌다(#E8906A는 2.4). 그래서 흰 글씨
-  // 대비 3.2(예전 핑크 3.15 이상)를 지키는 값으로 두고, 바탕 위 대비는 5.9로 충분하다.
+  // 다크 테마 — 웜 다크 그라운드에 캐러멜 액센트.
+  // 짙은 브라운은 어두운 바탕에 묻혀 한 톤 밝힌 캐러멜을 쓴다. 흰 글씨 버튼 대비 3.6, 바탕 위 5.2.
   // 의미색은 어두운 배경에서 읽히도록 톤을 올렸다.
   dark: {
-    bg: '#15110E',
-    surface: '#221B16', // 면 — bg보다 한 톤 밝게
-    card: '#1D1713',
-    ink: '#F5EEE8', // 웜 화이트
-    muted: '#A3978E',
-    line: '#3A2F27',
-    accent: '#D9744B',
-    accentDark: '#F0A584', // 다크에서는 "진한" 쪽이 더 밝아야 읽힌다
-    accentSoft: '#3D271C', // 배지·칠(다크 살구 틴트)
+    bg: '#16120E',
+    surface: '#211B15', // 면 — bg보다 한 톤 밝게
+    card: '#1C1712',
+    ink: '#F6EFE6', // 웜 화이트
+    muted: '#A89A8C',
+    line: '#3A3027',
+    accent: '#A97F57',
+    accentDark: '#E2C49E', // 다크에서는 "진한" 쪽이 더 밝아야 읽힌다 — 밝은 베이지
+    accentSoft: '#3A2C1E', // 배지·칠(다크 브라운 틴트)
     onAccent: '#FFFFFF',
     success: '#46C978',
     successSoft: '#16311F',
@@ -116,8 +114,8 @@ export const Radius = { sm: 12, md: 16, lg: 20, xl: 26, full: 999 } as const;
 
 export const Spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 
-/** 카드 그림자 — 살구 기운의 아주 옅은 소프트 섀도우 */
-export const CardShadow = { boxShadow: '0 8px 22px rgba(219, 120, 80, 0.10)' } as const;
+/** 카드 그림자 — 브라운 기운의 아주 옅은 소프트 섀도우 */
+export const CardShadow = { boxShadow: '0 8px 22px rgba(122, 82, 51, 0.10)' } as const;
 
 export const MaxContentWidth = 620;
 
@@ -129,12 +127,12 @@ export const MaxContentWidth = 620;
  * 값을 그대로 옮겼다.
  */
 export const LevelUpColors = {
-  // 이름은 예전 그대로 둔다(`pink`). 메인 색이 살구로 바뀌어 값만 살구 계열로 옮겼다
-  pink: '#F29A72', // 도장 테두리·원형 글자·퍼지는 고리
-  peach: '#FFC48A', // 발자국·하트의 짝 색, 도장 속 발바닥
-  stampInk: '#E8825A', // 도장 가운데 "Lv.N"
-  stampPaper: '#FFF8F2',
-  dotted: '#FFD3BE', // 안쪽 점선 원
+  // 이름은 예전 그대로 둔다(`pink`). 메인 색이 베이지·브라운으로 바뀌어 값만 캐러멜 계열로 옮겼다
+  pink: '#B98F66', // 도장 테두리·원형 글자·퍼지는 고리
+  peach: '#F2D3A8', // 발자국·하트의 짝 색, 도장 속 발바닥
+  stampInk: '#8A5F3C', // 도장 가운데 "Lv.N"
+  stampPaper: '#FFFAF2',
+  dotted: '#EAD7BB', // 안쪽 점선 원
   title: '#5A3D34',
   subtitle: '#8A6A5E',
   outline: '#FFFFFF',
@@ -158,8 +156,8 @@ export const CompanionColors = {
     shadow: 'rgba(45,38,34,0.07)',
     blush: '#FFC9B0',
     tongue: '#F7A58A',
-    scarf: '#F4B08F',
-    umbrella: '#FFD8C4',
+    scarf: '#C9A27A',
+    umbrella: '#F3E5CF',
     rain: '#8EC3E8',
     sun: '#F5B83D',
   },
@@ -185,8 +183,8 @@ export const CompanionColors = {
  */
 export const ClayShadow = {
   light: {
-    rest: 'inset 0 2px 0 rgba(255,255,255,0.95), inset 0 -4px 0 rgba(219,120,80,0.07), 0 16px 26px -18px rgba(150,80,50,0.38), 0 2px 6px -3px rgba(45,38,34,0.10)',
-    pressed: 'inset 0 2px 0 rgba(255,255,255,0.9), inset 0 -2px 0 rgba(219,120,80,0.06), 0 8px 14px -12px rgba(150,80,50,0.36)',
+    rest: 'inset 0 2px 0 rgba(255,255,255,0.95), inset 0 -4px 0 rgba(122,82,51,0.06), 0 16px 26px -18px rgba(110,78,48,0.36), 0 2px 6px -3px rgba(43,33,26,0.10)',
+    pressed: 'inset 0 2px 0 rgba(255,255,255,0.9), inset 0 -2px 0 rgba(122,82,51,0.05), 0 8px 14px -12px rgba(110,78,48,0.34)',
   },
   dark: {
     rest: 'inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -4px 0 rgba(0,0,0,0.25), 0 16px 26px -18px rgba(0,0,0,0.7), 0 2px 6px -3px rgba(0,0,0,0.4)',

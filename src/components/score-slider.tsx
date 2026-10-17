@@ -57,6 +57,6 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     marginLeft: -11,
     // 메인 색 기운 그림자로 살짝 떠 보이게
-    boxShadow: '0 2px 6px rgba(219, 120, 80, 0.3)',
+    boxShadow: '0 2px 6px rgba(122, 82, 51, 0.3)',
   },
 });
