@@ -166,5 +166,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
-  letter: { color: '#7A5233', fontSize: 46, fontWeight: '900', letterSpacing: -1 },
+  letter: { color: '#DB7850', fontSize: 46, fontWeight: '900', letterSpacing: -1 },
 });

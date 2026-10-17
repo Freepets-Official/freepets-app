@@ -52,8 +52,7 @@ const INK = '#2E2823';
 const SUB = '#8A7B62';
 const LINE = 'rgba(120,101,66,0.32)';
 const GOLD = '#E6C47F';
-// 초콜릿 가죽 — 앱의 짙은 브라운과 같은 집안
-const LEATHER = ['#7A5233', '#5C3A22', '#45291A'] as const;
+const LEATHER = ['#8E4632', '#6A2F21', '#57261B'] as const;
 const PERSPECTIVE = 1600;
 
 /** 끌기 시작했지만 아직 방향을 모름 */
@@ -634,7 +633,7 @@ function RecordPage({ pet, index, w, h, shimmer }: { pet: Pet; index: number; w:
               cy={27}
               r={R}
               fill="none"
-              stroke="#8A5F3C"
+              stroke="#DB7850"
               strokeWidth={5}
               strokeLinecap="round"
               strokeDasharray={`${C} ${C}`}
@@ -740,7 +739,7 @@ const styles = StyleSheet.create({
   mrzBox: { marginTop: 'auto', opacity: 0.72 },
   mrz: { fontFamily: MONO, color: '#5A5044', letterSpacing: 0.3 },
   dash: { borderTopWidth: 1, borderStyle: 'dashed', borderTopColor: LINE },
-  score: { color: '#7A5233', fontWeight: '800', marginTop: 1 },
+  score: { color: '#BC5F38', fontWeight: '800', marginTop: 1 },
   holo: { position: 'absolute', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.8)' },
   holoSweep: { position: 'absolute', width: 14, backgroundColor: 'rgba(255,255,255,0.55)' },
   holoText: { color: 'rgba(70,40,60,0.72)', fontWeight: '900', textAlign: 'center' },

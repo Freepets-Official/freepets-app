@@ -144,7 +144,7 @@ export function GlassTabBar(props: TabBarProps) {
           styles.bar,
           {
             borderColor: p.line,
-            // 다크는 배경(#15110E)보다 더 가라앉힌다. 바탕이 어두울수록 강조색
+            // 다크는 배경(#15110E)보다 더 가라앉힌다. 바탕이 어두울수록 살구색
             // 활성 탭이 또렷해지고, 비활성 회색도 대비를 얻는다.
             backgroundColor: scheme === 'dark' ? 'rgba(13,10,8,0.88)' : 'rgba(255,255,255,0.72)',
           },

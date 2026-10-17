@@ -695,7 +695,7 @@ export const CAL_EVENT_META: Record<
   CalEventType,
   { label: string; icon: string; color: string; soft: string }
 > = {
-  // 약 복용(주황)·메인 브라운과 헷갈리지 않게 접종은 라벤더로 뺐다
+  // 메인 색(살구)과 약 복용(주황) 사이에 끼지 않게 접종은 라벤더로 뺐다
   VACCINE: { label: '예방접종', icon: 'medkit', color: '#8A6CD1', soft: '#EFE9FB' },
   MED: { label: '약 복용', icon: 'medical', color: '#E0952B', soft: '#FBEFD6' },
   CHECKUP: { label: '건강검진', icon: 'pulse', color: '#2BB3A3', soft: '#DBF4F0' },
