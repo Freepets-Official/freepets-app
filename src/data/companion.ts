@@ -108,6 +108,8 @@ export function hasBatchim(word: string): boolean {
 export const callName = (name: string) => `${name}${hasBatchim(name) ? '아' : '야'}`;
 const eunNeun = (w: string) => `${w}${hasBatchim(w) ? '은' : '는'}`;
 const iGa = (w: string) => `${w}${hasBatchim(w) ? '이' : '가'}`;
+/** 을·를 — 꽃 핀을 · 리본을 · 반다나를 */
+export const eulReul = (w: string) => `${w}${hasBatchim(w) ? '을' : '를'}`;
 
 const petName = (pets: Pet[], ids: number[]) =>
   ids

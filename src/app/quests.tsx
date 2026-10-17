@@ -219,8 +219,11 @@ export default function QuestsScreen() {
             total={j.trio.length}
             ready={j.chestReady}
             openedToday={j.journey.chestDay === j.today}
-            lastItem={j.journey.chestDay === j.today ? lastChestItem(j.journey.owned) : null}
-            onOpen={() => setOpening({ item: j.openChest() })}
+            lastItem={j.journey.chestDay === j.today ? j.journey.chestItem : null}
+            // 두 번 빨리 눌러도 처음 연 결과를 지킨다(두 번째는 같은 날이라 빈손이다)
+            onOpen={() => {
+              if (!opening) setOpening({ item: j.openChest() });
+            }}
           />
 
           {unlocked.length ? (
@@ -314,12 +317,6 @@ export default function QuestsScreen() {
       ) : null}
     </Screen>
   );
-}
-
-/** 오늘 상자에서 받은 소품 — 상자 소품은 정해진 순서로 나오므로 가진 것 중 마지막 상자 소품이다 */
-function lastChestItem(owned: ItemId[]): ItemId | null {
-  const chestOwned = owned.filter((id) => itemById(id).unlock === 'chest');
-  return chestOwned[chestOwned.length - 1] ?? null;
 }
 
 const styles = StyleSheet.create({

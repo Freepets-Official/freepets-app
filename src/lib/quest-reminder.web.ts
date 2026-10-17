@@ -5,4 +5,4 @@ export async function askReminderPermission(): Promise<boolean> {
   return false;
 }
 export async function cancelQuestReminders(): Promise<void> {}
-export async function planQuestReminders(_: { doneToday: boolean; streak: number }): Promise<void> {}
+export async function planQuestReminders(_: { doneToday: boolean; streak: number; stillWanted: () => boolean }): Promise<void> {}

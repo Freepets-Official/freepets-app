@@ -148,9 +148,10 @@ function usePushDeepLink() {
   useEffect(() => {
     if (!session.authed) return;
     return onNotificationTap((data) => {
-      // 앱이 직접 예약한 퀘스트 저녁 알림 — 정해 둔 화면만 연다(아무 주소나 열지 않는다)
+      // 앱이 직접 예약한 퀘스트 저녁 알림 — 정해 둔 화면만 연다(아무 주소나 열지 않는다).
+      // 사업자 프로필로 들어와 있으면 소비자 화면으로 끌고 가지 않는다
       if (data.url === '/quests') {
-        router.push('/quests');
+        if (session.activeProfile !== 'owner') router.push('/quests');
         return;
       }
       const id = Number(data.facilityId);
@@ -159,7 +160,7 @@ function usePushDeepLink() {
         router.push({ pathname: '/facility/[id]', params: { id: String(id) } });
       }
     });
-  }, [session.authed, router]);
+  }, [session.authed, session.activeProfile, router]);
 }
 
 /**

@@ -8,6 +8,16 @@ import { loadLocalNotifications } from '@/lib/push';
  * 없어서, 앞으로 7일치를 하루씩 예약하고 앱을 열 때마다 다시 짠다.
  */
 const PREFIX = 'quest-reminder-';
+
+/**
+ * 예약·취소를 한 줄로 세운다. 예약이 도는 사이 스위치를 끄면 취소가 먼저 끝나고 예약이 이어져,
+ * 꺼 둔 알림이 울렸다. 앞 작업이 끝나야 다음 작업이 돈다.
+ */
+let chain: Promise<void> = Promise.resolve();
+const enqueue = (job: () => Promise<void>) => {
+  chain = chain.then(job).catch(() => {});
+  return chain;
+};
 const HOUR = 20;
 
 const LINES = [
@@ -29,7 +39,11 @@ export async function askReminderPermission(): Promise<boolean> {
   }
 }
 
-export async function cancelQuestReminders(): Promise<void> {
+export function cancelQuestReminders(): Promise<void> {
+  return enqueue(cancelNow);
+}
+
+async function cancelNow(): Promise<void> {
   const Notifications = loadLocalNotifications();
   if (!Notifications) return;
   try {
@@ -42,11 +56,19 @@ export async function cancelQuestReminders(): Promise<void> {
   }
 }
 
-/** 앞으로 7일 저녁 알림을 다시 짠다. 오늘 이미 했거나 8시가 지났으면 오늘 몫은 없다 */
-export async function planQuestReminders({ doneToday, streak }: { doneToday: boolean; streak: number }): Promise<void> {
+/**
+ * 앞으로 7일 저녁 알림을 다시 짠다. 오늘 이미 했거나 8시가 지났으면 오늘 몫은 없다.
+ * `stillWanted`는 예약 직전에 다시 묻는다 — 줄을 서 있는 사이 사용자가 껐을 수 있다.
+ */
+export function planQuestReminders(opts: { doneToday: boolean; streak: number; stillWanted: () => boolean }): Promise<void> {
+  return enqueue(() => planNow(opts));
+}
+
+async function planNow({ doneToday, streak, stillWanted }: { doneToday: boolean; streak: number; stillWanted: () => boolean }) {
   const Notifications = loadLocalNotifications();
   if (!Notifications) return;
-  await cancelQuestReminders();
+  await cancelNow();
+  if (!stillWanted()) return;
   try {
     const perm = await Notifications.getPermissionsAsync();
     if (!perm.granted) return;

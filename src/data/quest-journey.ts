@@ -19,6 +19,12 @@ import type { DailyQuest, QuestSource } from '@/lib/api';
  * (서버 저장은 freepets-docs 제안 문서 참고). 이 파일은 그 규칙만 담은 순수 함수다.
  */
 
+/**
+ * "오늘"은 **한국 시간** 날짜다. 서버 퀘스트가 KST 자정에 0으로 돌아가므로 기기 시계(해외 여행·
+ * 웹 해외 접속)로 날짜를 세면 어제 한 일이 오늘로 잡히거나 상자를 두 번 열 수 있다.
+ */
+export const kstYmd = (now = new Date()) => new Date(now.getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+
 /* ───────── 오늘의 세 가지 ───────── */
 
 export interface TrioMeta {
@@ -117,6 +123,8 @@ export interface JourneyState {
   passDays: string[];
   /** 마지막으로 상자를 연 날 */
   chestDay: string | null;
+  /** 그날 상자에서 나온 소품(다 모은 뒤엔 null) */
+  chestItem: ItemId | null;
   chests: number;
   owned: ItemId[];
   outfit: { dog: Outfit; cat: Outfit };
@@ -134,6 +142,7 @@ export const EMPTY_JOURNEY: JourneyState = {
   history: [],
   passDays: [],
   chestDay: null,
+  chestItem: null,
   chests: 0,
   owned: [],
   outfit: { dog: {}, cat: {} },
@@ -239,6 +248,7 @@ export function openChest(state: JourneyState, today: string): { state: JourneyS
     state: {
       ...state,
       chestDay: today,
+      chestItem: next?.id ?? null,
       chests: state.chests + 1,
       owned: next ? [...state.owned, next.id] : state.owned,
       fresh: next ? [...state.fresh, next.id] : state.fresh,
@@ -286,6 +296,7 @@ export function parseJourney(raw: unknown): JourneyState {
     history: Array.isArray(r.history) ? r.history.filter(isYmd).slice(-14) : [],
     passDays: Array.isArray(r.passDays) ? r.passDays.filter(isYmd).slice(-14) : [],
     chestDay: isYmd(r.chestDay) ? r.chestDay : null,
+    chestItem: typeof r.chestItem === 'string' && owned.includes(r.chestItem as ItemId) ? (r.chestItem as ItemId) : null,
     chests: num(r.chests),
     owned,
     outfit: { dog: wearing(r.outfit?.dog), cat: wearing(r.outfit?.cat) },

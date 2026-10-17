@@ -22,6 +22,7 @@ import { TiltPressable } from '@/components/motion/tilt-pressable';
 import { PawBurst } from '@/components/paw-burst';
 import { Text } from '@/components/text';
 import { ClayShadow, Radius, Type } from '@/constants/theme';
+import { eulReul } from '@/data/companion';
 import { itemById, type ItemId } from '@/data/quest-journey';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { haptic } from '@/lib/haptics';
@@ -111,7 +112,7 @@ export function ChestCard({
   const title = openedToday ? '오늘 상자를 열었어요' : ready ? '간식 상자가 도착했어요!' : '오늘의 간식 상자';
   const sub = openedToday
     ? lastItem
-      ? `${itemById(lastItem).name}을(를) 받았어요 · 내일 또 열려요`
+      ? `${eulReul(itemById(lastItem).name)} 받았어요 · 내일 또 열려요`
       : '내일 또 열려요'
     : ready
       ? '눌러서 열어 보세요'
@@ -176,6 +177,17 @@ export function ChestOpening({
   const prize = useSharedValue(reduce ? 1 : 0);
   const [revealed, setRevealed] = useState(reduce);
 
+  // 애니메이션 끝 신호가 오지 않는 경우(중간에 끊김)에도 결과와 닫기가 나오게 하는 안전장치
+  useEffect(() => {
+    if (!visible || revealed) return;
+    const t = setTimeout(() => {
+      lid.set(1);
+      prize.set(1);
+      setRevealed(true);
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [visible, revealed, lid, prize]);
+
   useEffect(() => {
     if (!visible || reduce) return;
     haptic.medium();
@@ -210,7 +222,15 @@ export function ChestOpening({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.scrim}>
-        <View style={[styles.sheet, { backgroundColor: p.card }]}>
+        <View style={[styles.sheet, { backgroundColor: p.card }]} accessibilityViewIsModal>
+          <Pressable
+            onPress={onClose}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="닫기"
+            style={[styles.closeX, { backgroundColor: p.surface }]}>
+            <Ionicons name="close" size={18} color={p.muted} />
+          </Pressable>
           <View style={styles.stage}>
             <Animated.View style={[styles.prize, prizeStyle]}>
               {item ? <AccessoryGlyph id={item} size={96} /> : <Ionicons name="heart" size={64} color={p.accent} />}
@@ -241,12 +261,14 @@ export function ChestOpening({
                 {item && onWear ? (
                   <Pressable
                     onPress={() => onWear(item)}
+                    accessibilityRole="button"
                     style={({ pressed }) => [styles.btn, { backgroundColor: p.accent, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
                     <Text style={[styles.btnText, { color: p.onAccent }]}>바로 입혀 보기</Text>
                   </Pressable>
                 ) : null}
                 <Pressable
                   onPress={onClose}
+                  accessibilityRole="button"
                   style={({ pressed }) => [styles.btn, { backgroundColor: p.surface, transform: [{ scale: pressed ? 0.97 : 1 }] }]}>
                   <Text style={[styles.btnText, { color: p.ink }]}>닫기</Text>
                 </Pressable>
@@ -273,6 +295,7 @@ const styles = StyleSheet.create({
   openText: { fontSize: Type.callout, fontWeight: '900' },
   scrim: { flex: 1, backgroundColor: 'rgba(25,15,10,0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   sheet: { width: '100%', maxWidth: 360, borderRadius: 32, padding: 22, gap: 8 },
+  closeX: { position: 'absolute', top: 14, right: 14, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
   stage: { height: 230, alignItems: 'center', justifyContent: 'flex-end' },
   prize: { position: 'absolute', bottom: 70 },
   burst: { position: 'absolute', bottom: 120, width: 0, height: 0, alignSelf: 'center' },
