@@ -129,7 +129,8 @@ const styles = StyleSheet.create({
   segText: { fontSize: Type.footnote, fontWeight: '800' },
   preview: { borderRadius: 20, alignItems: 'center', paddingTop: 10, paddingBottom: 4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  item: { width: '18.4%', minWidth: 58, aspectRatio: 0.82, borderRadius: 16, borderWidth: 2, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  // 다섯 칸 — 열 개가 두 줄로 딱 떨어진다
+  item: { width: '17.6%', aspectRatio: 0.8, borderRadius: 16, borderWidth: 2, alignItems: 'center', justifyContent: 'center', gap: 2 },
   itemName: { fontSize: 10, fontWeight: '800' },
   lock: { position: 'absolute', top: 5, right: 5, width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   fresh: { position: 'absolute', top: 5, left: 5, width: 8, height: 8, borderRadius: 4 },
