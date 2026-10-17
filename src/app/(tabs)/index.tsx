@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useIsFocused, useRouter, useScrollToTop } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -171,8 +171,10 @@ export default function HomeScreen() {
   const holdUntil = useRef(0);
 
   // 화면 읽기 프로그램을 쓰는 중이면 저절로 넘기지 않는다 — 읽던 문장이 바뀌어 버린다(WCAG 2.2.2)
+  // 웹(react-native-web)은 알아낼 방법이 없어 늘 true를 준다 — 믿으면 웹에서는 영영 안 넘어간다
   const [screenReader, setScreenReader] = useState(false);
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     void AccessibilityInfo.isScreenReaderEnabled().then(setScreenReader);
     const sub = AccessibilityInfo.addEventListener('screenReaderChanged', setScreenReader);
     return () => sub.remove();
