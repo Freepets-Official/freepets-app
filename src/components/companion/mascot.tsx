@@ -19,10 +19,12 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
 
+import { AccessoryAt } from '@/components/companion/accessories';
 import { PawBurst } from '@/components/paw-burst';
 import { Text } from '@/components/text';
 import { CompanionColors, LevelUpFonts } from '@/constants/theme';
 import type { Mood, Speaker, WeatherProp } from '@/data/companion';
+import type { Outfit } from '@/data/quest-journey';
 import { haptic } from '@/lib/haptics';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 
@@ -154,9 +156,11 @@ export interface MascotProps {
   cue: string;
   /** 화면이 안 보이면 반복 동작을 멈춘다 — 배터리 */
   active: boolean;
+  /** 퀘스트로 모은 꾸미기 소품 */
+  outfit?: { dog: Outfit; cat: Outfit };
 }
 
-export function CompanionMascot({ width, speaker, mood, props = [], cue, active }: MascotProps) {
+export function CompanionMascot({ width, speaker, mood, props = [], cue, active, outfit }: MascotProps) {
   const p = usePalette();
   const scheme = useColorScheme();
   const cc = CompanionColors[scheme === 'dark' ? 'dark' : 'light'];
@@ -437,6 +441,10 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active 
             <Layer>
               <Path d={D.dogScarf} fill={cc.scarf} {...line} />
             </Layer>
+          ) : outfit?.dog.neck ? (
+            <Layer>
+              <AccessoryAt who="dog" slot="neck" id={outfit.dog.neck} />
+            </Layer>
           ) : null}
           <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: origin(90, 112) }, dogHeadStyle]}>
             <Boiled
@@ -474,6 +482,13 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active 
                 <Path d={D.maskPleats} fill="none" {...line} strokeWidth={1.6} opacity={0.6} />
               </Layer>
             ) : null}
+            {/* 머리·얼굴 소품은 머리 층에 둬야 고개를 갸웃할 때 같이 기운다 */}
+            {outfit?.dog.face || (outfit?.dog.head && !has('umbrella')) ? (
+              <Layer>
+                {outfit.dog.face ? <AccessoryAt who="dog" slot="face" id={outfit.dog.face} /> : null}
+                {outfit.dog.head && !has('umbrella') ? <AccessoryAt who="dog" slot="head" id={outfit.dog.head} /> : null}
+              </Layer>
+            ) : null}
           </Animated.View>
         </Animated.View>
       </Animated.View>
@@ -493,6 +508,11 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active 
               </>
             )}
           />
+          {outfit?.cat.neck ? (
+            <Layer>
+              <AccessoryAt who="cat" slot="neck" id={outfit.cat.neck} />
+            </Layer>
+          ) : null}
           <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: origin(184, 113) }, catHeadStyle]}>
             <Boiled frame={frame} render={(j) => <Path d={j(D.catHead)} fill={fill} {...line} />} />
             <Layer>
@@ -514,6 +534,12 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active 
                   <Circle cx={198.8} cy={80.6} r={1.3} fill="#FFFFFF" />
                 </Layer>
               </Animated.View>
+            ) : null}
+            {outfit?.cat.face || outfit?.cat.head ? (
+              <Layer>
+                {outfit.cat.face ? <AccessoryAt who="cat" slot="face" id={outfit.cat.face} /> : null}
+                {outfit.cat.head ? <AccessoryAt who="cat" slot="head" id={outfit.cat.head} /> : null}
+              </Layer>
             ) : null}
           </Animated.View>
         </Animated.View>

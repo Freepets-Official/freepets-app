@@ -148,6 +148,11 @@ function usePushDeepLink() {
   useEffect(() => {
     if (!session.authed) return;
     return onNotificationTap((data) => {
+      // 앱이 직접 예약한 퀘스트 저녁 알림 — 정해 둔 화면만 연다(아무 주소나 열지 않는다)
+      if (data.url === '/quests') {
+        router.push('/quests');
+        return;
+      }
       const id = Number(data.facilityId);
       // 서버가 문자열로 보내므로 숫자로 바꾼다. 값이 깨졌으면 아무 데도 보내지 않는다.
       if (Number.isFinite(id) && id > 0) {

@@ -57,7 +57,7 @@ import {
 import { FACILITIES } from '@/data/mock';
 import { uniqueRegionCount } from '@/data/stamps';
 import { ymd, type Pet } from '@/data/types';
-import { useQuestProgress } from '@/hooks/use-daily-quests';
+import { useQuestJourney } from '@/hooks/use-quest-journey';
 import { usePalette } from '@/hooks/use-theme';
 import { useWalkWeather } from '@/hooks/use-walk-weather';
 import { haptic } from '@/lib/haptics';
@@ -133,7 +133,8 @@ export default function HomeScreen() {
 
   // 뱃지 기준과 같은 값(서로 다른 시군구 수)을 쓴다 — 홈과 도장첩이 다른 숫자를 보이면 안 된다
   const stampCount = useMemo(() => uniqueRegionCount(stamps), [stamps]);
-  const quests = useQuestProgress(session.authed);
+  const journey = useQuestJourney(session.authed);
+  const questLeft = journey.trio.length - journey.trioDone;
   const weather = useWalkWeather(session.authed);
   const alerts = useMemo(() => plannedDenialAlerts(), [plannedDenialAlerts]);
   const vax = useMemo(() => upcomingVaccinations(), [upcomingVaccinations]);
@@ -152,6 +153,13 @@ export default function HomeScreen() {
   // 지운 아이를 보고 있었다면 모두 보기로 돌아간다
   const focusId = focusPet !== null && pets.some((x) => x.petId === focusPet) ? focusPet : null;
 
+  const questNudge = useMemo(
+    () =>
+      journey.status === 'ready'
+        ? { streak: journey.streak.count, doneToday: journey.streak.doneToday, chestReady: journey.chestReady }
+        : undefined,
+    [journey.status, journey.streak.count, journey.streak.doneToday, journey.chestReady],
+  );
   const denials = useMemo<DenialNews[]>(
     () =>
       alerts.map(({ facility, report }) => ({
@@ -166,10 +174,10 @@ export default function HomeScreen() {
   const built = useMemo(
     () =>
       buildCompanionQueue(
-        { now, pets, denials, vaccinations: vax, eventsOn, isMedTaken, weather: weather.state },
+        { now, pets, denials, vaccinations: vax, eventsOn, isMedTaken, weather: weather.state, quest: questNudge },
         focusId,
       ),
-    [now, pets, denials, vax, eventsOn, isMedTaken, weather.state, focusId],
+    [now, pets, denials, vax, eventsOn, isMedTaken, weather.state, focusId, questNudge],
   );
   // 내용이 같으면 같은 배열을 쓴다 — 1분마다 다시 짜도 자동 넘김 타이머가 처음부터 다시 돌지 않게
   const builtKey = built.map((m) => `${m.id}:${m.text}`).join('|');
@@ -372,6 +380,7 @@ export default function HomeScreen() {
                 props={msg?.props}
                 cue={msg?.id ?? ''}
                 active={focused}
+                outfit={journey.journey.outfit}
               />
             </View>
           </Animated.View>
@@ -384,7 +393,17 @@ export default function HomeScreen() {
             </View>
             <View style={styles.pair}>
               <StampTile order={3} count={stampCount} />
-              <QuestTile order={4} progress={quests} />
+              <QuestTile
+              order={4}
+              q={{
+                loaded: journey.status === 'ready',
+                done: journey.trioDone,
+                total: journey.trio.length || 3,
+                streak: journey.streak.count,
+                doneToday: journey.streak.doneToday,
+                chestReady: journey.chestReady,
+              }}
+            />
             </View>
             <RecentTile
               order={5}
@@ -430,8 +449,8 @@ export default function HomeScreen() {
           {/* 퀘스트(두루마리)와 알림(종)을 나란히 — 둘 다 "지금 할 일"을 여는 입구다 */}
           <HeaderButton
             onPress={() => router.push('/quests')}
-            label={quests === null ? '오늘의 퀘스트' : `오늘의 퀘스트, ${quests.left}개 남음`}
-            badge={quests && quests.left > 0 ? quests.left : 0}>
+            label={journey.status !== 'ready' ? '오늘의 퀘스트' : `오늘의 퀘스트, ${questLeft}개 남음`}
+            badge={journey.status === 'ready' && questLeft > 0 ? questLeft : 0}>
             <QuestScrollIcon size={21} color={p.ink} />
           </HeaderButton>
           <HeaderButton

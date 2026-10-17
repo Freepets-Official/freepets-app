@@ -1,5 +1,3 @@
-import { useEffect, useState } from 'react';
-
 import { questsApi, type DailyQuests } from '@/lib/api';
 
 /**
@@ -22,8 +20,9 @@ function stale(entry: { data: DailyQuests; at: number }): boolean {
   return Date.now() - entry.at > 5 * 60_000;
 }
 
-function load(): Promise<DailyQuests | null> {
-  if (cached && !stale(cached)) return Promise.resolve(cached.data);
+/** `fresh`면 캐시를 건너뛴다 — 퀘스트 화면을 열 때는 방금 한 행동이 반영돼야 한다 */
+export function loadDailyQuests(fresh = false): Promise<DailyQuests | null> {
+  if (!fresh && cached && !stale(cached)) return Promise.resolve(cached.data);
   if (!inFlight) {
     inFlight = questsApi
       .today()
@@ -43,36 +42,4 @@ function load(): Promise<DailyQuests | null> {
 export function resetDailyQuests() {
   cached = null;
   inFlight = null;
-}
-
-/**
- * 오늘 퀘스트 진행 — 홈의 퀘스트 버튼 배지와 타일의 고리가 "몇 개 중 몇 개"를 쓴다.
- * 받아오기 전이거나 실패하면 `null`.
- *
- * `left: 0`과 `null`을 구분해야 한다 — 0은 "오늘 다 했다"는 뿌듯한 상태고, null은 "모른다"다.
- * 모르는데 0을 보여주면 다 한 것처럼 읽힌다.
- */
-export function useQuestProgress(enabled: boolean): { left: number; total: number } | null {
-  const [progress, setProgress] = useState<{ left: number; total: number } | null>(() =>
-    cached && !stale(cached) ? toProgress(cached.data) : null,
-  );
-
-  useEffect(() => {
-    if (!enabled) return;
-    let alive = true;
-    void load().then((d) => {
-      if (alive && d) setProgress(toProgress(d));
-    });
-    return () => {
-      alive = false;
-    };
-  }, [enabled]);
-
-  return progress;
-}
-
-const toProgress = (d: DailyQuests) => ({ left: countLeft(d), total: d.quests.length });
-
-function countLeft(d: DailyQuests): number {
-  return d.quests.filter((q) => q.completed < q.target).length;
 }

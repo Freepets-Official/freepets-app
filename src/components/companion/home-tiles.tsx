@@ -327,25 +327,54 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const RING_R = 20;
 const RING_C = 2 * Math.PI * RING_R;
 
-export function QuestTile({ order, progress }: { order: number; progress: { left: number; total: number } | null }) {
+export interface QuestSummary {
+  /** 서버 퀘스트를 받았나 — 못 받았으면 숫자 대신 "눌러서 보기" */
+  loaded: boolean;
+  done: number;
+  total: number;
+  streak: number;
+  doneToday: boolean;
+  chestReady: boolean;
+}
+
+/**
+ * 오늘 퀘스트 — 연속 기록이 주인공이다. 고리는 오늘의 세 가지 진행, 큰 숫자는 며칠째.
+ * 세 가지를 다 해서 간식 상자가 도착하면 타일이 살구빛으로 바뀌고 상자 아이콘이 들썩인다.
+ */
+export function QuestTile({ order, q }: { order: number; q: QuestSummary }) {
   const p = usePalette();
   const router = useRouter();
-  const done = progress ? progress.total - progress.left : 0;
-  const ratio = progress && progress.total > 0 ? done / progress.total : 0;
+  const reduce = useReducedMotion();
+  const ratio = q.total > 0 ? q.done / q.total : 0;
   const v = useSharedValue(0);
   useEffect(() => {
     v.set(withTiming(ratio, { duration: 900, easing: EASE_OUT }));
   }, [ratio, v]);
   const ringProps = useAnimatedProps(() => ({ strokeDashoffset: RING_C * (1 - v.value) }));
-  const complete = !!progress && progress.total > 0 && progress.left === 0;
-  const reduce = useReducedMotion();
+  const complete = q.total > 0 && q.done >= q.total;
+  // 상자가 도착하면 아이콘이 들썩 — 처음 그릴 때 한 번
+  const hop = useOnce(order, q.chestReady, 700, Easing.linear);
+  const hopStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${Math.sin(hop.value * Math.PI * 4) * 12 * (1 - hop.value)}deg` }, { translateY: -Math.abs(Math.sin(hop.value * Math.PI * 2)) * 4 }],
+  }));
+
+  const sub = !q.loaded
+    ? '눌러서 오늘 할 일 보기'
+    : q.chestReady
+      ? '간식 상자가 도착했어요!'
+      : q.doneToday
+        ? `오늘도 지켰어요 · ${q.done}/${q.total}`
+        : q.streak > 0
+          ? `오늘 하나만 하면 ${q.streak + 1}일째`
+          : '하나만 해도 연속 기록 시작';
   return (
     <Tile
       order={order}
       onPress={() => router.push('/quests')}
-      label={progress ? `오늘 퀘스트 ${progress.left}개 남음` : '오늘 퀘스트'}
+      label={`오늘 퀘스트, ${q.streak}일 연속, ${sub}`}
+      tint={q.chestReady ? p.accentSoft : undefined}
       style={styles.half}>
-      <TileKey icon="ribbon-outline" label="오늘 퀘스트" />
+      <TileKey icon={q.chestReady ? 'gift-outline' : 'ribbon-outline'} label="오늘 퀘스트" iconStyle={hopStyle} />
       <Svg width={50} height={50} viewBox="0 0 50 50" style={styles.ring}>
         <Circle cx={25} cy={25} r={RING_R} stroke={p.line} strokeWidth={6} fill="none" />
         <AnimatedCircle
@@ -361,19 +390,25 @@ export function QuestTile({ order, progress }: { order: number; progress: { left
           transform="rotate(-90 25 25)"
         />
       </Svg>
-      {complete ? (
-        <View style={styles.ringCheck} pointerEvents="none">
-          <Ionicons name="checkmark" size={22} color={p.success} />
-          {/* 다 끝낸 날엔 고리에서 발자국이 퍼진다(홈을 처음 그릴 때 한 번) */}
-          {!reduce ? <PawBurst color={p.success} size={12} /> : null}
-        </View>
-      ) : null}
+      <View style={styles.ringCheck} pointerEvents="none">
+        {complete ? (
+          <>
+            <Ionicons name="checkmark" size={22} color={p.success} />
+            {/* 다 끝낸 날엔 고리에서 발자국이 퍼진다(홈을 처음 그릴 때 한 번) */}
+            {!reduce ? <PawBurst color={p.success} size={12} /> : null}
+          </>
+        ) : (
+          <Text style={[styles.ringText, { color: p.muted }]}>
+            {q.done}/{q.total}
+          </Text>
+        )}
+      </View>
       <Text style={[styles.big, { color: p.ink }]}>
-        {progress === null ? '–' : progress.left === 0 ? '완료' : progress.left}
-        {progress && progress.left > 0 ? <Text style={[styles.unit, { color: p.ink }]}> 개 남음</Text> : null}
+        {q.streak}
+        <Text style={[styles.unit, { color: p.ink }]}>일 연속</Text>
       </Text>
-      <Text style={[styles.sub, { color: p.muted }]}>
-        {progress ? `${progress.total}개 중 ${done}개 완료` : '눌러서 오늘 할 일 보기'}
+      <Text style={[styles.sub, { color: q.chestReady ? p.accentDark : p.muted }]} numberOfLines={2}>
+        {sub}
       </Text>
     </Tile>
   );
@@ -504,6 +539,7 @@ const styles = StyleSheet.create({
   },
   ring: { position: 'absolute', right: 12, top: 12 },
   ringCheck: { position: 'absolute', right: 12, top: 12, width: 50, height: 50, alignItems: 'center', justifyContent: 'center' },
+  ringText: { fontSize: Type.caption, fontWeight: '900', fontVariant: ['tabular-nums'] },
   listHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 },
   listTitle: { fontSize: Type.cardTitle, fontWeight: '800', letterSpacing: -0.3 },
   listCount: { fontSize: Type.caption, fontWeight: '600' },

@@ -77,6 +77,20 @@ function loadNotifications(): NotificationsModule | null {
   return notifications;
 }
 
+/**
+ * 기기 안에서 예약하는 로컬 알림(퀘스트 저녁 알림)용. 푸시 토큰과 달리 시뮬레이터에서도 되고
+ * FCM이 없어도 된다 — 알림 예약 네이티브 모듈만 있으면 쓴다. 웹·없는 빌드는 null.
+ */
+export function loadLocalNotifications(): NotificationsModule | null {
+  if (Platform.OS === 'web') return null;
+  try {
+    if (requireOptionalNativeModule('ExpoNotificationScheduler') == null) return null;
+  } catch {
+    return null;
+  }
+  return loadNotifications();
+}
+
 /** 시뮬레이터·웹에서는 푸시 토큰이 발급되지 않는다. 부르기 전에 걸러 헛된 실패를 만들지 않는다. */
 export function isPushSupported(): boolean {
   return Platform.OS !== 'web' && Device.isDevice && hasPushNativeModules();
@@ -130,7 +144,8 @@ export async function getFcmToken(): Promise<string | null> {
 }
 
 /** 서버가 보내는 data payload. 탭했을 때 어디로 갈지는 이 값으로 정한다. */
-export type PushData = { facilityId?: string };
+/** facilityId: 서버 푸시(거부 경고) · url: 앱이 예약한 로컬 알림(퀘스트 저녁 알림)이 열 화면 */
+export type PushData = { facilityId?: string; url?: string };
 
 /**
  * 알림을 탭했을 때를 받는다. 앱이 떠 있을 때와 꺼져 있을 때가 경로가 달라 둘 다 다룬다.

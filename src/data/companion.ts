@@ -28,6 +28,7 @@ export type NewsKind =
   | 'checkup'
   | 'trip'
   | 'care'
+  | 'quest'
   | 'weather'
   | 'weather-off'
   | 'welcome'
@@ -91,6 +92,8 @@ export interface CompanionInput {
   eventsOn: (date: string) => CalendarEvent[];
   isMedTaken: (eventId: number, date: string) => boolean;
   weather: WeatherState;
+  /** 퀘스트 여정 — 상자가 도착했거나, 저녁인데 오늘 아직이면 한 번 말한다 */
+  quest?: { streak: number; doneToday: boolean; chestReady: boolean };
 }
 
 /* ───────── 한국어 조사 ───────── */
@@ -277,6 +280,47 @@ function upcomingNews(input: CompanionInput, today: string): CompanionMessage[] 
     }
   }
   return out;
+}
+
+/**
+ * 퀘스트 — **조르지 않는다.** 상자가 왔을 때(기쁜 소식)와, 이어 온 기록이 있는데 저녁이 되도록
+ * 오늘 아직일 때만 말한다. 기록이 없는 사람에게 매번 "퀘스트 하자"고 하면 홈이 잔소리가 된다.
+ */
+function questNews(input: CompanionInput): CompanionMessage[] {
+  const q = input.quest;
+  if (!q) return [];
+  if (q.chestReady)
+    return [
+      {
+        id: 'quest-chest',
+        kind: 'quest',
+        priority: 3,
+        petIds: [],
+        speaker: 'dog',
+        mood: 'happy',
+        tag: '간식 상자',
+        text: '오늘의 세 가지를 다 했어! 간식 상자가 도착했는데 같이 열어 볼래?',
+        actions: [{ kind: 'route', label: '상자 열기', href: '/quests' }],
+      },
+    ];
+  if (!q.doneToday && q.streak > 0 && input.now.getHours() >= 18)
+    return [
+      {
+        id: 'quest-streak',
+        kind: 'quest',
+        priority: 3,
+        petIds: [],
+        speaker: 'dog',
+        mood: 'idle',
+        tag: `${q.streak}일 연속`,
+        text: `오늘 하나만 하면 ${q.streak + 1}일 연속이야! 가고 싶은 곳 하나 판별해 볼까?`,
+        actions: [
+          { kind: 'route', label: '판별하러 가기', href: '/(tabs)/explore' },
+          { kind: 'route', label: '퀘스트', href: '/quests' },
+        ],
+      },
+    ];
+  return [];
 }
 
 /* ───────── 산책 날씨 ───────── */
@@ -498,7 +542,13 @@ export function buildCompanionQueue(input: CompanionInput, focusPetId: number | 
     ];
   }
 
-  const all = [...denialNews(input), ...vaccineNews(input), ...medNews(input, today), ...upcomingNews(input, today)];
+  const all = [
+    ...denialNews(input),
+    ...vaccineNews(input),
+    ...medNews(input, today),
+    ...upcomingNews(input, today),
+    ...questNews(input),
+  ];
   const news = all.filter(
     (m) => focusPetId === null || m.petIds.length === 0 || m.petIds.includes(focusPetId),
   );
