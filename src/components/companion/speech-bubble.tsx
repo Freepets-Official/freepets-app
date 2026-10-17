@@ -104,7 +104,7 @@ export function SpeechBubble({
           ) : null}
         </View>
 
-        <TypeText key={`${message.id}:${message.text}:${reduce}`} text={message.text} reduce={reduce} onDone={onTyped} color={p.ink} caret={p.accent} />
+        <TypeText key={`${message.id}:${reduce}`} text={message.text} reduce={reduce} onDone={onTyped} color={p.ink} caret={p.accent} />
 
         {message.chips?.length ? (
           <View style={styles.chips}>
@@ -119,6 +119,7 @@ export function SpeechBubble({
             })}
           </View>
         ) : null}
+        {message.credit ? <Text style={[styles.credit, { color: p.muted }]}>{message.credit}</Text> : null}
         </Pressable>
 
         {message.actions.length ? (
@@ -167,8 +168,10 @@ function TypeText({
   color: string;
   caret: string;
 }) {
-  // 글이 바뀌면 부모가 key로 새로 만든다 — 그래서 여기서는 0부터 세기만 하면 된다
+  // 다른 소식이면 부모가 key로 새로 만든다 — 그래서 여기서는 0부터 세기만 하면 된다.
+  // 같은 소식의 글만 바뀌면("23분 전" → "24분 전") 다시 타자를 치지 않고 바뀐 글을 그대로 보인다
   const [n, setN] = useState(reduce ? text.length : 0);
+  const [done, setDone] = useState(reduce);
   useEffect(() => {
     if (reduce) {
       onDone();
@@ -180,15 +183,17 @@ function TypeText({
       setN(i);
       if (i >= text.length) {
         clearInterval(timer);
+        setDone(true);
         onDone();
       }
     }, TYPE_MS);
     return () => clearInterval(timer);
-    // onDone은 부모가 매 렌더 새로 만든다 — 글이 바뀔 때만 다시 쓴다
+    // 한 번만 친다. onDone은 부모가 매 렌더 새로 만들고, 글이 조금 바뀌어도 다시 칠 필요가 없다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, reduce]);
+  }, []);
 
-  const typing = n < text.length;
+  const shown = done ? text.length : n;
+  const typing = shown < text.length;
   return (
     <View style={styles.textBox}>
       {/* 자리 잡기용 — 완성된 문장 높이만큼 미리 차지한다 */}
@@ -196,7 +201,7 @@ function TypeText({
         {text}
       </Text>
       <Text style={[styles.text, styles.typed, { color }]}>
-        {text.slice(0, n)}
+        {text.slice(0, shown)}
         {typing ? <Text style={{ color: caret }}>▍</Text> : null}
       </Text>
     </View>
@@ -223,6 +228,7 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: Radius.full },
   chipText: { fontSize: Type.caption, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  credit: { fontSize: Type.micro, marginTop: 7 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 11 },
   action: { height: 36, paddingHorizontal: 14, borderRadius: 18, justifyContent: 'center' },
   actionText: { fontSize: Type.body, fontWeight: '800' },

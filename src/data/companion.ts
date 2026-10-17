@@ -61,6 +61,8 @@ export interface CompanionMessage {
   actions: CompanionAction[];
   props?: WeatherProp[];
   chips?: WeatherChip[];
+  /** 자료 출처 — Open-Meteo는 CC BY 4.0이라 화면에 밝혀야 한다 */
+  credit?: string;
 }
 
 export interface DenialNews {
@@ -75,7 +77,8 @@ export interface DenialNews {
 
 export type WeatherState =
   | { status: 'ready'; data: WalkWeather }
-  | { status: 'no-permission' }
+  /** blocked: 다시 물을 수 없다(브라우저 주소창에서 막음 등) — 버튼 대신 방법을 말한다 */
+  | { status: 'no-permission'; blocked?: boolean }
   | { status: 'loading' }
   | { status: 'error' };
 
@@ -119,6 +122,8 @@ function addDays(d: Date, n: number): Date {
   x.setDate(x.getDate() + n);
   return x;
 }
+/** 시작한 기간 여행 — 오늘 출발은 "여행 중"이 아니라 "오늘 출발" */
+const isOngoingTrip = (e: CalendarEvent, today: string) => !!e.endDate && e.date < today && today <= e.endDate;
 const dayDiff = (from: string, to: string) =>
   Math.round((new Date(`${to}T00:00:00`).getTime() - new Date(`${from}T00:00:00`).getTime()) / 86400000);
 const monthDay = (date: string) => `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일`;
@@ -142,6 +147,9 @@ function ago(iso: string, now: Date): string {
   if (h < 24) return `${h}시간 전`;
   return `${Math.round(h / 24)}일 전`;
 }
+
+/** 이 값 이하만 아이별 첫 바퀴에 선다(거부·기한 지난 접종·오늘 할 일·오늘 검진) */
+const URGENT_MAX = 2;
 
 /* ───────── 소식 만들기 ───────── */
 
@@ -244,13 +252,15 @@ function upcomingNews(input: CompanionInput, today: string): CompanionMessage[] 
       }
       if (e.type === 'TRAVEL') {
         seen.add(e.eventId);
-        // 여행은 기간 일정이라 중간 날에도 걸린다. 시작일이 지났으면 "여행 중"이다
-        const ongoing = e.date <= today;
-        const dday = dayDiff(today, e.date);
+        // 기간 여행이 이미 시작됐으면 "여행 중"이다. 하루짜리 반복 여행은 시작일이 과거여도
+        // 이번 발생일(i일 뒤)을 기준으로 센다 — 시작일로 세면 다음 주 여행을 오늘 "여행 중"이라 한다
+        const ongoing = isOngoingTrip(e, today);
+        const dday = ongoing ? 0 : i;
         out.push({
           id: `trip-${e.eventId}`,
           kind: 'trip',
-          priority: ongoing ? 2 : 4,
+          // 떠나는 날·여행 중은 오늘 할 일이다
+          priority: ongoing || dday === 0 ? 2 : 4,
           petIds: e.petId !== null ? [e.petId] : [],
           speaker: 'dog',
           mood: 'happy',
@@ -310,7 +320,7 @@ export interface WalkAdvice {
  *
  * 개가 없는 집(고양이·새·토끼…)은 산책하지 않으니 같은 날씨를 **집 안 이야기**로 바꿔 말한다.
  */
-export function walkAdvice(w: WalkWeather, walkers: boolean): WalkAdvice {
+export function walkAdvice(w: WalkWeather, walkers: boolean, hour: number): WalkAdvice {
   const t = Math.round(w.temp);
   const feels = Math.round(w.feels);
   const s = sky(w.code, w.isDay);
@@ -379,16 +389,21 @@ export function walkAdvice(w: WalkWeather, walkers: boolean): WalkAdvice {
     verdict = 'caution';
     dog = '바람이 세게 불어. 작은 친구는 짧게만 걷자.';
     indoor = '바람 부는 날이야. 창문 틈 바람 조심!';
-  } else if (w.isDay && w.uvMax !== null && w.uvMax >= 8) {
+  } else if (w.isDay && hour < 15 && w.uvMax !== null && w.uvMax >= 8) {
+    // 하루 최고값이라 오후 늦게는 이미 지나간 이야기다
     verdict = 'caution';
     dog = '자외선이 아주 강해. 한낮은 피하고 아침저녁으로 걷자.';
     indoor = '햇살이 아주 강해. 창가 자리는 커튼으로 살짝 가려 줘.';
     props.push('sparkles');
   } else {
     const airWord = air === 0 ? ' 공기도 깨끗해' : '';
+    // 여기까지 온 하늘은 맑음·구름·흐림·안개뿐이다(비·눈·뇌우는 위에서 걸렀다)
+    const skyWord = ({ 맑음: '맑고', '구름 조금': '구름이 조금 있고', 흐림: '흐리고', 안개: '안개가 끼고' } as Record<string, string>)[s.label] ?? `${s.label}이고`;
     dog = w.isDay
-      ? `오늘 ${t}도에 ${s.label === '맑음' ? '맑고' : `${s.label}이고`}${airWord}! 산책하기 딱 좋은 날이야.`
-      : `선선한 밤이야${airWord ? ',' + airWord : ''}. 밝은 길로 가볍게 걷고 오자!`;
+      ? `오늘 ${t}도에 ${skyWord}${airWord}! 산책하기 딱 좋은 날이야.`
+      : feels >= 25
+        ? '후덥지근한 밤이야. 물 챙겨서 가볍게만 걷고 오자!'
+        : `선선한 밤이야${airWord ? ',' + airWord : ''}. 밝은 길로 가볍게 걷고 오자!`;
     indoor = w.isDay
       ? '햇살 좋은 날이야. 창가 자리 비워 두면 좋아할 거야.'
       : '조용한 밤이야. 오늘도 같이 놀아 줘서 고마워.';
@@ -416,6 +431,18 @@ function weatherNews(input: CompanionInput, scoped: Pet[]): CompanionMessage | n
   // 아직 아이가 없으면 대부분 강아지 보호자라 산책 쪽으로 말한다
   const walkers = scoped.length === 0 || scoped.some((p) => p.kind === 'DOG');
   const speaker: Speaker = walkers || scoped.length === 0 || scoped.some((p) => p.kind !== 'CAT') ? 'dog' : 'cat';
+  if (input.weather.status === 'no-permission' && input.weather.blocked)
+    return {
+      id: 'weather-off',
+      kind: 'weather-off',
+      priority: 7,
+      petIds: [],
+      speaker,
+      mood: 'idle',
+      tag: '오늘 날씨',
+      text: '위치가 막혀 있어서 날씨를 못 봤어. 주소창 옆 자물쇠에서 위치를 허용해 주면 알려 줄게!',
+      actions: [],
+    };
   if (input.weather.status === 'no-permission')
     return {
       id: 'weather-off',
@@ -431,7 +458,7 @@ function weatherNews(input: CompanionInput, scoped: Pet[]): CompanionMessage | n
       actions: [{ kind: 'enable-location', label: '위치 켜기' }],
     };
   if (input.weather.status !== 'ready') return null;
-  const a = walkAdvice(input.weather.data, walkers);
+  const a = walkAdvice(input.weather.data, walkers, input.now.getHours());
   return {
     id: 'weather',
     kind: 'weather',
@@ -444,6 +471,7 @@ function weatherNews(input: CompanionInput, scoped: Pet[]): CompanionMessage | n
     actions: [],
     props: a.props,
     chips: a.chips,
+    credit: '날씨 Open-Meteo.com · 대기질 CAMS',
   };
 }
 
@@ -486,7 +514,10 @@ export function buildCompanionQueue(input: CompanionInput, focusPetId: number | 
   const rest: CompanionMessage[] = [];
   for (const list of groups.values()) {
     const sorted = [...list].sort(byUrgency);
-    heads.push(sorted[0]);
+    // 여유 있는 소식(다음 달 접종 등)은 아이의 "첫 소식"이 될 자격이 없다 — 그게 앞에 서면
+    // 날씨가 밀리고 "급한 소식이 없어"라는 말도 사라진다
+    if (sorted[0].priority <= URGENT_MAX) heads.push(sorted[0]);
+    else rest.push(sorted[0]);
     rest.push(...sorted.slice(1));
   }
   heads.sort(byUrgency);
@@ -495,8 +526,8 @@ export function buildCompanionQueue(input: CompanionInput, focusPetId: number | 
   const queue = [...heads];
   const wx = weatherNews(input, scoped);
   if (wx) queue.splice(Math.min(1, queue.length), 0, wx);
-  queue.push(...rest);
 
+  // 급한 게 없으면 날씨 다음에 "오늘은 괜찮아"를 먼저 말하고, 여유 있는 소식은 그 뒤에
   if (heads.length === 0)
     queue.push({
       id: 'calm',
@@ -509,6 +540,7 @@ export function buildCompanionQueue(input: CompanionInput, focusPetId: number | 
       text: '오늘은 급한 소식이 없어! 갈 곳이 생기면 들어갈 수 있는지 먼저 판별해 줄게.',
       actions: [{ kind: 'route', label: '판별하러 가기', href: '/(tabs)/explore' }],
     });
+  queue.push(...rest);
 
   // 말풍선을 끝없이 넘기게 하지 않는다. 일곱 개를 넘는 소식은 알림 페이지에 있다
   return queue.slice(0, 7);
@@ -533,12 +565,11 @@ export interface NextSchedule {
  * 보여줘 다음 일정 자리로서 쓸모가 없다 — 약은 말풍선과 건강 타일이 이미 챙긴다.
  * 다른 일정이 하나도 없을 때만 매일 일정을 보여준다.
  */
-export function nextSchedule(
-  eventsOn: (date: string) => CalendarEvent[],
-  now: Date,
-  horizonDays = 60,
-): NextSchedule | null {
+export function nextSchedule(eventsOn: (date: string) => CalendarEvent[], now: Date): NextSchedule | null {
   const today = ymd(now);
+  // 스토어는 지난달·이번 달·다음 달 일정만 미리 받는다. 그 뒤까지 훑으면 아직 안 받은 달이
+  // 비어 보여 "일정 없음"이라고 거짓말을 한다 — 다음 달 말일까지만 본다
+  const horizonDays = dayDiff(today, ymd(new Date(now.getFullYear(), now.getMonth() + 2, 0)));
   const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   let firstAny: NextSchedule | null = null;
   let firstDaily: NextSchedule | null = null;
@@ -547,8 +578,8 @@ export function nextSchedule(
     const events = [...eventsOn(date)].sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
     for (const e of events) {
       if (e.type === 'TRAVEL') {
-        const ongoing = e.date <= today;
-        return { event: e, date: ongoing ? today : e.date, dday: ongoing ? 0 : dayDiff(today, e.date), isTrip: true, ongoing };
+        const ongoing = isOngoingTrip(e, today);
+        return { event: e, date: ongoing ? today : date, dday: ongoing ? 0 : i, isTrip: true, ongoing };
       }
       // 오늘 이미 지난 시각의 일정은 "다음" 일정이 아니다
       if (i === 0 && e.time && e.time < hhmm) continue;

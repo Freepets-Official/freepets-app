@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import { useCallback, useEffect, useState } from 'react';
-import { AppState, Linking } from 'react-native';
+import { AppState, Linking, Platform } from 'react-native';
 
 import type { WeatherState } from '@/data/companion';
 import type { Coords } from '@/lib/location';
@@ -25,12 +25,23 @@ export function useWalkWeather(enabled: boolean): { state: WeatherState; enable:
       try {
         let coords: Coords | null = lastCoords;
         if (!coords) {
-          const perm = ask
-            ? await Location.requestForegroundPermissionsAsync()
-            : await Location.getForegroundPermissionsAsync();
+          let perm = await Location.getForegroundPermissionsAsync();
+          if (!perm.granted && ask) {
+            // **묻기 전에** 이미 막혀 있는지 본다. 물은 직후의 canAskAgain은 iOS에서 방금 거절해도
+            // false라, 그걸 보고 설정을 열면 "허용 안 함"을 누르자마자 설정 앱이 튀어나온다
+            if (!perm.canAskAgain && Platform.OS !== 'web') {
+              void Linking.openSettings();
+              setState({ status: 'no-permission' });
+              return;
+            }
+            perm = await Location.requestForegroundPermissionsAsync();
+            // 웹은 canAskAgain이 늘 true라 브라우저가 막아도 알 수 없다 — 물어도 안 되면 막힌 것
+            if (!perm.granted && Platform.OS === 'web') {
+              setState({ status: 'no-permission', blocked: true });
+              return;
+            }
+          }
           if (!perm.granted) {
-            // 예전에 거절해서 더 묻지 못하면 버튼이 아무 일도 안 하는 것처럼 보인다 — 설정을 연다
-            if (ask && !perm.canAskAgain) void Linking.openSettings();
             setState({ status: 'no-permission' });
             return;
           }

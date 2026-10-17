@@ -83,28 +83,33 @@ function TileKey({ icon, label, color }: { icon: keyof typeof Ionicons.glyphMap;
 
 const EXAMPLES = ['강릉 안목해변', '애견 동반 카페', '제주 숙소', '한옥 마을'];
 
-/** 탐색 탭은 살아 있는 화면이라 같은 값으로 다시 보내면 반응하지 않는다 — 보낼 때마다 다른 표식 */
+/**
+ * 탐색 탭은 살아 있는 화면이라 같은 값으로 다시 보내면 반응하지 않는다 — 보낼 때마다 다른 표식.
+ * 시각을 섞는다: 웹은 새로고침하면 카운터가 1로 돌아가 주소에 남은 옛 값과 겹칠 수 있다.
+ */
 let nonce = 0;
-const nextNonce = () => String(++nonce);
+const nextNonce = () => `${Date.now()}-${++nonce}`;
 const QUICK: Category[] = ['CAFE', 'TOUR', 'STAY', 'RESTAURANT'];
 
-export function SearchTile({ order }: { order: number }) {
+export function SearchTile({ order, active }: { order: number; active: boolean }) {
   const p = usePalette();
   const router = useRouter();
   const reduce = useReducedMotion();
   const [i, setI] = useState(0);
   useEffect(() => {
-    // 검색 예시를 천천히 돌려 "무엇을 넣으면 되는지" 보여준다. 글자 단위로 치면 다시 그리기가 잦다
+    // 검색 예시를 천천히 돌려 "무엇을 넣으면 되는지" 보여준다. 글자 단위로 치면 다시 그리기가 잦다.
+    // 홈이 안 보이면 멈춘다
+    if (!active) return;
     const t = setInterval(() => setI((x) => x + 1), 2600);
     return () => clearInterval(t);
-  }, []);
+  }, [active]);
   const go = (params: Record<string, string>) =>
     router.push({ pathname: '/(tabs)/explore', params: { ...params, t: nextNonce() } });
 
   return (
     <Tile order={order}>
       <Pressable
-        onPress={() => go({ focus: 'search' })}
+        onPress={() => go({ focus: 'search', category: '' })}
         accessibilityRole="button"
         accessibilityLabel="장소를 검색해 출입 판별하기"
         style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
@@ -126,7 +131,7 @@ export function SearchTile({ order }: { order: number }) {
         {QUICK.map((c) => (
           <Pressable
             key={c}
-            onPress={() => go({ category: c })}
+            onPress={() => go({ category: c, focus: '' })}
             hitSlop={6}
             accessibilityRole="button"
             accessibilityLabel={`${CATEGORY_LABEL[c]} 찾기`}
@@ -146,6 +151,8 @@ export function SearchTile({ order }: { order: number }) {
 
 export interface HealthItem {
   kind: 'vaccine' | 'med';
+  /** 머리말 — 접종 지남 · 오늘 접종 · 다음 접종 · 오늘 약 */
+  label: string;
   /** 큰 글씨 — D+5 · D-3 · 오늘 */
   big: string;
   sub: string;
@@ -160,12 +167,12 @@ export function HealthTile({ order, item }: { order: number; item: HealthItem | 
     <Tile
       order={order}
       onPress={() => router.push('/(tabs)/calendar')}
-      label={item ? `${item.kind === 'med' ? '오늘 약' : '접종'} ${item.big}, ${item.sub}` : '건강 일정 없음'}
+      label={item ? `${item.label} ${item.big}, ${item.sub}` : '건강 일정 없음'}
       tint={item?.urgent ? p.dangerSoft : undefined}
       style={styles.half}>
         <TileKey
           icon={item?.kind === 'med' ? 'medical-outline' : 'medkit-outline'}
-          label={item ? (item.kind === 'med' ? '오늘 약' : item.urgent ? '접종 지남' : '다음 접종') : '건강 일정'}
+          label={item ? item.label : '건강 일정'}
           color={item?.urgent ? p.danger : undefined}
         />
         <Text style={[styles.big, { color: tint }]}>{item ? item.big : '여유'}</Text>

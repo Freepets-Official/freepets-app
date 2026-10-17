@@ -114,6 +114,12 @@ function BoilCopy({ frame, index, children }: { frame: SharedValue<number>; inde
   return <Layer style={style}>{children}</Layer>;
 }
 
+/**
+ * Android는 Svg 하나마다 화면 크기 비트맵을 따로 잡아(react-native-svg `SvgView`) 떨림용
+ * 복사본 3벌이 메모리를 크게 먹는다(층마다 ~1.8MB). Android에서는 떨림 없이 한 벌만 그린다.
+ */
+const BOIL_COPIES = Platform.OS === 'android' ? [0] : [0, 1, 2];
+
 function Boiled({
   frame,
   render,
@@ -121,9 +127,10 @@ function Boiled({
   frame: SharedValue<number>;
   render: (j: (d: string) => string) => ReactNode;
 }) {
+  if (BOIL_COPIES.length === 1) return <Layer>{render((d) => d)}</Layer>;
   return (
     <>
-      {[0, 1, 2].map((i) => (
+      {BOIL_COPIES.map((i) => (
         <BoilCopy key={i} frame={frame} index={i}>
           {render((d) => jitter(d, i))}
         </BoilCopy>
@@ -203,7 +210,7 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active 
       return;
     }
     frame.set(0);
-    frame.set(withRepeat(withTiming(3, { duration: 375, easing: Easing.linear }), -1, false));
+    if (BOIL_COPIES.length > 1) frame.set(withRepeat(withTiming(3, { duration: 375, easing: Easing.linear }), -1, false));
     breathe.set(withRepeat(withTiming(1, { duration: 1700, easing: Easing.inOut(Easing.sin) }), -1, true));
     const half = wagFast ? 170 : 340;
     dogTail.set(withRepeat(
@@ -393,7 +400,9 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active 
       onPointerMove={(e) => onPoint(e.nativeEvent.offsetX ?? 0, e.nativeEvent.offsetY ?? 0)}
       onPointerLeave={release}
       onTouchMove={(e: GestureResponderEvent) => onPoint(e.nativeEvent.locationX, e.nativeEvent.locationY)}
-      onTouchEnd={release}>
+      onTouchEnd={release}
+      // 마스코트 위에서 시작해 스크롤로 넘어가면 End가 아니라 Cancel이 온다
+      onTouchCancel={release}>
       {moving && Platform.OS !== 'web' ? <TiltGaze gx={gx} gy={gy} touching={touching} /> : null}
 
       {has('rain') && moving ? <Rain color={cc.rain} width={width} height={height} /> : null}
@@ -597,6 +606,9 @@ function TiltGaze({ gx, gy, touching }: { gx: SharedValue<number>; gy: SharedVal
       if (touching.get()) return;
       // 처음 잡은 기울기를 기준으로 삼는다 — 사람마다 폰을 드는 각도가 달라 절대값을 쓰면
       // 어떤 사람에게는 눈이 늘 한쪽에 몰려 있다
+      // 센서의 첫 값은 아직 측정 전의 0이다. 그걸 기준으로 잡으면 폰을 세워 든 것만으로
+      // 눈동자가 끝까지 몰린다 — 진짜 값이 들어올 때까지 건너뛴다
+      if (v.x === 0 && v.y === 0 && v.z === 0) return;
       const b = base.get() ?? { x: v.x, y: v.y };
       if (!base.get()) base.set(b);
       gx.set(Math.max(-3, Math.min(3, (v.x - b.x) * 0.9)));

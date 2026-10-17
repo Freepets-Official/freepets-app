@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useIsFocused, useRouter, useScrollToTop } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -49,6 +49,8 @@ import { useWalkWeather } from '@/hooks/use-walk-weather';
 import { haptic } from '@/lib/haptics';
 import { DENIAL_REASON_LABEL, useAppStore } from '@/store/app-store';
 
+/** 최근 판별 타일에 보여 줄 줄 수. 이름을 알아야 하므로 시설도 이만큼만 불러온다 */
+const RECENT_MAX = 4;
 /** 마스코트 그림의 가로. 말풍선 꼬리가 강아지·고양이를 가리키는 위치도 이 값에서 나온다 */
 const MASCOT_W = 280;
 /** 첫 소식은 짧게 보여주고 날씨로 넘어간다. 그 뒤는 천천히 */
@@ -106,7 +108,7 @@ export default function HomeScreen() {
    */
   const triedFacilities = useRef<Set<number>>(new Set());
   useEffect(() => {
-    for (const c of checks.slice(0, 5)) {
+    for (const c of checks.slice(0, RECENT_MAX)) {
       if (triedFacilities.current.has(c.facilityId)) continue;
       if (facilityById(c.facilityId)) continue;
       triedFacilities.current.add(c.facilityId);
@@ -168,13 +170,21 @@ export default function HomeScreen() {
   const [typedId, setTypedId] = useState<string | null>(null);
   const holdUntil = useRef(0);
 
+  // 화면 읽기 프로그램을 쓰는 중이면 저절로 넘기지 않는다 — 읽던 문장이 바뀌어 버린다(WCAG 2.2.2)
+  const [screenReader, setScreenReader] = useState(false);
+  useEffect(() => {
+    void AccessibilityInfo.isScreenReaderEnabled().then(setScreenReader);
+    const sub = AccessibilityInfo.addEventListener('screenReaderChanged', setScreenReader);
+    return () => sub.remove();
+  }, []);
+
   // 다 써지고 나서 몇 초 뒤 다음 소식. 홈이 안 보이면 넘기지 않는다
   useEffect(() => {
-    if (!focused || !msg || typedId !== msg.id || queue.length < 2) return;
+    if (!focused || screenReader || !msg || typedId !== msg.id || queue.length < 2) return;
     const delay = (idx === 0 ? FIRST_MS : NEXT_MS) + Math.max(0, holdUntil.current - Date.now());
     const t = setTimeout(() => setMsgId(queue[(idx + 1) % queue.length].id), delay);
     return () => clearTimeout(t);
-  }, [focused, msg, typedId, idx, queue]);
+  }, [focused, screenReader, msg, typedId, idx, queue]);
 
   const next = () => {
     if (queue.length < 2) return;
@@ -219,6 +229,7 @@ export default function HomeScreen() {
     const vaxItem: HealthItem | null = v
       ? {
           kind: 'vaccine',
+          label: v.dday < 0 ? '접종 지남' : v.dday === 0 ? '오늘 접종' : '다음 접종',
           big: v.dday < 0 ? `D+${-v.dday}` : v.dday === 0 ? '오늘' : `D-${v.dday}`,
           sub: `${v.pet.name} · ${Number(v.date.slice(5, 7))}.${Number(v.date.slice(8, 10))}`,
           urgent: v.dday <= 0,
@@ -227,6 +238,7 @@ export default function HomeScreen() {
     const medItem: HealthItem | null = med
       ? {
           kind: 'med',
+          label: '오늘 약',
           big: '오늘',
           sub: [
             med.petId !== null ? pets.find((x) => x.petId === med.petId)?.name : null,
@@ -255,7 +267,7 @@ export default function HomeScreen() {
 
   const recentRows = useMemo<RecentRow[]>(
     () =>
-      checks.slice(0, 4).map((c) => {
+      checks.slice(0, RECENT_MAX).map((c) => {
         // 스토어 캐시를 먼저 본다. 목 데이터에만 기대면 관광공사에서 온 실제 시설이
         // 전부 "알 수 없는 시설"로 뜬다 — 판별 이력은 대부분 그쪽이다.
         const facility = facilityById(c.facilityId) ?? FACILITIES.find((f) => f.facilityId === c.facilityId);
@@ -349,7 +361,7 @@ export default function HomeScreen() {
           </Animated.View>
 
           <View style={styles.bento}>
-            <SearchTile order={0} />
+            <SearchTile order={0} active={focused} />
             <View style={styles.pair}>
               <HealthTile order={1} item={health} />
               <ScheduleTile order={2} next={schedule} petName={scheduleOwner} />
