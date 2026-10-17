@@ -5,7 +5,6 @@ import Animated, {
   cancelAnimation,
   Easing,
   FadeIn,
-  FadeOut,
   SensorType,
   useAnimatedReaction,
   useAnimatedSensor,
@@ -373,7 +372,7 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active 
   };
 
   const sayPos = say?.who === 'cat' ? at(196, 6) : at(84, 2);
-  const burstPos = burst?.who === 'cat' ? at(184, 80) : at(90, 80);
+  const burstPos = burst?.who === 'cat' ? at(184, 34) : at(90, 26);
   const pupils = useMemo(
     () => (
       <>
@@ -402,6 +401,13 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active 
       <Layer>
         <Ellipse cx={136} cy={163} rx={104} ry={6} fill={ink} opacity={0.07} />
       </Layer>
+
+      {/* 발자국·하트는 그림 뒤에서 튀어나온다 — 앞에 그리면 얼굴에 얼룩처럼 묻는다 */}
+      {burst ? (
+        <View key={`burst-${burst.key}`} style={[styles.abs, styles.burst, burstPos]} pointerEvents="none">
+          {burst.kind === 'paw' ? <PawBurst color={p.accent} size={16} /> : <HeartBurst color={p.accent} />}
+        </View>
+      ) : null}
 
       {/* ── 강아지 ── */}
       <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: origin(90, 158) }, dogHopStyle]}>
@@ -541,18 +547,13 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active 
 
       {say ? (
         <Animated.View
-          key={say.key}
+          key={`say-${say.key}`}
+          // 사라질 때는 그냥 뺀다 — 웹에서 퇴장 애니메이션이 가끔 멈춰 글자가 남았다
           entering={reduce ? undefined : FadeIn.duration(120)}
-          exiting={reduce ? undefined : FadeOut.duration(200)}
           style={[styles.abs, sayPos]}
           pointerEvents="none">
           <Text style={[styles.say, { color: p.ink }]}>{say.text}</Text>
         </Animated.View>
-      ) : null}
-      {burst ? (
-        <View key={burst.key} style={[styles.abs, styles.burst, burstPos]} pointerEvents="none">
-          {burst.kind === 'paw' ? <PawBurst color={p.accent} size={16} /> : <HeartBurst color={p.accent} />}
-        </View>
       ) : null}
     </View>
   );

@@ -71,17 +71,17 @@ export function SpeechBubble({
           : { bg: p.surface, fg: p.ink };
 
   return (
-    <Pressable
-      onPress={onNext}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}. ${message.text}`}
-      accessibilityHint={total > 1 ? `${total}개 소식 중 ${index + 1}번째. 누르면 다음 소식` : undefined}
-      style={({ pressed }) => [
-        styles.bubble,
-        { backgroundColor: p.card, boxShadow: pressed ? clay.pressed : clay.rest, transform: [{ scale: pressed ? 0.985 : 1 }] },
-      ]}>
+    <View style={[styles.bubble, { backgroundColor: p.card, boxShadow: clay.rest }]}>
       <Animated.View pointerEvents="none" style={[styles.tail, { backgroundColor: p.card }, tailStyle]} />
       <Animated.View key={message.id} entering={reduce ? undefined : FadeIn.duration(200).easing(EASE_OUT)}>
+        {/* 말 부분을 누르면 다음 소식. 아래 행동 버튼은 이 버튼 밖에 둔다(버튼 속 버튼 금지) */}
+        <Pressable
+          onPress={onNext}
+          disabled={total < 2}
+          accessibilityRole="button"
+          accessibilityLabel={`${title}. ${message.text}`}
+          accessibilityHint={total > 1 ? `${total}개 소식 중 ${index + 1}번째. 누르면 다음 소식` : undefined}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
         <View style={styles.head}>
           {who.length ? (
             <PetAvatar pet={who[0]} size={22} />
@@ -119,6 +119,7 @@ export function SpeechBubble({
             })}
           </View>
         ) : null}
+        </Pressable>
 
         {message.actions.length ? (
           <View style={styles.actions}>
@@ -138,6 +139,7 @@ export function SpeechBubble({
         ) : null}
       </Animated.View>
 
+      {/* 몇 번째 소식인지 — 칩·버튼과 겹치지 않게 맨 아래 한 줄로 둔다 */}
       {total > 1 ? (
         <View style={styles.dots} pointerEvents="none">
           {Array.from({ length: total }).map((_, i) => (
@@ -148,7 +150,7 @@ export function SpeechBubble({
           ))}
         </View>
       ) : null}
-    </Pressable>
+    </View>
   );
 }
 
@@ -221,10 +223,10 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: Radius.full },
   chipText: { fontSize: Type.caption, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 11, paddingRight: 56 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 11 },
   action: { height: 36, paddingHorizontal: 14, borderRadius: 18, justifyContent: 'center' },
   actionText: { fontSize: Type.body, fontWeight: '800' },
-  dots: { position: 'absolute', right: 14, bottom: 15, flexDirection: 'row', gap: 4 },
+  dots: { flexDirection: 'row', justifyContent: 'flex-end', gap: 4, marginTop: 10, marginBottom: -3 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   dotOn: { width: 16 },
 });

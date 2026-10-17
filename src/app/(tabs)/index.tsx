@@ -242,7 +242,15 @@ export default function HomeScreen() {
     if (vaxItem?.urgent) return vaxItem;
     return medItem ?? vaxItem;
   }, [scoped, vax, eventsOn, isMedTaken, today, now, pets]);
-  const schedule = useMemo(() => nextSchedule(eventsOn, now), [eventsOn, now]);
+  // 아이를 골랐으면 그 아이 일정과 모두의 일정(여행 등)만 — 다른 아이 약이 뜨면 헷갈린다
+  const schedule = useMemo(
+    () =>
+      nextSchedule(
+        focusId === null ? eventsOn : (d) => eventsOn(d).filter((e) => e.petId === null || e.petId === focusId),
+        now,
+      ),
+    [eventsOn, now, focusId],
+  );
   const scheduleOwner = schedule?.event.petId != null ? pets.find((x) => x.petId === schedule.event.petId)?.name ?? null : null;
 
   const recentRows = useMemo<RecentRow[]>(

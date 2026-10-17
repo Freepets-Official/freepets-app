@@ -46,20 +46,25 @@ function Tile({
 }) {
   const p = usePalette();
   const clay = ClayShadow[useColorScheme()];
+  const surface = { backgroundColor: tint ?? p.card };
   return (
     <Animated.View entering={FadeInDown.delay(80 + order * 50).duration(300).easing(EASE_OUT)} style={style}>
-      <Pressable
-        onPress={onPress}
-        disabled={!onPress}
-        accessibilityRole={onPress ? 'button' : undefined}
-        accessibilityLabel={label}
-        style={({ pressed }) => [
-          styles.tile,
-          { backgroundColor: tint ?? p.card, boxShadow: pressed ? clay.pressed : clay.rest },
-          { transform: [{ scale: pressed ? 0.96 : 1 }] },
-        ]}>
-        {children}
-      </Pressable>
+      {onPress ? (
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          style={({ pressed }) => [
+            styles.tile,
+            surface,
+            { boxShadow: pressed ? clay.pressed : clay.rest, transform: [{ scale: pressed ? 0.96 : 1 }] },
+          ]}>
+          {children}
+        </Pressable>
+      ) : (
+        // 안에 따로 누르는 것이 있는 타일은 통째로 버튼이면 안 된다(웹에서 버튼 속 버튼)
+        <View style={[styles.tile, surface, { boxShadow: clay.rest }]}>{children}</View>
+      )}
     </Animated.View>
   );
 }
@@ -97,7 +102,12 @@ export function SearchTile({ order }: { order: number }) {
     router.push({ pathname: '/(tabs)/explore', params: { ...params, t: nextNonce() } });
 
   return (
-    <Tile order={order} onPress={() => go({ focus: 'search' })} label="장소를 검색해 출입 판별하기">
+    <Tile order={order}>
+      <Pressable
+        onPress={() => go({ focus: 'search' })}
+        accessibilityRole="button"
+        accessibilityLabel="장소를 검색해 출입 판별하기"
+        style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.98 : 1 }] })}>
       <TileKey icon="shield-checkmark-outline" label="출입 판별" />
       <Text style={[styles.question, { color: p.ink }]}>어디 갈까요?</Text>
       <View style={[styles.input, { backgroundColor: p.surface }]}>
@@ -111,6 +121,7 @@ export function SearchTile({ order }: { order: number }) {
           <Ionicons name="arrow-forward" size={18} color={p.onAccent} />
         </View>
       </View>
+      </Pressable>
       <View style={styles.cats}>
         {QUICK.map((c) => (
           <Pressable
@@ -154,7 +165,7 @@ export function HealthTile({ order, item }: { order: number; item: HealthItem | 
       style={styles.half}>
         <TileKey
           icon={item?.kind === 'med' ? 'medical-outline' : 'medkit-outline'}
-          label={item ? (item.kind === 'med' ? '오늘 약' : '접종 기한') : '건강 일정'}
+          label={item ? (item.kind === 'med' ? '오늘 약' : item.urgent ? '접종 지남' : '다음 접종') : '건강 일정'}
           color={item?.urgent ? p.danger : undefined}
         />
         <Text style={[styles.big, { color: tint }]}>{item ? item.big : '여유'}</Text>
@@ -169,6 +180,7 @@ export function HealthTile({ order, item }: { order: number; item: HealthItem | 
 
 export function ScheduleTile({ order, next, petName }: { order: number; next: NextSchedule | null; petName: string | null }) {
   const p = usePalette();
+  const scheme = useColorScheme();
   const router = useRouter();
   if (!next) {
     return (
@@ -183,6 +195,8 @@ export function ScheduleTile({ order, next, petName }: { order: number; next: Ne
     );
   }
   const meta = CAL_EVENT_META[next.event.type];
+  // 일정 종류 색의 연한 바탕은 라이트용이라 다크에서 번쩍인다 — 다크는 면 색 위에 아이콘 색만
+  const iconBg = scheme === 'dark' ? p.surface : meta.soft;
   const big = next.ongoing ? '여행 중' : next.dday === 0 ? '오늘' : next.dday === 1 ? '내일' : `D-${next.dday}`;
   const sub = [next.event.title, next.event.time ? clockWord(next.event.time) : null, petName].filter(Boolean).join(' · ');
   return (
@@ -192,7 +206,7 @@ export function ScheduleTile({ order, next, petName }: { order: number; next: Ne
       label={`${next.isTrip ? '다음 여행' : '다음 일정'} ${big}, ${sub}`}
       style={styles.half}>
       <TileKey icon={next.isTrip ? 'airplane-outline' : 'calendar-outline'} label={next.isTrip ? '다음 여행' : '다음 일정'} />
-      <View style={[styles.badgeIcon, { backgroundColor: meta.soft }]}>
+      <View style={[styles.badgeIcon, { backgroundColor: iconBg }]}>
         <Ionicons name={meta.icon as keyof typeof Ionicons.glyphMap} size={19} color={meta.color} />
       </View>
       <Text style={[styles.big, { color: p.ink }]} numberOfLines={1}>
@@ -217,10 +231,10 @@ export function StampTile({ order, count }: { order: number; count: number }) {
         {count}
         <Text style={[styles.unit, { color: p.ink }]}> 개 지역</Text>
       </Text>
-      <Text style={[styles.sub, { color: p.muted }]}>{count > 0 ? '도장첩 열어 보기' : '다녀온 곳에서 첫 도장을 찍어요'}</Text>
-      <View style={styles.stampDeco} pointerEvents="none">
-        <Ionicons name="paw" size={34} color={p.accent} style={{ opacity: 0.16 }} />
+      <View style={[styles.badgeIcon, { backgroundColor: p.accentSoft }]} pointerEvents="none">
+        <Ionicons name="paw" size={19} color={p.accentDark} />
       </View>
+      <Text style={[styles.sub, { color: p.muted }]}>{count > 0 ? '도장첩 열어 보기' : '첫 도장을 찍어 보세요'}</Text>
     </Tile>
   );
 }
@@ -266,7 +280,7 @@ export function QuestTile({ order, progress }: { order: number; progress: { left
         {progress && progress.left > 0 ? <Text style={[styles.unit, { color: p.ink }]}> 개 남음</Text> : null}
       </Text>
       <Text style={[styles.sub, { color: p.muted }]}>
-        {progress ? `${progress.total}개 중 ${done}개 완료` : '퀘스트를 불러오는 중'}
+        {progress ? `${progress.total}개 중 ${done}개 완료` : '눌러서 오늘 할 일 보기'}
       </Text>
     </Tile>
   );
@@ -349,9 +363,10 @@ export function RecentTile({
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  half: { flex: 1 },
+  // 반 칸 타일은 숫자 하나가 크게 들어가 키를 맞춘다. 목록·검색 타일은 내용만큼
+  half: { flex: 1, minHeight: 128 },
   // 반 칸 타일 둘이 나란히 놓일 때 키가 같아야 해서 남는 높이를 채운다
-  tile: { flexGrow: 1, borderRadius: 26, padding: 15, minHeight: 128, overflow: 'hidden' },
+  tile: { flexGrow: 1, borderRadius: 26, padding: 15, overflow: 'hidden' },
   key: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   keyText: { fontSize: Type.footnote, fontWeight: '800' },
   question: { fontSize: 21, fontWeight: '800', letterSpacing: -0.5, marginTop: 3 },
@@ -391,7 +406,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stampDeco: { position: 'absolute', right: 10, bottom: 8, transform: [{ rotate: '-14deg' }] },
   ring: { position: 'absolute', right: 12, top: 12 },
   listHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 },
   listTitle: { fontSize: Type.cardTitle, fontWeight: '800', letterSpacing: -0.3 },
