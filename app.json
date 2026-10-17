@@ -70,7 +70,7 @@
       [
         "expo-notifications",
         {
-          "color": "#E86397",
+          "color": "#DB7850",
           "defaultChannel": "default"
         }
       ],

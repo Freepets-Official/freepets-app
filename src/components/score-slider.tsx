@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     borderWidth: 3,
     marginLeft: -11,
-    // 핑크 기운 그림자로 살짝 떠 보이게
-    boxShadow: '0 2px 6px rgba(232, 99, 151, 0.3)',
+    // 메인 색 기운 그림자로 살짝 떠 보이게
+    boxShadow: '0 2px 6px rgba(219, 120, 80, 0.3)',
   },
 });

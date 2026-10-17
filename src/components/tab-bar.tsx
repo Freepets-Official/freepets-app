@@ -124,9 +124,9 @@ export function GlassTabBar(props: TabBarProps) {
           styles.bar,
           {
             borderColor: p.line,
-            // 다크는 배경(#15121A)보다 더 가라앉힌다. 바탕이 어두울수록 로즈핑크
+            // 다크는 배경(#15110E)보다 더 가라앉힌다. 바탕이 어두울수록 살구색
             // 활성 탭이 또렷해지고, 비활성 회색도 대비를 얻는다.
-            backgroundColor: scheme === 'dark' ? 'rgba(12,10,16,0.88)' : 'rgba(255,255,255,0.72)',
+            backgroundColor: scheme === 'dark' ? 'rgba(13,10,8,0.88)' : 'rgba(255,255,255,0.72)',
           },
         ]}>
         {state.routes.map((route, index) => {
@@ -166,8 +166,8 @@ const styles = StyleSheet.create({
     right: 16,
     bottom: Platform.select({ ios: 26, default: 16 }),
     borderRadius: Radius.full,
-    // 핑크 기운의 소프트 섀도우로 떠 있는 유리 느낌
-    boxShadow: '0 10px 30px rgba(42, 37, 48, 0.14)',
+    // 웜 블랙의 소프트 섀도우로 떠 있는 유리 느낌
+    boxShadow: '0 10px 30px rgba(45, 38, 34, 0.14)',
   },
   bar: {
     flexDirection: 'row',

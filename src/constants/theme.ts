@@ -1,21 +1,27 @@
 import '@/global.css';
 
 /**
- * 반갑꼬리 디자인 토큰 — 라이트(화이트 + 파스텔 로즈핑크) / 다크(웜 다크 + 로즈핑크).
+ * 반갑꼬리 디자인 토큰 — 라이트(따뜻한 흰 바탕 + 파스텔 살구) / 다크(웜 다크 + 살구).
+ *
+ * 2026-10 메인 색을 로즈핑크에서 살구로 바꿨다. 사용자가 "파스텔톤의 부드럽고 따뜻한 색"을
+ * 원했고, 살구 `#DB7850`은 흰 바탕 대비가 3.0으로 예전 핑크(3.15)와 거의 같아 핑크가 쓰이던
+ * 자리(글자·아이콘·흰 글씨 버튼)에 그대로 들어간다. 더 연한 살구는 글자로 읽히지 않는다.
+ * 판별 의미색(초록·앰버·빨강)과 헷갈리지 않게 칠 배경(`accentSoft`)은 노랑기가 아니라
+ * 분홍기 도는 살구로 뒀다 — 조건부의 `warnSoft`(노란 크림)와 나란히 놓여도 구분된다.
  * 실제 적용 팔레트는 설정의 화면 모드(라이트·다크·자동)로 결정된다(`hooks/use-theme`).
  * 판별 결과는 의미색으로 인코딩: 가능(초록) / 조건부(앰버) / 불가(빨강 채운 배경).
  */
 export const Palette = {
   light: {
     bg: '#FFFFFF',
-    surface: '#FFF6FA', // 살짝 핑크빛 도는 면 — 회색보다 따뜻하고 귀엽게
+    surface: '#FFF6EF', // 살구빛 도는 면 — 회색보다 따뜻하고 귀엽게
     card: '#FFFFFF',
-    ink: '#2A2530', // 핑크 기운의 웜 블랙
-    muted: '#8C8591',
-    line: '#F1E6EC', // 핑크빛 보더
-    accent: '#E86397', // 로즈핑크 — 흰 배경에서 읽히는 파스텔
-    accentDark: '#CE4E80',
-    accentSoft: '#FDEAF2', // 배지·칠 배경
+    ink: '#2D2622', // 갈색 기운의 웜 블랙
+    muted: '#8C8079',
+    line: '#F1E4DA', // 살구빛 보더
+    accent: '#DB7850', // 살구 — 흰 배경에서 읽히는 가장 연한 값
+    accentDark: '#BC5F38', // 작은 글씨용. 흰 바탕 대비 4.3
+    accentSoft: '#FDE8DE', // 배지·칠 배경
     onAccent: '#FFFFFF',
     // 동반 가능 — 진한 초록 볼드 글씨 + 연초록 배경
     success: '#0F7D45',
@@ -32,18 +38,19 @@ export const Palette = {
     // 달력의 토요일. 일요일은 danger(빨강)를 쓰는데 토요일만 팔레트 밖 값이 박혀 있었다
     saturday: '#4C8DF5',
   },
-  // 다크 테마 — 웜 다크(살짝 보라·핑크 기운) 그라운드에 같은 로즈핑크 액센트.
-  // 의미색은 어두운 배경에서 읽히도록 톤을 올렸다.
+  // 다크 테마 — 웜 다크(갈색 기운) 그라운드에 한 톤 밝힌 살구 액센트.
+  // 라이트 값 그대로면 어두운 바탕에서 탁해 보여 밝혔다. 흰 글씨 버튼 대비는 2.6으로
+  // 굵은 버튼 글씨에만 쓴다. 의미색은 어두운 배경에서 읽히도록 톤을 올렸다.
   dark: {
-    bg: '#15121A',
-    surface: '#211C28', // 면 — bg보다 한 톤 밝게
-    card: '#1D1824',
-    ink: '#F3EEF5', // 웜 화이트
-    muted: '#9C94A4',
-    line: '#342C3C',
-    accent: '#E86397', // 라이트와 동일 — 흰 글씨 버튼 대비 유지
-    accentDark: '#CE4E80',
-    accentSoft: '#3A2130', // 배지·칠(다크 핑크 틴트)
+    bg: '#15110E',
+    surface: '#221B16', // 면 — bg보다 한 톤 밝게
+    card: '#1D1713',
+    ink: '#F5EEE8', // 웜 화이트
+    muted: '#A3978E',
+    line: '#3A2F27',
+    accent: '#E8906A',
+    accentDark: '#F0A584', // 다크에서는 "진한" 쪽이 더 밝아야 읽힌다
+    accentSoft: '#3D271C', // 배지·칠(다크 살구 틴트)
     onAccent: '#FFFFFF',
     success: '#46C978',
     successSoft: '#16311F',
@@ -108,8 +115,8 @@ export const Radius = { sm: 12, md: 16, lg: 20, xl: 26, full: 999 } as const;
 
 export const Spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 
-/** 카드 그림자 — 핑크 기운의 아주 옅은 소프트 섀도우 */
-export const CardShadow = { boxShadow: '0 8px 22px rgba(232, 99, 151, 0.08)' } as const;
+/** 카드 그림자 — 살구 기운의 아주 옅은 소프트 섀도우 */
+export const CardShadow = { boxShadow: '0 8px 22px rgba(219, 120, 80, 0.10)' } as const;
 
 export const MaxContentWidth = 620;
 
@@ -121,16 +128,42 @@ export const MaxContentWidth = 620;
  * 값을 그대로 옮겼다.
  */
 export const LevelUpColors = {
-  pink: '#FF8FB1', // 도장 테두리·원형 글자·퍼지는 고리
-  peach: '#FFB38A', // 발자국·하트의 짝 색, 도장 속 발바닥
-  stampInk: '#FF7FA3', // 도장 가운데 "Lv.N"
-  stampPaper: '#FFF7F9',
-  dotted: '#FFC2D3', // 안쪽 점선 원
+  // 이름은 예전 그대로 둔다(`pink`). 메인 색이 살구로 바뀌어 값만 살구 계열로 옮겼다
+  pink: '#F29A72', // 도장 테두리·원형 글자·퍼지는 고리
+  peach: '#FFC48A', // 발자국·하트의 짝 색, 도장 속 발바닥
+  stampInk: '#E8825A', // 도장 가운데 "Lv.N"
+  stampPaper: '#FFF8F2',
+  dotted: '#FFD3BE', // 안쪽 점선 원
   title: '#5A3D34',
   subtitle: '#8A6A5E',
   outline: '#FFFFFF',
-  shadow: 'rgba(255,127,163,0.28)',
+  shadow: 'rgba(232,130,90,0.28)',
 } as const;
 
 /** 레벨업 연출 글꼴 — `assets/fonts`에 번들(OFL). 이름은 폰트의 PostScript 이름과 같게 맞췄다 */
 export const LevelUpFonts = { ko: 'Jua-Regular', latin: 'Fredoka-Bold' } as const;
+
+/**
+ * 홈 「꼬리 친구」(강아지·고양이 손그림) 색.
+ *
+ * 선과 몸통은 테마의 `ink`·`card`를 그대로 쓰고, 볼터치·혀·소품만 여기서 정한다.
+ * 다크에서 라이트 값을 그대로 쓰면 볼터치가 형광처럼 떠 보여 한 톤 가라앉혔다.
+ */
+export const CompanionColors = {
+  light: {
+    blush: '#FFC9B0',
+    tongue: '#F7A58A',
+    scarf: '#F4B08F',
+    umbrella: '#FFD8C4',
+    rain: '#8EC3E8',
+    sun: '#F5B83D',
+  },
+  dark: {
+    blush: '#8C4F3A',
+    tongue: '#C9705A',
+    scarf: '#B4694A',
+    umbrella: '#7A4A36',
+    rain: '#7FB2D9',
+    sun: '#F2C14E',
+  },
+} as const;
