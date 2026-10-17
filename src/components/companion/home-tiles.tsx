@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated, {
@@ -8,13 +8,19 @@ import Animated, {
   FadeIn,
   FadeInDown,
   useAnimatedProps,
+  useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withDelay,
   withTiming,
+  type SharedValue,
+  type WithTimingConfig,
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 
 import { ResultBadge } from '@/components/badge';
+import { TiltPressable } from '@/components/motion/tilt-pressable';
+import { PawBurst } from '@/components/paw-burst';
 import { Text } from '@/components/text';
 import { ClayShadow, Radius, Spacing, Type } from '@/constants/theme';
 import { clockWord, type NextSchedule } from '@/data/companion';
@@ -22,6 +28,7 @@ import { CAL_EVENT_META, CATEGORY_LABEL, type Category, type CheckResult } from 
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
+const SLAM = Easing.bezier(0.2, 0.8, 0.2, 1);
 
 /**
  * 눌리는 점토 타일. 누르면 0.96으로 들어가고(120ms), 놓으면 ease-out으로 돌아온다.
@@ -50,17 +57,15 @@ function Tile({
   return (
     <Animated.View entering={FadeInDown.delay(80 + order * 50).duration(300).easing(EASE_OUT)} style={style}>
       {onPress ? (
-        <Pressable
+        // 누른 자리 쪽으로 3D로 눌려 들어간다(점토를 누르는 손맛). 눌린 동안 바닥 그림자가 줄어든다
+        <TiltPressable
           onPress={onPress}
           accessibilityRole="button"
           accessibilityLabel={label}
-          style={({ pressed }) => [
-            styles.tile,
-            surface,
-            { boxShadow: pressed ? clay.pressed : clay.rest, transform: [{ scale: pressed ? 0.96 : 1 }] },
-          ]}>
+          containerStyle={styles.grow}
+          style={(pressed) => [styles.tile, surface, { boxShadow: pressed ? clay.pressed : clay.rest }]}>
           {children}
-        </Pressable>
+        </TiltPressable>
       ) : (
         // 안에 따로 누르는 것이 있는 타일은 통째로 버튼이면 안 된다(웹에서 버튼 속 버튼)
         <View style={[styles.tile, surface, { boxShadow: clay.rest }]}>{children}</View>
@@ -69,11 +74,46 @@ function Tile({
   );
 }
 
-function TileKey({ icon, label, color }: { icon: keyof typeof Ionicons.glyphMap; label: string; color?: string }) {
+/**
+ * 타일마다 **한 번만** 재생하는 작은 동작. 등장이 끝날 즈음(타일 순서만큼 늦게) 시작한다.
+ * 계속 움직이면 홈이 산만해진다 — 뜻이 있는 순간에 한 번(도장 쾅, 비행기 착륙, 두근)만.
+ */
+function useOnce(
+  order: number,
+  enabled: boolean,
+  duration: number,
+  easing: WithTimingConfig['easing'] = EASE_OUT,
+): SharedValue<number> {
+  const reduce = useReducedMotion();
+  // 0 → 1. 동작 줄이기면 처음부터 끝 상태(1)
+  const v = useSharedValue(reduce ? 1 : 0);
+  useEffect(() => {
+    if (!enabled || reduce) {
+      v.set(1);
+      return;
+    }
+    v.set(withDelay(380 + order * 50, withTiming(1, { duration, easing })));
+  }, [enabled, reduce, order, duration, easing, v]);
+  return v;
+}
+
+function TileKey({
+  icon,
+  label,
+  color,
+  iconStyle,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  color?: string;
+  iconStyle?: ComponentProps<typeof Animated.View>['style'];
+}) {
   const p = usePalette();
   return (
     <View style={styles.key}>
-      <Ionicons name={icon} size={15} color={color ?? p.muted} />
+      <Animated.View style={iconStyle}>
+        <Ionicons name={icon} size={15} color={color ?? p.muted} />
+      </Animated.View>
       <Text style={[styles.keyText, { color: color ?? p.muted }]}>{label}</Text>
     </View>
   );
@@ -103,6 +143,11 @@ export function SearchTile({ order, active }: { order: number; active: boolean }
     const t = setInterval(() => setI((x) => x + 1), 2600);
     return () => clearInterval(t);
   }, [active]);
+  // 화살표가 두 번 콕콕 — "여기를 누르면 된다"는 신호. 처음 한 번만
+  const nudge = useOnce(order + 8, true, 900, Easing.linear);
+  const nudgeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: Math.max(0, Math.sin(nudge.value * Math.PI * 4)) * 5 * (1 - nudge.value * 0.3) }],
+  }));
   const go = (params: Record<string, string>) =>
     router.push({ pathname: '/(tabs)/explore', params: { ...params, t: nextNonce() } });
 
@@ -123,7 +168,9 @@ export function SearchTile({ order, active }: { order: number; active: boolean }
           </Text>
         </Animated.View>
         <View style={[styles.go, { backgroundColor: p.accent }]}>
-          <Ionicons name="arrow-forward" size={18} color={p.onAccent} />
+          <Animated.View style={nudgeStyle}>
+            <Ionicons name="arrow-forward" size={18} color={p.onAccent} />
+          </Animated.View>
         </View>
       </View>
       </Pressable>
@@ -163,6 +210,13 @@ export function HealthTile({ order, item }: { order: number; item: HealthItem | 
   const p = usePalette();
   const router = useRouter();
   const tint = item?.urgent ? p.danger : p.ink;
+  const beat = useOnce(order, !!item?.urgent, 900, Easing.linear);
+  // 두근두근 — 0~1 동안 두 번 부풀었다 돌아온다
+  const beatStyle = useAnimatedStyle(() => {
+    const k = beat.value;
+    const pulse = Math.max(0, Math.sin(k * Math.PI * 2 * 2));
+    return { transform: [{ scale: 1 + (k < 1 ? pulse * 0.28 : 0) }] };
+  });
   return (
     <Tile
       order={order}
@@ -174,6 +228,7 @@ export function HealthTile({ order, item }: { order: number; item: HealthItem | 
           icon={item?.kind === 'med' ? 'medical-outline' : 'medkit-outline'}
           label={item ? item.label : '건강 일정'}
           color={item?.urgent ? p.danger : undefined}
+          iconStyle={beatStyle}
         />
         <Text style={[styles.big, { color: tint }]}>{item ? item.big : '여유'}</Text>
         <Text style={[styles.sub, { color: item?.urgent ? p.danger : p.muted }]} numberOfLines={2}>
@@ -189,6 +244,19 @@ export function ScheduleTile({ order, next, petName }: { order: number; next: Ne
   const p = usePalette();
   const scheme = useColorScheme();
   const router = useRouter();
+  // 여행이면 비행기가 왼쪽 아래에서 미끄러져 내려앉고, 하루 이틀 남은 일정은 아이콘이 톡톡 흔들린다
+  const trip = !!next?.isTrip;
+  const soon = !!next && !next.isTrip && next.dday <= 1;
+  const v = useOnce(order, trip || soon, trip ? 700 : 520);
+  const iconMotion = useAnimatedStyle(() => {
+    const k = v.value;
+    if (trip)
+      return {
+        opacity: Math.min(1, k * 2),
+        transform: [{ translateX: -18 * (1 - k) }, { translateY: 10 * (1 - k) }, { rotate: `${-18 * (1 - k)}deg` }],
+      };
+    return { transform: [{ rotate: `${Math.sin(k * Math.PI * 4) * 10 * (1 - k)}deg` }] };
+  });
   if (!next) {
     return (
       <Tile order={order} onPress={() => router.push('/calendar-event')} label="일정 추가하기" style={styles.half}>
@@ -214,7 +282,9 @@ export function ScheduleTile({ order, next, petName }: { order: number; next: Ne
       style={styles.half}>
       <TileKey icon={next.isTrip ? 'airplane-outline' : 'calendar-outline'} label={next.isTrip ? '다음 여행' : '다음 일정'} />
       <View style={[styles.badgeIcon, { backgroundColor: iconBg }]}>
-        <Ionicons name={meta.icon as keyof typeof Ionicons.glyphMap} size={19} color={meta.color} />
+        <Animated.View style={iconMotion}>
+          <Ionicons name={meta.icon as keyof typeof Ionicons.glyphMap} size={19} color={meta.color} />
+        </Animated.View>
       </View>
       <Text style={[styles.big, { color: p.ink }]} numberOfLines={1}>
         {big}
@@ -231,6 +301,13 @@ export function ScheduleTile({ order, next, petName }: { order: number; next: Ne
 export function StampTile({ order, count }: { order: number; count: number }) {
   const p = usePalette();
   const router = useRouter();
+  // 모은 도장이 있으면 도장이 위에서 "쾅" 찍힌다(1.7배 → 살짝 눌림 → 제자리, 비뚤게)
+  const v = useOnce(order, count > 0, 360, SLAM);
+  const stamp = useAnimatedStyle(() => {
+    const k = v.value;
+    const s = k < 0.6 ? 1.7 - (0.75 * k) / 0.6 : 0.95 + (0.05 * (k - 0.6)) / 0.4;
+    return { opacity: Math.min(1, k * 3), transform: [{ scale: s }, { rotate: `${-8 * k}deg` }] };
+  });
   return (
     <Tile order={order} onPress={() => router.push('/stamps')} label={`여권 도장 ${count}개 지역`} style={styles.half}>
       <TileKey icon="flag-outline" label="여권 도장" />
@@ -238,9 +315,9 @@ export function StampTile({ order, count }: { order: number; count: number }) {
         {count}
         <Text style={[styles.unit, { color: p.ink }]}> 개 지역</Text>
       </Text>
-      <View style={[styles.badgeIcon, { backgroundColor: p.accentSoft }]} pointerEvents="none">
-        <Ionicons name="paw" size={19} color={p.accentDark} />
-      </View>
+      <Animated.View style={[styles.badgeIcon, styles.stampMark, { borderColor: p.accent }, stamp]} pointerEvents="none">
+        <Ionicons name="paw" size={18} color={p.accent} />
+      </Animated.View>
       <Text style={[styles.sub, { color: p.muted }]}>{count > 0 ? '도장첩 열어 보기' : '첫 도장을 찍어 보세요'}</Text>
     </Tile>
   );
@@ -260,6 +337,8 @@ export function QuestTile({ order, progress }: { order: number; progress: { left
     v.set(withTiming(ratio, { duration: 900, easing: EASE_OUT }));
   }, [ratio, v]);
   const ringProps = useAnimatedProps(() => ({ strokeDashoffset: RING_C * (1 - v.value) }));
+  const complete = !!progress && progress.total > 0 && progress.left === 0;
+  const reduce = useReducedMotion();
   return (
     <Tile
       order={order}
@@ -273,7 +352,7 @@ export function QuestTile({ order, progress }: { order: number; progress: { left
           cx={25}
           cy={25}
           r={RING_R}
-          stroke={p.accent}
+          stroke={complete ? p.success : p.accent}
           strokeWidth={6}
           fill="none"
           strokeLinecap="round"
@@ -282,6 +361,13 @@ export function QuestTile({ order, progress }: { order: number; progress: { left
           transform="rotate(-90 25 25)"
         />
       </Svg>
+      {complete ? (
+        <View style={styles.ringCheck} pointerEvents="none">
+          <Ionicons name="checkmark" size={22} color={p.success} />
+          {/* 다 끝낸 날엔 고리에서 발자국이 퍼진다(홈을 처음 그릴 때 한 번) */}
+          {!reduce ? <PawBurst color={p.success} size={12} /> : null}
+        </View>
+      ) : null}
       <Text style={[styles.big, { color: p.ink }]}>
         {progress === null ? '–' : progress.left === 0 ? '완료' : progress.left}
         {progress && progress.left > 0 ? <Text style={[styles.unit, { color: p.ink }]}> 개 남음</Text> : null}
@@ -372,6 +458,9 @@ const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   // 반 칸 타일은 숫자 하나가 크게 들어가 키를 맞춘다. 목록·검색 타일은 내용만큼
   half: { flex: 1, minHeight: 128 },
+  grow: { flexGrow: 1 },
+  // 도장 — 잉크 테두리 원
+  stampMark: { borderWidth: 2, borderRadius: 20, borderStyle: 'dashed' },
   // 반 칸 타일 둘이 나란히 놓일 때 키가 같아야 해서 남는 높이를 채운다
   tile: { flexGrow: 1, borderRadius: 26, padding: 15, overflow: 'hidden' },
   key: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -414,6 +503,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ring: { position: 'absolute', right: 12, top: 12 },
+  ringCheck: { position: 'absolute', right: 12, top: 12, width: 50, height: 50, alignItems: 'center', justifyContent: 'center' },
   listHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 2 },
   listTitle: { fontSize: Type.cardTitle, fontWeight: '800', letterSpacing: -0.3 },
   listCount: { fontSize: Type.caption, fontWeight: '600' },

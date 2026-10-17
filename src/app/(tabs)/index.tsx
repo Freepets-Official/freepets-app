@@ -1,7 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useIsFocused, useRouter, useScrollToTop } from 'expo-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { AccessibilityInfo, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  AccessibilityInfo,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -10,10 +19,16 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useScrollOffset,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CompanionMascot } from '@/components/companion/mascot';
+import { PingDot } from '@/components/motion/ping-dot';
 import {
   HealthTile,
   QuestTile,
@@ -24,11 +39,10 @@ import {
   type HealthItem,
   type RecentRow,
 } from '@/components/companion/home-tiles';
+import { PassportBook } from '@/components/companion/passport-book';
 import { SpeechBubble } from '@/components/companion/speech-bubble';
-import { GameCardFx } from '@/components/game-card-fx';
 import { GuestScreen } from '@/components/guest-prompt';
 import { PetAvatar } from '@/components/pet-avatar';
-import { PetIdCard } from '@/components/pet-id-card';
 import { QuestScrollIcon } from '@/components/quest-scroll-icon';
 import { useTabChrome } from '@/components/tab-bar';
 import { Text } from '@/components/text';
@@ -80,6 +94,7 @@ export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { height: windowH } = useWindowDimensions();
   const chrome = useTabChrome();
   const reduce = useReducedMotion();
   const focused = useIsFocused();
@@ -285,7 +300,6 @@ export default function HomeScreen() {
       }),
     [checks, facilityById, pets],
   );
-  const passportPet: Pet | undefined = scoped[0];
 
   /* ───────── 스크롤 ───────── */
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -381,20 +395,10 @@ export default function HomeScreen() {
             />
           </View>
 
-          {passportPet ? (
-            <View style={styles.passport}>
-              <View style={styles.passHead}>
-                <Text style={[styles.passTitle, { color: p.ink }]}>{passportPet.name} 여권</Text>
-                {pets.length > 1 ? (
-                  <Text style={[styles.passHint, { color: p.muted }]}>위에서 아이를 고르면 바뀌어요</Text>
-                ) : null}
-              </View>
-              <View style={styles.card}>
-                <PetIdCard pet={passportPet} />
-                <GameCardFx />
-              </View>
-            </View>
-          ) : null}
+          {/* 여권 — 손가락으로 넘기는 책. 위에서 고른 아이의 여권으로 넘어간다 */}
+          <View style={styles.passport}>
+            <PassportBook pets={pets} focusPetId={focusId} scrollY={offset} viewportH={windowH} />
+          </View>
         </View>
       </Animated.ScrollView>
 
@@ -457,6 +461,14 @@ function PetChip({
   onPress?: () => void;
 }) {
   const p = usePalette();
+  const reduce = useReducedMotion();
+  // 고르는 순간 아바타가 통 — 눌렀다는 확인
+  const pop = useSharedValue(1);
+  useEffect(() => {
+    if (!selected || reduce) return;
+    pop.set(withSequence(withTiming(1.16, { duration: 120 }), withSpring(1, { damping: 10, stiffness: 260 })));
+  }, [selected, reduce, pop]);
+  const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
   return (
     <Animated.View layout={LinearTransition.duration(220)}>
       <Pressable
@@ -475,15 +487,17 @@ function PetChip({
             transform: [{ scale: pressed ? 0.95 : 1 }],
           },
         ]}>
-        {pet ? (
-          <PetAvatar pet={pet} size={34} />
-        ) : (
-          <View style={[styles.allAvatar, { backgroundColor: p.accentSoft }]}>
-            <Ionicons name="paw" size={17} color={p.accentDark} />
-          </View>
-        )}
+        <Animated.View style={popStyle}>
+          {pet ? (
+            <PetAvatar pet={pet} size={34} />
+          ) : (
+            <View style={[styles.allAvatar, { backgroundColor: p.accentSoft }]}>
+              <Ionicons name="paw" size={17} color={p.accentDark} />
+            </View>
+          )}
+        </Animated.View>
         {selected ? <Text style={[styles.chipText, { color: p.accentDark }]}>{label}</Text> : null}
-        {urgent ? <View style={[styles.urgentDot, { backgroundColor: p.dangerSolid, borderColor: p.surface }]} /> : null}
+        {urgent ? <PingDot color={p.dangerSolid} size={11} borderColor={p.surface} style={styles.urgentDot} /> : null}
       </Pressable>
     </Animated.View>
   );
@@ -503,6 +517,32 @@ function HeaderButton({
   urgent?: boolean;
 }) {
   const p = usePalette();
+  const reduce = useReducedMotion();
+  const swing = useSharedValue(0);
+  const badgePop = useSharedValue(1);
+  // 급한 알림이 있으면 종이 딸랑 — 처음 그릴 때와 개수가 늘 때만. 계속 흔들면 무시하게 된다
+  const prevBadge = useRef(0);
+  useEffect(() => {
+    const grew = badge > prevBadge.current;
+    prevBadge.current = badge;
+    if (!grew || reduce) return;
+    badgePop.set(withSequence(withTiming(0.6, { duration: 0 }), withSpring(1, { damping: 9, stiffness: 240 })));
+    if (urgent)
+      swing.set(
+        withDelay(
+          500,
+          withSequence(
+            withTiming(16, { duration: 90 }),
+            withTiming(-14, { duration: 110 }),
+            withTiming(10, { duration: 100 }),
+            withTiming(-6, { duration: 90 }),
+            withTiming(0, { duration: 120 }),
+          ),
+        ),
+      );
+  }, [badge, urgent, reduce, swing, badgePop]);
+  const swingStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${swing.value}deg` }] }));
+  const badgeStyle = useAnimatedStyle(() => ({ transform: [{ scale: badgePop.value }] }));
   return (
     <Pressable
       onPress={onPress}
@@ -513,11 +553,13 @@ function HeaderButton({
         styles.headerBtn,
         { borderColor: p.line, backgroundColor: p.card, transform: [{ scale: pressed ? 0.94 : 1 }] },
       ]}>
-      {children}
+      {/* 종은 꼭지(위 가운데)를 축으로 흔들린다 */}
+      <Animated.View style={[{ transformOrigin: '50% 10%' }, swingStyle]}>{children}</Animated.View>
       {badge > 0 ? (
-        <View style={[styles.badge, { backgroundColor: urgent ? p.dangerSolid : p.accent, borderColor: p.surface }]}>
+        <Animated.View
+          style={[styles.badge, { backgroundColor: urgent ? p.dangerSolid : p.accent, borderColor: p.surface }, badgeStyle]}>
           <Text style={[styles.badgeText, { color: p.onAccent }]}>{badge > 9 ? '9+' : badge}</Text>
-        </View>
+        </Animated.View>
       ) : null}
     </Pressable>
   );
@@ -530,23 +572,7 @@ const styles = StyleSheet.create({
   mascot: { marginTop: 8, marginLeft: -4 },
   bento: { gap: 12, marginTop: 6 },
   pair: { flexDirection: 'row', gap: 12 },
-  passport: { marginTop: 26, gap: 10 },
-  passHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: 2 },
-  passTitle: { fontSize: Type.sectionTitle - 2, fontWeight: '800', letterSpacing: -0.4 },
-  passHint: { fontSize: Type.caption },
-  // 여권은 종이 질감이라 테마와 상관없이 같은 색이다(`pet-id-card.tsx`의 `CARD`)
-  card: {
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(120,101,66,0.32)',
-    backgroundColor: '#F6F0E2',
-    overflow: 'hidden',
-    shadowColor: '#3A332A',
-    shadowOpacity: 0.14,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 12,
-  },
+  passport: { marginTop: 26 },
   header: {
     position: 'absolute',
     top: 0,
@@ -573,7 +599,7 @@ const styles = StyleSheet.create({
   },
   allAvatar: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   chipText: { fontSize: Type.bodyLg - 0.5, fontWeight: '800' },
-  urgentDot: { position: 'absolute', top: -1, right: -1, width: 11, height: 11, borderRadius: 6, borderWidth: 2 },
+  urgentDot: { position: 'absolute', top: -1, right: -1 },
   headerActions: { flexDirection: 'row', gap: 8 },
   headerBtn: {
     width: 42,

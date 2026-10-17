@@ -5,12 +5,17 @@ import {
   useContext,
   useEffect,
   useRef,
+  useState,
   type ReactNode,
 } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet } from 'react-native';
 import Animated, {
+  Easing,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
+  withSequence,
+  withSpring,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -18,6 +23,7 @@ import Animated, {
 import { Radius, Type } from '@/constants/theme';
 import { Text } from '@/components/text';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
+import { haptic } from '@/lib/haptics';
 
 /**
  * 인스타그램식 유리 네비게이터 + 자동 축소.
@@ -42,18 +48,18 @@ export function TabChromeProvider({ children }: { children: ReactNode }) {
   const scheduleCollapse = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      collapsed.value = withTiming(1, { duration: 320 });
+      collapsed.set(withTiming(1, { duration: 320 }));
     }, IDLE_MS);
   }, [collapsed]);
 
   const wake = useCallback(() => {
-    collapsed.value = withTiming(0, { duration: 220 });
+    collapsed.set(withTiming(0, { duration: 220 }));
     scheduleCollapse();
   }, [collapsed, scheduleCollapse]);
 
   const onScroll = useCallback(() => {
     // 스크롤하면 즉시 작아지고, 다시 커지는 건 탭 바를 건드릴 때만
-    collapsed.value = withTiming(1, { duration: 260 });
+    collapsed.set(withTiming(1, { duration: 260 }));
     if (timer.current) clearTimeout(timer.current);
   }, [collapsed]);
 
@@ -92,6 +98,20 @@ export function GlassTabBar(props: TabBarProps) {
   const scheme = useColorScheme();
   const chrome = useTabChrome();
   const collapsed = chrome?.collapsed;
+  const reduce = useReducedMotion();
+
+  /**
+   * 고른 탭 뒤에 말랑한 알약이 미끄러져 따라간다. 화면 안에서 자리를 옮기는 움직임이라
+   * 가속·감속이 다 있는 곡선(ease-in-out)을 쓴다. 탭 화면 전환 자체는 여전히 애니메이션 없이 즉시다.
+   */
+  const [barW, setBarW] = useState(0);
+  const count = state.routes.length;
+  const itemW = count ? (barW - 12) / count : 0;
+  const pill = useSharedValue(state.index);
+  useEffect(() => {
+    pill.set(reduce ? state.index : withTiming(state.index, { duration: 300, easing: Easing.bezier(0.77, 0, 0.175, 1) }));
+  }, [state.index, reduce, pill]);
+  const pillStyle = useAnimatedStyle(() => ({ transform: [{ translateX: pill.value * itemW }] }));
 
   const barStyle = useAnimatedStyle(() => {
     const c = collapsed?.value ?? 0;
@@ -128,7 +148,14 @@ export function GlassTabBar(props: TabBarProps) {
             // 활성 탭이 또렷해지고, 비활성 회색도 대비를 얻는다.
             backgroundColor: scheme === 'dark' ? 'rgba(13,10,8,0.88)' : 'rgba(255,255,255,0.72)',
           },
-        ]}>
+        ]}
+        onLayout={(e) => setBarW(e.nativeEvent.layout.width)}>
+        {itemW > 0 ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.pill, { width: itemW, backgroundColor: p.accentSoft }, pillStyle]}
+          />
+        ) : null}
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const focused = state.index === index;
@@ -140,12 +167,24 @@ export function GlassTabBar(props: TabBarProps) {
           const onPress = () => {
             chrome?.wake();
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+            if (!focused && !event.defaultPrevented) {
+              haptic.light();
+              navigation.navigate(route.name);
+            }
           };
 
           return (
-            <Pressable key={route.key} onPress={onPress} style={styles.item} hitSlop={6}>
-              {icon}
+            <Pressable
+              key={route.key}
+              onPress={onPress}
+              style={styles.item}
+              hitSlop={6}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: focused }}
+              accessibilityLabel={label}>
+              <TabIcon focused={focused} reduce={reduce}>
+                {icon}
+              </TabIcon>
               <Animated.View style={labelStyle}>
                 <Text style={[styles.label, { color }]} numberOfLines={1}>
                   {label}
@@ -159,12 +198,28 @@ export function GlassTabBar(props: TabBarProps) {
   );
 }
 
+/** 새로 고른 탭 아이콘이 통 튀어 오른다 — 눌렀다는 확인. 다른 탭은 가만히 */
+function TabIcon({ focused, reduce, children }: { focused: boolean; reduce: boolean; children: ReactNode }) {
+  const s = useSharedValue(1);
+  const y = useSharedValue(0);
+  useEffect(() => {
+    if (!focused || reduce) return;
+    s.set(withSequence(withTiming(0.82, { duration: 90 }), withSpring(1, { damping: 9, stiffness: 260 })));
+    y.set(withSequence(withTiming(2, { duration: 90 }), withSpring(0, { damping: 9, stiffness: 260 })));
+  }, [focused, reduce, s, y]);
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }, { scale: s.value }] }));
+  return <Animated.View style={style}>{children}</Animated.View>;
+}
+
 const styles = StyleSheet.create({
+  pill: { position: 'absolute', left: 6, top: 6, bottom: 6, borderRadius: Radius.full },
   wrap: {
     position: 'absolute',
     left: 16,
     right: 16,
     bottom: Platform.select({ ios: 26, default: 16 }),
+    // 움직이는 타일(transform)이 웹에서 새 쌓임 맥락을 만들어 탭 바 위로 올라오는 걸 막는다
+    zIndex: 50,
     borderRadius: Radius.full,
     // 웜 블랙의 소프트 섀도우로 떠 있는 유리 느낌
     boxShadow: '0 10px 30px rgba(45, 38, 34, 0.14)',

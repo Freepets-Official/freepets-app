@@ -1,7 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import Animated, { Easing, FadeIn, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  FadeIn,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { PetAvatar } from '@/components/pet-avatar';
 import { Text } from '@/components/text';
@@ -61,6 +69,14 @@ export function SpeechBubble({
   }, [tailX, reduce, tail]);
   const tailStyle = useAnimatedStyle(() => ({ transform: [{ translateX: tail.value }, { rotate: '45deg' }] }));
 
+  // 새 소식마다 말풍선이 꼬리 쪽에서 톡 부풀었다 자리 잡는다 — 친구가 "말을 건다"는 느낌
+  const pop = useSharedValue(1);
+  useEffect(() => {
+    if (reduce) return;
+    pop.set(withSequence(withTiming(0.95, { duration: 0 }), withSpring(1, { damping: 13, stiffness: 240, mass: 0.7 })));
+  }, [message.id, reduce, pop]);
+  const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
+
   const tone = (t: ChipTone) =>
     t === 'good'
       ? { bg: p.successSoft, fg: p.success }
@@ -71,7 +87,12 @@ export function SpeechBubble({
           : { bg: p.surface, fg: p.ink };
 
   return (
-    <View style={[styles.bubble, { backgroundColor: p.card, boxShadow: clay.rest }]}>
+    <Animated.View
+      style={[
+        styles.bubble,
+        { backgroundColor: p.card, boxShadow: clay.rest, transformOrigin: `${tailX}px 100%` },
+        popStyle,
+      ]}>
       <Animated.View pointerEvents="none" style={[styles.tail, { backgroundColor: p.card }, tailStyle]} />
       <Animated.View key={message.id} entering={reduce ? undefined : FadeIn.duration(200).easing(EASE_OUT)}>
         {/* 말 부분을 누르면 다음 소식. 아래 행동 버튼은 이 버튼 밖에 둔다(버튼 속 버튼 금지) */}
@@ -151,7 +172,7 @@ export function SpeechBubble({
           ))}
         </View>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 
