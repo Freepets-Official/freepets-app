@@ -82,7 +82,7 @@ export type PaletteColors = { [K in keyof typeof Palette.light]: string };
  * 그래서 **각 구간에서 가장 많이 쓰이던 값**을 대표로 뽑아 사다리를 만들었다. 가장 많은 쪽을
  * 고른 이유는 실제로 바뀌는 자리를 최소로 줄이기 위해서다.
  *
- * 명함·여권 카드(`pet-id-card`, `passport-card`)와 스플래시·로고는 이 사다리를 쓰지 않는다.
+ * 여권(`companion/passport-book`, `passport-card`)과 스플래시·로고는 이 사다리를 쓰지 않는다.
  * 실제 카드 비율에 맞춰 픽셀로 맞춰 둔 고정 디자인이라, 사다리에 맞추면 도리어 깨진다.
  */
 export const Type = {
@@ -147,11 +147,15 @@ export const LevelUpFonts = { ko: 'Jua-Regular', latin: 'Fredoka-Bold' } as cons
 /**
  * 홈 「꼬리 친구」(강아지·고양이 손그림) 색.
  *
- * 선과 몸통은 테마의 `ink`·`card`를 그대로 쓰고, 볼터치·혀·소품만 여기서 정한다.
- * 다크에서 라이트 값을 그대로 쓰면 볼터치가 형광처럼 떠 보여 한 톤 가라앉혔다.
+ * **다크에서도 몸은 밝게 둔다.** 테마대로 몸을 어둡게, 선을 밝게 뒤집으면 눈·코가 흰 구멍처럼
+ * 보여 무섭다는 말을 들었다(2026-10-17). 다크는 베이지 털에 짙은 갈색 선 — 어두운 방에
+ * 놓인 인형처럼 보이게 한다. 흰색 그대로면 화면에서 너무 튄다.
  */
 export const CompanionColors = {
   light: {
+    fill: '#FFFFFF',
+    ink: '#2D2622',
+    shadow: 'rgba(45,38,34,0.07)',
     blush: '#FFC9B0',
     tongue: '#F7A58A',
     scarf: '#F4B08F',
@@ -160,10 +164,13 @@ export const CompanionColors = {
     sun: '#F5B83D',
   },
   dark: {
-    blush: '#8C4F3A',
-    tongue: '#C9705A',
-    scarf: '#B4694A',
-    umbrella: '#7A4A36',
+    fill: '#EADCC8',
+    ink: '#3A2D24',
+    shadow: 'rgba(0,0,0,0.35)',
+    blush: '#F1AE93',
+    tongue: '#E48C72',
+    scarf: '#D98A66',
+    umbrella: '#F0CDB6',
     rain: '#7FB2D9',
     sun: '#F2C14E',
   },

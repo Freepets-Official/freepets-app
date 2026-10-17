@@ -164,8 +164,8 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active 
   const height = (width * VB_H) / VB_W;
   const moving = active && !reduce;
 
-  const ink = p.ink;
-  const fill = p.card;
+  const ink = cc.ink;
+  const fill = cc.fill;
   const line = { stroke: ink, strokeWidth: 3.1, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
   /* 표정 — 말하는 쪽의 기분에서 정해지고, 쓰다듬기·하품이 잠깐 덮어쓴다 */
@@ -408,7 +408,7 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active 
       {has('rain') && moving ? <Rain color={cc.rain} width={width} height={height} /> : null}
 
       <Layer>
-        <Ellipse cx={136} cy={163} rx={104} ry={6} fill={ink} opacity={0.07} />
+        <Ellipse cx={136} cy={163} rx={104} ry={6} fill={cc.shadow} />
       </Layer>
 
       {/* 발자국·하트는 그림 뒤에서 튀어나온다 — 앞에 그리면 얼굴에 얼룩처럼 묻는다 */}
