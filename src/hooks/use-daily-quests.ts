@@ -46,29 +46,32 @@ export function resetDailyQuests() {
 }
 
 /**
- * 오늘 아직 안 끝낸 퀘스트 수. 받아오기 전이거나 실패하면 `null`.
+ * 오늘 퀘스트 진행 — 홈의 퀘스트 버튼 배지와 타일의 고리가 "몇 개 중 몇 개"를 쓴다.
+ * 받아오기 전이거나 실패하면 `null`.
  *
- * `0`과 `null`을 구분해야 한다 — 0은 "오늘 다 했다"는 뿌듯한 상태고, null은 "모른다"다.
+ * `left: 0`과 `null`을 구분해야 한다 — 0은 "오늘 다 했다"는 뿌듯한 상태고, null은 "모른다"다.
  * 모르는데 0을 보여주면 다 한 것처럼 읽힌다.
  */
-export function useQuestsLeft(enabled: boolean): number | null {
-  const [left, setLeft] = useState<number | null>(() =>
-    cached && !stale(cached) ? countLeft(cached.data) : null,
+export function useQuestProgress(enabled: boolean): { left: number; total: number } | null {
+  const [progress, setProgress] = useState<{ left: number; total: number } | null>(() =>
+    cached && !stale(cached) ? toProgress(cached.data) : null,
   );
 
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
     void load().then((d) => {
-      if (alive && d) setLeft(countLeft(d));
+      if (alive && d) setProgress(toProgress(d));
     });
     return () => {
       alive = false;
     };
   }, [enabled]);
 
-  return left;
+  return progress;
 }
+
+const toProgress = (d: DailyQuests) => ({ left: countLeft(d), total: d.quests.length });
 
 function countLeft(d: DailyQuests): number {
   return d.quests.filter((q) => q.completed < q.target).length;

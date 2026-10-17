@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { Text } from '@/components/text';
@@ -86,6 +86,28 @@ export default function ExploreScreen() {
   const [mode, setMode] = useState<Mode>('nearby');
   const [keyword, setKeyword] = useState('');
   const [category, setCategory] = useState<Category | null>(null);
+  const searchRef = useRef<TextInput>(null);
+
+  /**
+   * 홈의 「어디 갈까요?」 타일에서 넘어오면 검색칸에 바로 커서를 두고, 카테고리 칩을 눌러
+   * 왔으면 그 카테고리를 고른다. 탭 화면은 한 번 뜨면 살아 있어 같은 값으로 다시 오면
+   * 효과가 다시 돌지 않는다 — 홈이 매번 다른 `t`를 붙여 보낸다.
+   */
+  const params = useLocalSearchParams<{ focus?: string; category?: string; t?: string }>();
+  const [handledT, setHandledT] = useState<string | undefined>(undefined);
+  if (params.t && params.t !== handledT) {
+    setHandledT(params.t);
+    setMode('nearby');
+    if (params.category && (CATEGORIES as string[]).includes(params.category)) {
+      setCategory(params.category as Category);
+    }
+  }
+  useEffect(() => {
+    if (!params.t || params.focus !== 'search') return;
+    // 탭 전환이 끝나고 입력칸이 그려진 뒤에 포커스해야 키보드가 뜬다
+    const timer = setTimeout(() => searchRef.current?.focus(), 250);
+    return () => clearTimeout(timer);
+  }, [params.t, params.focus]);
   // '전체' 모드의 지역 선택. 시군구까지 고르면 관광공사 실시간 목록으로 갈아탄다.
   // 지역 목록은 모듈 캐시라 RegionChips와 같은 값을 공유한다 — 여기서 부른다고 더 받지 않는다
   const regions = useRegions();
@@ -308,6 +330,7 @@ export default function ExploreScreen() {
           <View style={[styles.search, { backgroundColor: p.surface, borderColor: p.line }]}>
             <Ionicons name="search" size={18} color={p.muted} />
             <TextInput
+              ref={searchRef}
               value={keyword}
               onChangeText={setKeyword}
               placeholder="시설명이나 지역으로 검색"

@@ -1,32 +1,61 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useIsFocused, useRouter, useScrollToTop } from 'expo-router';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
+  Extrapolation,
+  interpolate,
+  LinearTransition,
+  useAnimatedRef,
   useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
+  useReducedMotion,
+  useScrollOffset,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PetIdCard } from '@/components/pet-id-card';
-import { StampMark } from '@/components/stamp-mark';
-import { QuestScrollIcon } from '@/components/quest-scroll-icon';
-import { Text } from '@/components/text';
-import { ResultBadge } from '@/components/badge';
+import { CompanionMascot } from '@/components/companion/mascot';
+import {
+  HealthTile,
+  QuestTile,
+  RecentTile,
+  ScheduleTile,
+  SearchTile,
+  StampTile,
+  type HealthItem,
+  type RecentRow,
+} from '@/components/companion/home-tiles';
+import { SpeechBubble } from '@/components/companion/speech-bubble';
 import { GameCardFx } from '@/components/game-card-fx';
-import { LoadState } from '@/components/load-state';
-import { Screen } from '@/components/screen';
-import { SectionTitle } from '@/components/section-title';
-import { Radius, Spacing, Type } from '@/constants/theme';
-import { FACILITIES } from '@/data/mock';
-import { type Pet } from '@/data/types';
-import { useQuestsLeft } from '@/hooks/use-daily-quests';
-import { usePalette } from '@/hooks/use-theme';
-import { uniqueRegionCount } from '@/data/stamps';
 import { GuestScreen } from '@/components/guest-prompt';
-import { useAppStore } from '@/store/app-store';
+import { PetAvatar } from '@/components/pet-avatar';
+import { PetIdCard } from '@/components/pet-id-card';
+import { QuestScrollIcon } from '@/components/quest-scroll-icon';
+import { useTabChrome } from '@/components/tab-bar';
+import { Text } from '@/components/text';
+import { MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
+import {
+  buildCompanionQueue,
+  clockWord,
+  nextSchedule,
+  type CompanionAction,
+  type DenialNews,
+} from '@/data/companion';
+import { FACILITIES } from '@/data/mock';
+import { uniqueRegionCount } from '@/data/stamps';
+import { ymd, type Pet } from '@/data/types';
+import { useQuestProgress } from '@/hooks/use-daily-quests';
+import { usePalette } from '@/hooks/use-theme';
+import { useWalkWeather } from '@/hooks/use-walk-weather';
+import { haptic } from '@/lib/haptics';
+import { DENIAL_REASON_LABEL, useAppStore } from '@/store/app-store';
+
+/** 마스코트 그림의 가로. 말풍선 꼬리가 강아지·고양이를 가리키는 위치도 이 값에서 나온다 */
+const MASCOT_W = 280;
+/** 첫 소식은 짧게 보여주고 날씨로 넘어간다. 그 뒤는 천천히 */
+const FIRST_MS = 3800;
+const NEXT_MS = 7000;
+/** 사용자가 직접 넘기거나 아이를 고르면 그만큼 자동 넘김을 늦춘다 — 읽는 중에 바뀌면 안 된다 */
+const HOLD_MS = 8000;
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -35,57 +64,23 @@ function formatDate(iso: string): string {
   ).padStart(2, '0')}`;
 }
 
-/** 시간대별 인사 — 홈을 열 때마다 조금씩 다른 온기를 준다 */
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 6) return '편안한 밤이에요 🌙';
-  if (h < 11) return '좋은 아침이에요 🐾';
-  if (h < 17) return '좋은 오후예요 🐾';
-  if (h < 21) return '좋은 저녁이에요 🐾';
-  return '편안한 밤이에요 🌙';
-}
-
-/** 홈 우측 상단 알림 종 — 안 읽은 알림 수 배지. 거부가 있으면 빨강(긴급). */
-function NotificationBell({
-  count,
-  urgent,
-  onPress,
-}: {
-  count: number;
-  urgent: boolean;
-  onPress: () => void;
-}) {
-  const p = usePalette();
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={8}
-      style={({ pressed }) => [
-        styles.bellBtn,
-        { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
-      ]}>
-      <Ionicons name="notifications-outline" size={22} color={p.ink} />
-      {count > 0 && (
-        <View style={[styles.bellBadge, { backgroundColor: urgent ? p.danger : p.accent, borderColor: p.bg }]}>
-          <Text style={[styles.bellBadgeText, { color: p.onAccent }]}>{count > 9 ? '9+' : count}</Text>
-        </View>
-      )}
-    </Pressable>
-  );
-}
-
 /**
- * 도장 잉크의 빨강.
+ * 홈 — 「꼬리 친구」.
  *
- * 팔레트의 `danger`를 쓰지 않는다 — 그 색은 이 앱에서 "동반 불가"를 뜻해서, 도장에 쓰면
- * 모을수록 나쁜 것처럼 읽힌다. 실제 여권 도장에 가까운 주홍 계열을 따로 둔다.
- * 흰 바탕 위에만 얹으므로 양 테마에서 같은 값을 쓴다.
+ * 앱 아이콘의 강아지·고양이가 지금 가장 급한 소식을 말풍선으로 알려주고(현장 거부 → 접종 →
+ * 오늘 약 → …), 몇 초 뒤 오늘 산책 날씨를 말한다. 아이가 여럿이면 아이마다 가장 급한 소식을
+ * 하나씩 먼저 돌린다(순서 규칙은 `data/companion.ts`). 그 아래는 눌리는 점토 타일:
+ * 출입 판별 검색 · 건강 · 다음 여행(없으면 다음 일정) · 도장 · 퀘스트 · 최근 판별, 맨 아래 여권.
+ *
+ * 예전 홈의 여권 카드 더미는 맨 아래 「○○ 여권」으로 옮겼다. 위에서 고른 아이의 여권이 보인다.
  */
-const STAMP_INK = '#C0392B';
-
 export default function HomeScreen() {
   const p = usePalette();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const chrome = useTabChrome();
+  const reduce = useReducedMotion();
+  const focused = useIsFocused();
   const {
     session,
     pets,
@@ -97,6 +92,9 @@ export default function HomeScreen() {
     loadFacility,
     hideCheck,
     reloadAll,
+    eventsOn,
+    isMedTaken,
+    toggleMedTaken,
   } = useAppStore();
 
   /**
@@ -115,15 +113,181 @@ export default function HomeScreen() {
       void loadFacility(c.facilityId);
     }
   }, [checks, facilityById, loadFacility]);
+
   // 뱃지 기준과 같은 값(서로 다른 시군구 수)을 쓴다 — 홈과 도장첩이 다른 숫자를 보이면 안 된다
   const stampCount = useMemo(() => uniqueRegionCount(stamps), [stamps]);
-  // 로그인한 계정만 물어본다 — 게스트에게는 퀘스트가 없다
-  const questsLeft = useQuestsLeft(session.authed);
-  const alerts = plannedDenialAlerts();
-  const vax = upcomingVaccinations();
-
+  const quests = useQuestProgress(session.authed);
+  const weather = useWalkWeather(session.authed);
+  const alerts = useMemo(() => plannedDenialAlerts(), [plannedDenialAlerts]);
+  const vax = useMemo(() => upcomingVaccinations(), [upcomingVaccinations]);
   // 흩어져 있던 푸시성 알림(현장 거부·접종 기한)은 우측 상단 종 버튼 → 알림 페이지로 모았다.
   const alertCount = alerts.length + vax.length;
+
+  // 말이 시각에 따라 달라진다("벌써 오후 7시가 지났어") — 1분마다 다시 짠다
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+
+  /* ───────── 말풍선 ───────── */
+  const [focusPet, setFocusPet] = useState<number | null>(null);
+  // 지운 아이를 보고 있었다면 모두 보기로 돌아간다
+  const focusId = focusPet !== null && pets.some((x) => x.petId === focusPet) ? focusPet : null;
+
+  const denials = useMemo<DenialNews[]>(
+    () =>
+      alerts.map(({ facility, report }) => ({
+        facilityId: facility.facilityId,
+        facilityName: facility.name,
+        reasonLabel: report.reason ? DENIAL_REASON_LABEL[report.reason] : null,
+        createdAt: report.createdAt,
+        petIds: [...new Set(checks.filter((c) => c.facilityId === facility.facilityId).flatMap((c) => c.petIds))],
+      })),
+    [alerts, checks],
+  );
+  const built = useMemo(
+    () =>
+      buildCompanionQueue(
+        { now, pets, denials, vaccinations: vax, eventsOn, isMedTaken, weather: weather.state },
+        focusId,
+      ),
+    [now, pets, denials, vax, eventsOn, isMedTaken, weather.state, focusId],
+  );
+  // 내용이 같으면 같은 배열을 쓴다 — 1분마다 다시 짜도 자동 넘김 타이머가 처음부터 다시 돌지 않게
+  const builtKey = built.map((m) => `${m.id}:${m.text}`).join('|');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const queue = useMemo(() => built, [builtKey]);
+
+  const [msgId, setMsgId] = useState<string | null>(null);
+  const idx = Math.max(
+    0,
+    queue.findIndex((m) => m.id === msgId),
+  );
+  const msg = queue[idx];
+  const [typedId, setTypedId] = useState<string | null>(null);
+  const holdUntil = useRef(0);
+
+  // 다 써지고 나서 몇 초 뒤 다음 소식. 홈이 안 보이면 넘기지 않는다
+  useEffect(() => {
+    if (!focused || !msg || typedId !== msg.id || queue.length < 2) return;
+    const delay = (idx === 0 ? FIRST_MS : NEXT_MS) + Math.max(0, holdUntil.current - Date.now());
+    const t = setTimeout(() => setMsgId(queue[(idx + 1) % queue.length].id), delay);
+    return () => clearTimeout(t);
+  }, [focused, msg, typedId, idx, queue]);
+
+  const next = () => {
+    if (queue.length < 2) return;
+    holdUntil.current = Date.now() + HOLD_MS;
+    haptic.light();
+    setMsgId(queue[(idx + 1) % queue.length].id);
+  };
+  const pickPet = (id: number | null) => {
+    haptic.light();
+    holdUntil.current = Date.now() + HOLD_MS / 2;
+    setFocusPet((cur) => (cur === id ? null : id));
+    setMsgId(null);
+  };
+  const runAction = (a: CompanionAction) => {
+    holdUntil.current = Date.now() + HOLD_MS;
+    if (a.kind === 'route') router.push(a.href);
+    else if (a.kind === 'med-taken') {
+      toggleMedTaken(a.eventId, a.date);
+      haptic.success();
+    } else void weather.enable();
+  };
+
+  // 아이마다 급한 소식이 있는지 — 아바타의 빨간 점
+  const urgentPets = useMemo(() => {
+    const all = buildCompanionQueue(
+      { now, pets, denials, vaccinations: vax, eventsOn, isMedTaken, weather: { status: 'loading' } },
+      null,
+    );
+    return new Set(all.filter((m) => m.priority <= 1).flatMap((m) => m.petIds));
+  }, [now, pets, denials, vax, eventsOn, isMedTaken]);
+
+  /* ───────── 타일 ───────── */
+  const scoped = focusId === null ? pets : pets.filter((x) => x.petId === focusId);
+  const today = ymd(now);
+  const health = useMemo<HealthItem | null>(() => {
+    const ids = new Set(scoped.map((x) => x.petId));
+    const v = vax.find((x) => ids.has(x.pet.petId));
+    const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const med = eventsOn(today).find(
+      (e) => e.type === 'MED' && !isMedTaken(e.eventId, today) && (e.petId === null || ids.has(e.petId)),
+    );
+    const vaxItem: HealthItem | null = v
+      ? {
+          kind: 'vaccine',
+          big: v.dday < 0 ? `D+${-v.dday}` : v.dday === 0 ? '오늘' : `D-${v.dday}`,
+          sub: `${v.pet.name} · ${Number(v.date.slice(5, 7))}.${Number(v.date.slice(8, 10))}`,
+          urgent: v.dday <= 0,
+        }
+      : null;
+    const medItem: HealthItem | null = med
+      ? {
+          kind: 'med',
+          big: '오늘',
+          sub: [
+            med.petId !== null ? pets.find((x) => x.petId === med.petId)?.name : null,
+            med.title,
+            med.time ? clockWord(med.time) : null,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          urgent: !!med.time && med.time <= hhmm,
+        }
+      : null;
+    // 기한 지난 접종이 가장 급하고, 그다음 오늘 약, 그다음 다가오는 접종
+    if (vaxItem?.urgent) return vaxItem;
+    return medItem ?? vaxItem;
+  }, [scoped, vax, eventsOn, isMedTaken, today, now, pets]);
+  const schedule = useMemo(() => nextSchedule(eventsOn, now), [eventsOn, now]);
+  const scheduleOwner = schedule?.event.petId != null ? pets.find((x) => x.petId === schedule.event.petId)?.name ?? null : null;
+
+  const recentRows = useMemo<RecentRow[]>(
+    () =>
+      checks.slice(0, 4).map((c) => {
+        // 스토어 캐시를 먼저 본다. 목 데이터에만 기대면 관광공사에서 온 실제 시설이
+        // 전부 "알 수 없는 시설"로 뜬다 — 판별 이력은 대부분 그쪽이다.
+        const facility = facilityById(c.facilityId) ?? FACILITIES.find((f) => f.facilityId === c.facilityId);
+        // petIds를 쓴다 — 서버에서 불러온 이력엔 verdicts가 없어서 이름이 통째로 비어버린다
+        const names = c.petIds.map((id) => pets.find((x) => x.petId === id)?.name).filter(Boolean);
+        return {
+          checkId: c.checkId,
+          facilityId: c.facilityId,
+          name: facility?.name ?? '알 수 없는 시설',
+          meta: `${names.join(' · ')} · ${formatDate(c.createdAt)}`,
+          result: c.overall,
+        };
+      }),
+    [checks, facilityById, pets],
+  );
+  const passportPet: Pet | undefined = scoped[0];
+
+  /* ───────── 스크롤 ───────── */
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  useScrollToTop(scrollRef as unknown as RefObject<ScrollView>);
+  const offset = useScrollOffset(scrollRef);
+  // 스크롤하면 친구들이 살짝 작아지며 뒤로 물러나고, 머리에는 바탕이 깔린다
+  const heroStyle = useAnimatedStyle(() => {
+    if (reduce) return {};
+    const y = Math.max(0, offset.value);
+    return {
+      opacity: interpolate(y, [0, 260], [1, 0.45], Extrapolation.CLAMP),
+      transform: [
+        { translateY: interpolate(y, [0, 260], [0, 38], Extrapolation.CLAMP) },
+        { scale: interpolate(y, [0, 260], [1, 0.9], Extrapolation.CLAMP) },
+      ],
+    };
+  });
+  const headBg = useAnimatedStyle(() => ({ opacity: interpolate(offset.value, [0, 14], [0, 1], Extrapolation.CLAMP) }));
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    setRefreshing(true);
+    // 실제로 다시 불러온다. 최초 조회가 실패하면 여기가 빠져나올 길이다
+    await reloadAll().finally(() => setRefreshing(false));
+  };
 
   if (!session.authed) {
     return (
@@ -135,272 +299,261 @@ export default function HomeScreen() {
     );
   }
 
+  const tailX = msg?.speaker === 'cat' ? (184 / 270) * MASCOT_W + 6 : (90 / 270) * MASCOT_W;
+  const headerH = insets.top + 62;
+
   return (
-    <Screen
-      eyebrow={greeting()}
-      title="반려동물 여권"
-      subtitle="아이마다 좋아한 장소를 한눈에 확인하세요."
-      headerRight={
+    <View style={[styles.root, { backgroundColor: p.surface }]}>
+      <Animated.ScrollView
+        ref={scrollRef}
+        onScroll={() => chrome?.onScroll()}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.content, { paddingTop: headerH + 8 }]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={p.accent} colors={[p.accent]} progressViewOffset={headerH} />
+        }>
+        <View style={styles.inner}>
+          <Animated.View style={heroStyle}>
+            {msg ? (
+              <SpeechBubble
+                message={msg}
+                pets={pets}
+                index={idx}
+                total={queue.length}
+                tailX={tailX}
+                reduce={reduce}
+                onNext={next}
+                onAction={runAction}
+                onTyped={() => setTypedId(msg.id)}
+              />
+            ) : null}
+            <View style={styles.mascot}>
+              <CompanionMascot
+                width={MASCOT_W}
+                speaker={msg?.speaker ?? 'dog'}
+                mood={msg?.mood ?? 'idle'}
+                props={msg?.props}
+                cue={msg?.id ?? ''}
+                active={focused}
+              />
+            </View>
+          </Animated.View>
+
+          <View style={styles.bento}>
+            <SearchTile order={0} />
+            <View style={styles.pair}>
+              <HealthTile order={1} item={health} />
+              <ScheduleTile order={2} next={schedule} petName={scheduleOwner} />
+            </View>
+            <View style={styles.pair}>
+              <StampTile order={3} count={stampCount} />
+              <QuestTile order={4} progress={quests} />
+            </View>
+            <RecentTile
+              order={5}
+              rows={recentRows}
+              total={checks.length}
+              onOpen={(id) => router.push({ pathname: '/facility/[id]', params: { id: String(id) } })}
+              onHide={hideCheck}
+            />
+          </View>
+
+          {passportPet ? (
+            <View style={styles.passport}>
+              <View style={styles.passHead}>
+                <Text style={[styles.passTitle, { color: p.ink }]}>{passportPet.name} 여권</Text>
+                {pets.length > 1 ? (
+                  <Text style={[styles.passHint, { color: p.muted }]}>위에서 아이를 고르면 바뀌어요</Text>
+                ) : null}
+              </View>
+              <View style={styles.card}>
+                <PetIdCard pet={passportPet} />
+                <GameCardFx />
+              </View>
+            </View>
+          ) : null}
+        </View>
+      </Animated.ScrollView>
+
+      {/* 머리 — 아이 고르기 · 퀘스트 · 알림. 스크롤하면 바탕이 깔린다 */}
+      <View style={[styles.header, { paddingTop: insets.top + 8, height: headerH }]} pointerEvents="box-none">
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, styles.headBg, { backgroundColor: p.surface, borderBottomColor: p.line }, headBg]}
+        />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pets} style={styles.petsScroll}>
+          {pets.length > 1 ? (
+            <PetChip label="모두" selected={focusId === null} onPress={() => pickPet(null)} />
+          ) : null}
+          {pets.map((pet) => (
+            <PetChip
+              key={pet.petId}
+              pet={pet}
+              label={pet.name}
+              selected={pets.length === 1 || focusId === pet.petId}
+              urgent={urgentPets.has(pet.petId)}
+              onPress={pets.length > 1 ? () => pickPet(pet.petId) : undefined}
+            />
+          ))}
+          {pets.length === 0 ? (
+            <Text style={[styles.hello, { color: p.ink }]}>반가워요</Text>
+          ) : null}
+        </ScrollView>
         <View style={styles.headerActions}>
           {/* 퀘스트(두루마리)와 알림(종)을 나란히 — 둘 다 "지금 할 일"을 여는 입구다 */}
-          <Pressable
+          <HeaderButton
             onPress={() => router.push('/quests')}
-            hitSlop={8}
-            accessibilityLabel={
-              questsLeft === null ? '오늘의 퀘스트' : `오늘의 퀘스트, ${questsLeft}개 남음`
-            }
-            style={({ pressed }) => [
-              styles.bellBtn,
-              { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' },
-            ]}>
+            label={quests === null ? '오늘의 퀘스트' : `오늘의 퀘스트, ${quests.left}개 남음`}
+            badge={quests && quests.left > 0 ? quests.left : 0}>
             <QuestScrollIcon size={21} color={p.ink} />
-            {/*
-              오늘 남은 퀘스트 수. 퀘스트 화면이 아이콘 뒤에 숨어 있어서, 들어가 보기 전에는
-              할 일이 남았는지 알 수 없었다 — 돌아올 이유가 숫자로 보여야 한다.
-              `null`(아직 모름)과 `0`(다 했다)을 구분한다. 0에는 배지를 그리지 않는다.
-            */}
-            {questsLeft !== null && questsLeft > 0 && (
-              <View style={[styles.bellBadge, { backgroundColor: p.accent, borderColor: p.bg }]}>
-                <Text style={[styles.bellBadgeText, { color: p.onAccent }]}>{questsLeft}</Text>
-              </View>
-            )}
-          </Pressable>
-          <NotificationBell
-            count={alertCount}
-            urgent={alerts.length > 0}
+          </HeaderButton>
+          <HeaderButton
             onPress={() => router.push('/notifications')}
-          />
+            label={alertCount > 0 ? `알림 ${alertCount}개` : '알림'}
+            badge={alertCount}
+            urgent={alerts.length > 0}>
+            <Ionicons name="notifications-outline" size={22} color={p.ink} />
+          </HeaderButton>
         </View>
-      }
-      // 실제로 다시 불러온다. 예전에는 800ms 기다리는 연출뿐이라, 최초 조회가 실패하면
-      // 앱을 껐다 켜기 전까지 빈 화면에서 빠져나올 방법이 없었다.
-      onRefresh={reloadAll}>
-      {pets.length === 0 ? (
-        <LoadState
-          kind="empty"
-          icon="paw"
-          message={'아직 등록한 아이가 없어요.\n아이를 등록하면 그 아이 기준으로 판별해 드려요.'}
-          action={{ label: '아이 등록하기', icon: 'add', onPress: () => router.push('/(tabs)/pets') }}
-        />
-      ) : pets.length === 1 ? (
-        <View style={styles.card}>
-          <PetIdCard pet={pets[0]} />
-          <GameCardFx />
-        </View>
-      ) : (
-        <PetStack pets={pets} />
-      )}
-
-      {/*
-        여권 도장첩 — 모은 지역 수를 캡션으로 보여준다. 진도가 보여야 다음 도장을 찍는다.
-        도장이 없어도 카드는 남긴다. 기능이 있다는 걸 알아야 첫 도장을 찍는다.
-      */}
-      <Pressable
-        onPress={() => router.push('/stamps')}
-        style={({ pressed }) => [
-          styles.stampEntry,
-          { borderColor: p.line, backgroundColor: p.card, opacity: pressed ? 0.92 : 1 },
-        ]}>
-        {/* 실제 여권 도장처럼 — 흰 바탕에 빨간 테두리, 가운데는 강아지 발자국 */}
-        <View style={styles.stampEntryIcon}>
-          <StampMark size={36} color={STAMP_INK} background="#FFFFFF" />
-        </View>
-        <View style={styles.stampEntryTexts}>
-          <Text style={[styles.stampEntryTitle, { color: p.ink }]}>여권 도장첩</Text>
-          <Text style={[styles.stampEntryBody, { color: p.muted }]}>
-            {stampCount > 0
-              ? `${stampCount}개 지역을 모았어요`
-              : '다녀온 곳에서 인증샷을 남기고 지역을 모아보세요'}
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={p.muted} />
-      </Pressable>
-
-      {checks.length > 0 && (
-        <>
-          <SectionTitle title="최근 판별 이력" caption={`${checks.length}건`} />
-          <View style={styles.histList}>
-            {checks.slice(0, 5).map((c) => {
-              // 스토어 캐시를 먼저 본다. 목 데이터에만 기대면 관광공사에서 온 실제 시설이
-              // 전부 "알 수 없는 시설"로 뜬다 — 판별 이력은 대부분 그쪽이다.
-              const facility = facilityById(c.facilityId) ?? FACILITIES.find((f) => f.facilityId === c.facilityId);
-              // petIds를 쓴다 — 서버에서 불러온 이력엔 verdicts가 없어서 이름이 통째로 비어버린다
-              const names = c.petIds.map((id) => pets.find((x) => x.petId === id)?.name).filter(Boolean);
-              return (
-                <Swipeable
-                  key={c.checkId}
-                  friction={2}
-                  rightThreshold={40}
-                  // 목록에서만 지운다. 서버에 삭제 API가 없어 다시 불러오면 되살아나므로
-                  // 스토어가 지운 id를 기기에 남겨 걸러낸다.
-                  renderRightActions={() => (
-                    <Pressable
-                      onPress={() => hideCheck(c.checkId)}
-                      style={[styles.histDelete, { backgroundColor: p.danger }]}>
-                      <Ionicons name="trash" size={18} color={p.onAccent} />
-                      <Text style={[styles.histDeleteText, { color: p.onAccent }]}>삭제</Text>
-                    </Pressable>
-                  )}>
-                  <Pressable
-                    onPress={() =>
-                      router.push({ pathname: '/facility/[id]', params: { id: String(c.facilityId) } })
-                    }
-                    style={({ pressed }) => [
-                      styles.histCard,
-                      { backgroundColor: p.card, borderColor: p.line, opacity: pressed ? 0.92 : 1 },
-                    ]}>
-                    <View style={styles.histTop}>
-                      <Text style={[styles.histName, { color: p.ink }]} numberOfLines={1}>
-                        {facility?.name ?? '알 수 없는 시설'}
-                      </Text>
-                      <ResultBadge result={c.overall} />
-                    </View>
-                    <Text style={[styles.histMeta, { color: p.muted }]}>
-                      {names.join(' · ')} · {formatDate(c.createdAt)}
-                    </Text>
-                  </Pressable>
-                </Swipeable>
-              );
-            })}
-          </View>
-        </>
-      )}
-    </Screen>
-  );
-}
-
-/** 거부 알림의 통통 뛰는 벨 — 시선을 끈다 */
-/** 스택 카드 높이. 여권 카드가 잘리지 않게 여유를 둔다 — 남는 자리는 종이색으로 덮인다 */
-const STACK_CARD_H = 408;
-const STACK_PEEK = 72;
-const STACK_SPRING = { damping: 16, stiffness: 180, mass: 0.7 };
-// 틸트가 원위치로 돌아올 때의 스프링 — 살짝 출렁이며 손을 떼는 느낌
-const TILT_SPRING = { damping: 12, stiffness: 140, mass: 0.6 };
-
-/** 반려동물 카드 스택 — 겹쳐 쌓고, 뒤 카드를 탭하면 셔플하듯 앞으로 나온다 */
-function PetStack({ pets }: { pets: Pet[] }) {
-  const [order, setOrder] = useState<number[]>(() => pets.map((pt) => pt.petId));
-  // pets가 바뀌면(추가/삭제) order 동기화 — 있는 것만 유지 + 새로 생긴 것 뒤에 추가
-  const ids = pets.map((pt) => pt.petId).join(',');
-  useEffect(() => {
-    setOrder((prev) => {
-      const now = pets.map((pt) => pt.petId);
-      const kept = prev.filter((id) => now.includes(id));
-      const added = now.filter((id) => !kept.includes(id));
-      return [...kept, ...added];
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids]);
-
-  const bringFront = (id: number) => setOrder((prev) => [id, ...prev.filter((x) => x !== id)]);
-  const height = STACK_CARD_H + (pets.length - 1) * STACK_PEEK;
-
-  return (
-    <View style={{ height }}>
-      {pets.map((pet) => (
-        <StackCard
-          key={pet.petId}
-          pet={pet}
-          pos={order.indexOf(pet.petId)}
-          total={pets.length}
-          onFront={() => bringFront(pet.petId)}
-        />
-      ))}
+      </View>
     </View>
   );
 }
 
-function StackCard({
+function PetChip({
   pet,
-  pos,
-  total,
-  onFront,
+  label,
+  selected,
+  urgent,
+  onPress,
 }: {
-  pet: Pet;
-  pos: number;
-  total: number;
-  onFront: () => void;
+  pet?: Pet;
+  label: string;
+  selected: boolean;
+  urgent?: boolean;
+  onPress?: () => void;
 }) {
-  // 뒤 카드는 위로 살짝 올라가 헤더만 보이고(peek), 앞 카드가 그 위를 덮는다
-  const tY = useSharedValue((total - 1 - pos) * STACK_PEEK);
-  const sc = useSharedValue(1 - pos * 0.03);
-
-  useEffect(() => {
-    tY.value = withSpring((total - 1 - pos) * STACK_PEEK, STACK_SPRING);
-    sc.value = withSpring(Math.max(0.9, 1 - pos * 0.03), STACK_SPRING);
-  }, [pos, total, tY, sc]);
-
-  /**
-   * 뒤 카드를 **투명하게 만들지 않는다.**
-   *
-   * 예전에는 `opacity`로 깊이를 줬는데, 카드가 반투명해지면서 **뒤 카드의 내용이 앞
-   * 카드에 비쳐 보였다.** 아이가 여럿이면 이름·레벨·XP 바가 겹쳐 읽혀 지저분하다.
-   * 다크에서 특히 두드러진다.
-   *
-   * 깊이는 이미 `scale`과 `translateY`가 만들고 있어서 투명도까지 쓸 이유가 없다.
-   */
-  const anim = useAnimatedStyle(() => ({
-    transform: [{ translateY: tY.value }, { scale: sc.value }],
-  }));
-
-  const isFront = pos === 0;
-
-  // 홀로그램 카드 틸트 — 앞 카드 위에서 포인터/손가락을 움직이면 그쪽으로 3D로 기운다.
-  // 유리 광택이 각도에 따라 다르게 걸려 실제 홀로그램 카드를 만지는 느낌을 준다.
-  const rx = useSharedValue(0);
-  const ry = useSharedValue(0);
-  const dim = useRef({ w: 1, h: 1 });
-  const tilt = useAnimatedStyle(() => ({
-    transform: [{ perspective: 900 }, { rotateX: `${rx.value}deg` }, { rotateY: `${ry.value}deg` }],
-  }));
-  // 웹은 offsetX/Y, 네이티브는 locationX/Y — 있는 쪽을 쓴다 (플랫폼별 필드가 달라 any)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const onMove = (e: any) => {
-    const ne = e.nativeEvent as Record<string, number>;
-    const ox = ne.offsetX ?? ne.locationX;
-    const oy = ne.offsetY ?? ne.locationY;
-    if (!Number.isFinite(ox) || !Number.isFinite(oy)) return;
-    const clamp = (v: number) => Math.max(-1, Math.min(1, v));
-    const nx = (ox / dim.current.w) * 2 - 1; // -1..1
-    const ny = (oy / dim.current.h) * 2 - 1;
-    ry.value = withTiming(clamp(nx) * 9, { duration: 80 });
-    rx.value = withTiming(clamp(-ny) * 9, { duration: 80 });
-  };
-  const resetTilt = () => {
-    rx.value = withSpring(0, TILT_SPRING);
-    ry.value = withSpring(0, TILT_SPRING);
-  };
-
+  const p = usePalette();
   return (
-    <Animated.View style={[styles.stackItem, { zIndex: total - pos }, anim]}>
-      <Animated.View
-        style={[styles.card, styles.stackCard, isFront && tilt]}
-        onLayout={isFront ? (e) => { dim.current = { w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height }; } : undefined}
-        onPointerMove={isFront ? onMove : undefined}
-        onPointerLeave={isFront ? resetTilt : undefined}
-        onPointerUp={isFront ? resetTilt : undefined}
-        onPointerCancel={isFront ? resetTilt : undefined}>
-        {isFront ? (
-          <>
-            <PetIdCard pet={pet} />
-            <GameCardFx />
-          </>
+    <Animated.View layout={LinearTransition.duration(220)}>
+      <Pressable
+        onPress={onPress}
+        disabled={!onPress}
+        hitSlop={4}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        accessibilityLabel={`${label}${urgent ? ', 급한 소식 있음' : ''}`}
+        style={({ pressed }) => [
+          styles.chip,
+          {
+            backgroundColor: selected ? p.accentSoft : p.card,
+            borderColor: selected ? 'transparent' : p.line,
+            paddingRight: selected ? 13 : 3,
+            transform: [{ scale: pressed ? 0.95 : 1 }],
+          },
+        ]}>
+        {pet ? (
+          <PetAvatar pet={pet} size={34} />
         ) : (
-          <Pressable onPress={onFront} style={styles.flex}>
-            <View pointerEvents="none">
-              <PetIdCard pet={pet} />
-            </View>
-          </Pressable>
+          <View style={[styles.allAvatar, { backgroundColor: p.accentSoft }]}>
+            <Ionicons name="paw" size={17} color={p.accentDark} />
+          </View>
         )}
-      </Animated.View>
+        {selected ? <Text style={[styles.chipText, { color: p.accentDark }]}>{label}</Text> : null}
+        {urgent ? <View style={[styles.urgentDot, { backgroundColor: p.dangerSolid, borderColor: p.surface }]} /> : null}
+      </Pressable>
     </Animated.View>
   );
 }
 
+function HeaderButton({
+  children,
+  onPress,
+  label,
+  badge,
+  urgent,
+}: {
+  children: ReactNode;
+  onPress: () => void;
+  label: string;
+  badge: number;
+  urgent?: boolean;
+}) {
+  const p = usePalette();
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        styles.headerBtn,
+        { borderColor: p.line, backgroundColor: p.card, transform: [{ scale: pressed ? 0.94 : 1 }] },
+      ]}>
+      {children}
+      {badge > 0 ? (
+        <View style={[styles.badge, { backgroundColor: urgent ? p.dangerSolid : p.accent, borderColor: p.surface }]}>
+          <Text style={[styles.badgeText, { color: p.onAccent }]}>{badge > 9 ? '9+' : badge}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  bellBtn: {
+  root: { flex: 1 },
+  content: { paddingHorizontal: Spacing.lg, paddingBottom: 140 },
+  inner: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center' },
+  mascot: { marginTop: 8, marginLeft: -4 },
+  bento: { gap: 12, marginTop: 6 },
+  pair: { flexDirection: 'row', gap: 12 },
+  passport: { marginTop: 26, gap: 10 },
+  passHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: 2 },
+  passTitle: { fontSize: Type.sectionTitle - 2, fontWeight: '800', letterSpacing: -0.4 },
+  passHint: { fontSize: Type.caption },
+  // 여권은 종이 질감이라 테마와 상관없이 같은 색이다(`pet-id-card.tsx`의 `CARD`)
+  card: {
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(120,101,66,0.32)',
+    backgroundColor: '#F6F0E2',
+    overflow: 'hidden',
+    shadowColor: '#3A332A',
+    shadowOpacity: 0.14,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 12,
+  },
+  header: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: 10,
+  },
+  headBg: { borderBottomWidth: StyleSheet.hairlineWidth, opacity: 0.96 },
+  petsScroll: { flexGrow: 1, flexShrink: 1 },
+  pets: { gap: 6, alignItems: 'center', paddingVertical: 4, paddingRight: 4 },
+  hello: { fontSize: Type.headline, fontWeight: '800', letterSpacing: -0.5 },
+  chip: {
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingLeft: 3,
+  },
+  allAvatar: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  chipText: { fontSize: Type.bodyLg - 0.5, fontWeight: '800' },
+  urgentDot: { position: 'absolute', top: -1, right: -1, width: 11, height: 11, borderRadius: 6, borderWidth: 2 },
+  headerActions: { flexDirection: 'row', gap: 8 },
+  headerBtn: {
     width: 42,
     height: 42,
     borderRadius: Radius.full,
@@ -408,77 +561,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bellBadge: {
+  badge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+    top: -3,
+    right: -3,
+    minWidth: 19,
+    height: 19,
+    borderRadius: 10,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  bellBadgeText: { fontSize: Type.micro, fontWeight: '900' },
-  // 프리미엄 수집형 카드 — 그라디언트 네임플레이트 + 얇은 테두리 + 깊은 플로팅 그림자
-  card: {
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    /**
-     * **색을 반드시 적는다.** 안 적으면 React Native가 검정을 기본값으로 쓴다 —
-     * 실기기 캡처를 픽셀로 보니 크림색 명함 둘레에 순수 검정 테두리가 둘려 있었다(2026-09-21).
-     * 명함 안쪽 구분선과 같은 따뜻한 갈색을 써서 종이 카드의 가장자리처럼 보이게 한다
-     * (`pet-id-card.tsx`의 `CARD.line`과 같은 값).
-     */
-    borderColor: 'rgba(120,101,66,0.32)',
-    /**
-     * 여권과 같은 종이색을 깐다.
-     *
-     * 여러 마리일 때 이 래퍼는 고정 높이(`stackCard`)를 쓰는데, 안의 여권 카드는 아이마다
-     * 내용 길이가 달라 높이가 조금씩 다르다. 배경이 없으면 남는 자리에 화면 바탕이 비쳐
-     * 카드 안에 구멍이 뚫린 것처럼 보인다(`pet-id-card.tsx`의 `CARD.paper`와 같은 값).
-     */
-    backgroundColor: '#F6F0E2',
-    overflow: 'hidden',
-    /**
-     * 카드가 떠 있어 보이게 하는 그림자.
-     *
-     * 예전엔 앱 강조색인 로즈핑크(`#E86397`)를 썼다. 명함이 분홍 계열이던 시절엔 어울렸는데,
-     * 지금은 종이 질감의 여권(크림색 바탕 + 짙은 발급 띠)이라 카드 둘레에
-     * **분홍 테가 둘린 것처럼 보였다.** 특히 아래쪽에서 짙은 띠와 맞닿아 대비가 커진다.
-     * 카드 자체의 먹색(`pet-id-card.tsx`의 `CARD.strip`)을 써서 종이에 진 그림자로 보이게 한다.
-     */
-    shadowColor: '#3A332A',
-    shadowOpacity: 0.14,
-    shadowRadius: 26,
-    shadowOffset: { width: 0, height: 16 },
-    elevation: 12,
-  },
-  stackItem: { position: 'absolute', top: 0, left: 0, right: 0 },
-  stackCard: { height: STACK_CARD_H },
-  histDelete: {
-    justifyContent: 'center', alignItems: 'center', gap: 2,
-    width: 76, marginLeft: 8, borderRadius: Radius.md,
-  },
-  histDeleteText: { fontSize: Type.caption, fontWeight: '800' },
-  stampEntry: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderWidth: 1, borderRadius: Radius.md, padding: Spacing.lg, marginTop: 4,
-  },
-  stampEntryIcon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  stampEntryTexts: { flexShrink: 1, gap: 2 },
-  stampEntryTitle: { fontSize: Type.body, fontWeight: '800' },
-  stampEntryBody: { fontSize: Type.caption },
-
-  histList: { gap: Spacing.sm },
-  histCard: { borderRadius: Radius.lg, borderWidth: 1, padding: Spacing.lg, gap: 5 },
-  histTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
-  },
-  histName: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3, flexShrink: 1 },
-  histMeta: { fontSize: Type.footnote },
+  badgeText: { fontSize: Type.micro, fontWeight: '900' },
 });

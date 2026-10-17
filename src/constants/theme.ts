@@ -167,3 +167,21 @@ export const CompanionColors = {
     sun: '#F2C14E',
   },
 } as const;
+
+/**
+ * 홈 타일·말풍선의 말랑한 점토(클레이) 질감.
+ *
+ * 위쪽 안 그림자는 볼록하게 솟은 면, 아래 바깥 그림자는 바닥에서 뜬 느낌을 만든다.
+ * 다크에서 흰 안 그림자를 그대로 두면 테두리가 번쩍여서, 아주 옅게만 남긴다.
+ * 누르는 순간(`pressed`)에는 바깥 그림자를 줄여 바닥에 닿은 것처럼 보이게 한다.
+ */
+export const ClayShadow = {
+  light: {
+    rest: 'inset 0 2px 0 rgba(255,255,255,0.95), inset 0 -4px 0 rgba(219,120,80,0.07), 0 16px 26px -18px rgba(150,80,50,0.38), 0 2px 6px -3px rgba(45,38,34,0.10)',
+    pressed: 'inset 0 2px 0 rgba(255,255,255,0.9), inset 0 -2px 0 rgba(219,120,80,0.06), 0 8px 14px -12px rgba(150,80,50,0.36)',
+  },
+  dark: {
+    rest: 'inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -4px 0 rgba(0,0,0,0.25), 0 16px 26px -18px rgba(0,0,0,0.7), 0 2px 6px -3px rgba(0,0,0,0.4)',
+    pressed: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 8px 14px -12px rgba(0,0,0,0.6)',
+  },
+} as const;
