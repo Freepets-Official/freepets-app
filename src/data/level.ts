@@ -15,7 +15,7 @@ export type TierAnimal = 'DOG' | 'CAT';
 export type TierColor = 'RED' | 'ORANGE' | 'YELLOW' | 'GREEN' | 'BLUE' | 'INDIGO' | 'VIOLET';
 
 export const TIER_ANIMAL_LABEL: Record<TierAnimal, string> = {
-  DOG: '개',
+  DOG: '강아지',
   CAT: '고양이',
 };
 
@@ -130,15 +130,11 @@ export const levelBaseXp = (level: number) => (100 * level * (level - 1)) / 2;
 export const levelStepXp = (level: number) => 100 * level;
 
 /**
- * 배지 이름 — `"고양이 발바닥 노랑 20%"`처럼 **색과 투명도를 그대로 읽어준다.**
- *
- * 서버 `tierLabel`은 쓰지 않는다. 모양은 사용자가 고르고 색·투명도는 앱이 레벨에서 계산하므로,
- * 서버 문장("고양이 발바닥 · 반짝임 · 노랑")을 쓰면 화면과 어긋난다.
+ * 발바닥 이름 — **"강아지 발바닥" · "고양이 발바닥"까지만.** 색·투명도("빨강 80%")는 발바닥 그림이
+ * 이미 보여주고, 글로 붙이면 길고 낯설다는 사용자 요청으로 뺐다(2026-10-18).
  */
-export function tierName(g: Pick<Gamification, 'level'>, animal: TierAnimal = 'DOG'): string {
-  const look = tierLook(g.level);
-  if (look.rainbow) return `무지개 발바닥 ${look.transparency}%`;
-  return `${TIER_ANIMAL_LABEL[animal]} 발바닥 ${TIER_COLOR_LABEL[look.color ?? 'RED']} ${look.transparency}%`;
+export function tierName(_g: Pick<Gamification, 'level'>, animal: TierAnimal = 'DOG'): string {
+  return `${TIER_ANIMAL_LABEL[animal]} 발바닥`;
 }
 
 /**
