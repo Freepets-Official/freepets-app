@@ -27,7 +27,7 @@ export default function PolicyScreen() {
       <Stack.Screen options={{ title, headerBackButtonDisplayMode: 'minimal' }} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.inner}>
-          <Text style={[styles.updated, { color: p.muted }]}>최종 개정 2026-09-11 · 반갑꼬리</Text>
+          <Text style={[styles.updated, { color: p.muted }]}>최종 개정 2026-10-17 · 반갑꼬리</Text>
 
           {isPrivacy ? <Privacy p={p} /> : <Terms p={p} />}
 
@@ -111,7 +111,10 @@ function Privacy({ p }: { p: Palette }) {
         위치는 이용자가 권한을 허용한 경우에만 사용합니다. 주변 시설을 거리순으로 찾고 시설까지의 거리를
         계산하기 위해 <Text style={{ fontWeight: '800' }}>요청하는 시점에 좌표를 서버로 전송</Text>하며,
         이동 경로나 위치 이력을 만들지 않습니다. 여권 도장의 “현장 확인” 표시는 기기 안에서 시설과의
-        거리를 계산해 참·거짓만 남기고 좌표 자체는 저장하지 않습니다.
+        거리를 계산해 참·거짓만 남기고 좌표 자체는 저장하지 않습니다. 홈에서 오늘 산책 날씨를 알려 드릴
+        때는 좌표를 <Text style={{ fontWeight: '800' }}>약 1km 단위로 줄여</Text> 해외 날씨 정보 제공처(Open-Meteo)에
+        기기에서 바로 보내며, 이때 접속 IP 주소도 함께 전달됩니다. 이 값은 반갑꼬리 서버에 저장하지 않습니다.
+        위치를 허용하지 않으면 날씨를 조회하지 않습니다.
       </Clause>
       <Clause p={p} n="5. 사진과 카메라">
         반려동물·프로필 사진은 이용자가 등록할 때만 서버로 전송됩니다. 여권 도장 인증샷은 기기 안에만
@@ -128,7 +131,8 @@ function Privacy({ p }: { p: Palette }) {
       <Clause p={p} n="8. 제3자 제공">
         이용자의 개인정보를 제3자에게 판매하거나 광고 목적으로 제공하지 않습니다. 출입 조건 판별에는
         시설이 게시한 조건 문구를 AI 분석에 사용하며, 이 과정에 이용자를 식별할 수 있는 정보는 포함되지
-        않습니다.
+        않습니다. 날씨 조회에는 계정 정보 없이 대략적인 위치(약 1km 단위)와 접속 IP 주소가 해외 날씨 정보
+        제공처(Open-Meteo)에 전달됩니다.
       </Clause>
       <Clause p={p} n="9. 개인정보 보호책임자 및 문의처" highlight>
         개인정보 처리에 관한 문의·열람·삭제 요청은 아래로 보내주시면 지체 없이 답변드립니다.

@@ -1,28 +1,28 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Stack, useRouter, type Href } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Stack, useIsFocused, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Switch, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 
 import { LoadState } from '@/components/load-state';
+import { TiltPressable } from '@/components/motion/tilt-pressable';
 import { PawChooser } from '@/components/paw-chooser';
+import { ChestCard, ChestOpening } from '@/components/quest/chest';
+import { StreakCard } from '@/components/quest/streak-card';
+import { Wardrobe } from '@/components/quest/wardrobe';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
-import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
+import { Radius, Spacing, Type } from '@/constants/theme';
 import { BADGE_DOMAINS, tiersOf } from '@/data/badges';
 import { TIER_ANIMAL_LABEL } from '@/data/level';
+import { itemById, type ItemId } from '@/data/quest-journey';
+import { useQuestJourney } from '@/hooks/use-quest-journey';
 import { usePalette } from '@/hooks/use-theme';
-import { questsApi, type DailyQuests, type QuestSource } from '@/lib/api';
+import type { QuestSource } from '@/lib/api';
+import { haptic } from '@/lib/haptics';
+import { notify } from '@/lib/notify';
 import { useAppStore } from '@/store/app-store';
 
-/** 퀘스트를 실제로 할 수 있는 화면. 라벨만 보여주고 갈 곳이 없으면 퀘스트가 아니다 */
-const QUEST_META: Record<QuestSource, { icon: keyof typeof Ionicons.glyphMap; hint: string; route: Href; xp: number }> = {
-  PETCHECK: { icon: 'search', hint: '시설 상세에서 우리 아이 기준으로 판별해요', route: '/(tabs)/explore', xp: 5 },
-  REVIEW: { icon: 'create', hint: '다녀온 시설에 리뷰를 남겨요', route: '/(tabs)/explore', xp: 20 },
-  REPORT: { icon: 'megaphone', hint: '문 앞에서 거부당했다면 제보해요', route: '/(tabs)/explore', xp: 15 },
-  SATISFACTION: { icon: 'happy', hint: '아이가 그곳을 얼마나 좋아했는지 남겨요', route: '/(tabs)/explore', xp: 10 },
-  COURSE_PUBLISHED: { icon: 'earth', hint: '내가 만든 코스를 공개해요', route: '/course', xp: 20 },
-  COURSE_SHARED_COPY: { icon: 'share-social', hint: '내 공유 코스를 다른 집사가 담으면 올라가요', route: '/course', xp: 15 },
-};
 
 /**
  * 지금 가장 가까운 배지 하나.
@@ -85,46 +85,59 @@ function resetHint(resetsAt: string | null): string {
   return h > 0 ? `${h}시간 ${m}분 뒤 새로 시작해요` : `${m}분 뒤 새로 시작해요`;
 }
 
+/** 보너스 경험치 목록의 이름 — 세 가지에 없는 행동도 경험치는 그대로 쌓인다 */
+const BONUS_LABEL: Record<QuestSource, string> = {
+  PETCHECK: '판별 요청',
+  REVIEW: '리뷰 쓰기',
+  REPORT: '현장 거부 제보(겪었을 때만)',
+  SATISFACTION: '아이 만족도',
+  COURSE_PUBLISHED: '코스 공개',
+  COURSE_SHARED_COPY: '내 코스가 담기면',
+};
+
 /**
- * 오늘의 퀘스트 — `GET /me/gamification/quests`.
+ * 오늘의 퀘스트 2.0 — 연속 기록 · 오늘의 세 가지 · 간식 상자 · 꾸미기.
  *
- * 퀘스트를 "받는" 행위는 없다. 이미 XP를 주던 6개 행동의 **오늘 진행률**을 보여주는 화면이라,
- * 여기서 뭘 눌러도 XP가 지급되지 않는다(지급은 각 행동을 실제로 했을 때 서버가 한다).
- * 그래서 각 줄은 "그 행동을 하러 가는 길"로 연결한다.
+ * 규칙은 `data/quest-journey.ts`에 있다. 이 화면은 "지치지 않게"가 원칙이다 — 할 일은 세 개,
+ * 하나만 해도 연속 기록은 지켜지고, 빠진 날은 이용권이 막아 준다. 경험치는 지금처럼 서버가
+ * 각 행동마다 주므로 여기서 뭘 눌러도 XP가 생기지 않는다(상자는 꾸미기 소품만 준다).
  */
 export default function QuestsScreen() {
   const p = usePalette();
   const router = useRouter();
+  const focused = useIsFocused();
   /**
    * 발바닥은 이 화면에서 고른다. 처음 들어오면(고른 적 없으면) 퀘스트 대신 고르는 화면을
    * 먼저 보여준다 — 레벨 배지가 내 아이와 무관한 모양으로 시작하지 않게.
    */
-  const { settings, updateSettings } = useAppStore();
+  const { settings, updateSettings, pets } = useAppStore();
   const [choosing, setChoosing] = useState(false);
   const needsPaw = settings.pawAnimal === '';
-  const [data, setData] = useState<DailyQuests | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [attempt, setAttempt] = useState(0);
+  const j = useQuestJourney(true, { fresh: true });
+  const [opening, setOpening] = useState<{ item: ItemId | null } | null>(null);
+  // 연속 기록이 늘 때마다 1씩 — 카드가 그 순간 한 번 축하한다
+  const [celebrate, setCelebrate] = useState(0);
+  const [unlocked, setUnlocked] = useState<ItemId[]>([]);
+  const [showBonus, setShowBonus] = useState(false);
 
+  // 방금 생긴 일 — 연속 +1이면 숫자가 통, 새 소품이 열렸으면 알림 줄. 한 번 보여주고 비운다
   useEffect(() => {
-    let alive = true;
-    questsApi
-      .today()
-      .then((d) => alive && setData(d))
-      .catch(() => alive && setFailed(true));
-    return () => {
-      alive = false;
-    };
-  }, [attempt]);
+    if (!j.events.length) return;
+    const grew = j.events.some((e) => e.kind === 'continued' || e.kind === 'started' || e.kind === 'saved-by-pass');
+    const items = j.events.flatMap((e) => (e.kind === 'item-unlocked' ? [e.item] : []));
+    const t = setTimeout(() => {
+      if (grew) {
+        setCelebrate((c) => c + 1);
+        haptic.success();
+      }
+      if (items.length) setUnlocked(items);
+      j.consumeEvents();
+    }, 350);
+    return () => clearTimeout(t);
+  }, [j.events, j]);
 
-  const retry = useCallback(() => {
-    setFailed(false);
-    setData(null);
-    setAttempt((a) => a + 1);
-  }, []);
-
-  const quests = data?.quests ?? [];
-  const doneCount = quests.filter((q) => q.completed >= q.target).length;
+  const firstPetIsCat = pets[0]?.kind === 'CAT';
+  const quests = j.quests?.quests ?? [];
   const xpToday = quests.reduce((sum, q) => sum + q.earnedXpToday, 0);
 
   if (needsPaw || choosing) {
@@ -136,7 +149,6 @@ export default function QuestsScreen() {
             updateSettings({ pawAnimal: animal });
             setChoosing(false);
           }}
-          // 처음 진입이면 건너뛸 수 있게 — 퀘스트를 보러 왔는데 선택을 강요하지 않는다
           onSkip={choosing ? () => setChoosing(false) : undefined}
         />
       </Screen>
@@ -144,119 +156,186 @@ export default function QuestsScreen() {
   }
 
   return (
-    <Screen
-      hasNavHeader
-      eyebrow="오늘의 퀘스트"
-      title="오늘 할 일"
-      subtitle={resetHint(data?.resetsAt ?? null)}>
+    <Screen hasNavHeader eyebrow="오늘의 퀘스트" title="하나만 해도 충분해요" subtitle={resetHint(j.quests?.resetsAt ?? null)} onRefresh={j.reload}>
       <Stack.Screen options={{ title: '오늘의 퀘스트', headerBackButtonDisplayMode: 'minimal' }} />
 
-      {failed ? (
-        <LoadState kind="failed" message="퀘스트를 불러오지 못했어요." onRetry={retry} />
-      ) : !data ? (
+      {j.status === 'failed' ? (
+        <LoadState kind="failed" message="퀘스트를 불러오지 못했어요." onRetry={j.reload} />
+      ) : j.status !== 'ready' ? (
         <LoadState kind="loading" />
-      ) : quests.length === 0 ? (
-        <LoadState kind="empty" message="오늘 받을 수 있는 퀘스트가 없어요." />
       ) : (
-        <>
-          <View style={[styles.summary, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
-            <View style={styles.summaryItem}>
-              <Text style={[styles.summaryValue, { color: p.ink }]}>
-                {doneCount}
-                <Text style={[styles.summaryUnit, { color: p.muted }]}> / {quests.length}</Text>
-              </Text>
-              <Text style={[styles.summaryLabel, { color: p.muted }]}>오늘 채운 퀘스트</Text>
-            </View>
-            <View style={[styles.summaryDivider, { backgroundColor: p.line }]} />
-            <View style={styles.summaryItem}>
-              <Text style={[styles.summaryValue, { color: p.accent }]}>
-                +{xpToday.toLocaleString()}
-                <Text style={[styles.summaryUnit, { color: p.muted }]}> XP</Text>
-              </Text>
-              <Text style={[styles.summaryLabel, { color: p.muted }]}>오늘 받은 경험치</Text>
-            </View>
+        <View style={styles.stack}>
+          <StreakCard
+            journey={j.journey}
+            today={j.today}
+            count={j.streak.count}
+            doneToday={j.streak.doneToday}
+            celebrate={celebrate}
+          />
+
+          <View style={styles.sectionHead}>
+            <Text style={[styles.sectionTitle, { color: p.ink }]}>오늘의 세 가지</Text>
+            <Text style={[styles.sectionCount, { color: p.muted }]}>
+              {j.trioDone}/{j.trio.length}
+            </Text>
           </View>
+          <View style={styles.trio}>
+            {j.trio.map((q, i) => (
+              <Animated.View key={q.source} entering={FadeInDown.delay(60 + i * 50).duration(280)}>
+                <TiltPressable
+                  onPress={() => router.push(q.route)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${q.title}${q.done ? ', 완료' : ''}`}
+                  style={[styles.quest, { backgroundColor: p.card, borderColor: q.done ? p.success : p.line }]}>
+                  <View style={[styles.questIcon, { backgroundColor: q.done ? p.successSoft : p.accentSoft }]}>
+                    {q.done ? (
+                      <Animated.View entering={ZoomIn.springify().damping(10)}>
+                        <Ionicons name="checkmark" size={20} color={p.success} />
+                      </Animated.View>
+                    ) : (
+                      <Ionicons name={q.icon as keyof typeof Ionicons.glyphMap} size={19} color={p.accentDark} />
+                    )}
+                  </View>
+                  <View style={styles.questBody}>
+                    <Text
+                      style={[styles.questLabel, { color: q.done ? p.muted : p.ink }, q.done && styles.strike]}
+                      numberOfLines={1}>
+                      {q.title}
+                    </Text>
+                    <Text style={[styles.questHint, { color: p.muted }]} numberOfLines={1}>
+                      {q.done ? '오늘 몫 완료!' : q.hint}
+                    </Text>
+                  </View>
+                  <View style={[styles.xpChip, { backgroundColor: q.done ? p.successSoft : p.surface }]}>
+                    <Text style={[styles.xpText, { color: q.done ? p.success : p.accentDark }]}>+{q.xp}</Text>
+                  </View>
+                </TiltPressable>
+              </Animated.View>
+            ))}
+          </View>
+
+          <ChestCard
+            done={j.trioDone}
+            total={j.trio.length}
+            ready={j.chestReady}
+            openedToday={j.journey.chestDay === j.today}
+            lastItem={j.journey.chestDay === j.today ? j.journey.chestItem : null}
+            // 두 번 빨리 눌러도 처음 연 결과를 지킨다(두 번째는 같은 날이라 빈손이다)
+            onOpen={() => {
+              if (!opening) setOpening({ item: j.openChest() });
+            }}
+          />
+
+          {unlocked.length ? (
+            <Animated.View entering={FadeInDown.duration(260)} style={[styles.unlocked, { backgroundColor: p.accentSoft }]}>
+              <Ionicons name="gift" size={16} color={p.accentDark} />
+              <Text style={[styles.unlockedText, { color: p.ink }]}>
+                연속 기록 선물 — 「{unlocked.map((id) => itemById(id).name).join('」 「')}」이 열렸어요!
+              </Text>
+            </Animated.View>
+          ) : null}
+
+          <Wardrobe journey={j.journey} onToggle={j.toggleItem} active={focused} initialWho={firstPetIsCat ? 'cat' : 'dog'} />
 
           <NextBadgeLine />
 
-          <View style={styles.list}>
-            {quests.map((q) => {
-              const meta = QUEST_META[q.sourceType];
-              const done = q.completed >= q.target;
-              const ratio = Math.min(q.completed / q.target, 1);
-              return (
-                <Pressable
-                  key={q.sourceType}
-                  onPress={() => router.push(meta.route)}
-                  style={({ pressed }) => [
-                    styles.quest,
-                    { backgroundColor: p.card, borderColor: done ? p.success : p.line, opacity: pressed ? 0.94 : 1 },
-                  ]}>
-                  <View style={[styles.questIcon, { backgroundColor: done ? p.successSoft : p.accentSoft }]}>
-                    <Ionicons name={done ? 'checkmark' : meta.icon} size={17} color={done ? p.success : p.accent} />
-                  </View>
-                  <View style={styles.questBody}>
-                    <View style={styles.questTop}>
-                      <Text style={[styles.questLabel, { color: p.ink }]} numberOfLines={1}>
-                        {q.label || q.sourceType}
-                      </Text>
-                      <Text style={[styles.questXp, { color: p.accent }]}>+{meta.xp}</Text>
-                      <Text style={[styles.questCount, { color: done ? p.success : p.muted }]}>
-                        {q.completed}/{q.target}
-                      </Text>
-                    </View>
-                    <View style={[styles.track, { backgroundColor: p.surface }]}>
-                      <View style={[styles.fill, { width: `${Math.max(ratio * 100, done ? 100 : 3)}%`, backgroundColor: done ? p.success : p.accent }]} />
-                    </View>
-                    <Text style={[styles.questHint, { color: p.muted }]} numberOfLines={1}>
-                      {done ? '오늘 몫을 다 채웠어요' : meta.hint}
-                      {q.earnedXpToday > 0 ? ` · +${q.earnedXpToday} XP` : ''}
+          <View style={[styles.bonus, { borderColor: p.line, backgroundColor: p.card }]}>
+            <Pressable
+              onPress={() => setShowBonus((v) => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showBonus }}
+              style={styles.bonusHead}>
+              <Ionicons name="sparkles" size={15} color={p.accent} />
+              <Text style={[styles.bonusTitle, { color: p.ink }]}>
+                오늘 받은 경험치 <Text style={{ color: p.accentDark }}>+{xpToday.toLocaleString()} XP</Text>
+              </Text>
+              <Ionicons name={showBonus ? 'chevron-up' : 'chevron-down'} size={15} color={p.muted} />
+            </Pressable>
+            {showBonus ? (
+              <Animated.View entering={FadeIn.duration(200)} style={styles.bonusList}>
+                <Text style={[styles.bonusNote, { color: p.muted }]}>
+                  세 가지 말고도 평소 하던 행동마다 경험치가 쌓여요. 하루 상한까지만 쌓이고 자정에 다시 시작해요.
+                </Text>
+                {quests.map((q) => (
+                  <View key={q.sourceType} style={styles.bonusRow}>
+                    <Text style={[styles.bonusLabel, { color: p.ink }]} numberOfLines={1}>
+                      {BONUS_LABEL[q.sourceType]}
+                    </Text>
+                    <Text style={[styles.bonusCount, { color: p.muted }]}>
+                      {q.completed}/{q.target}
+                    </Text>
+                    <Text style={[styles.bonusXp, { color: q.earnedXpToday ? p.accentDark : p.muted }]}>
+                      +{q.earnedXpToday}
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={15} color={p.muted} />
-                </Pressable>
-              );
-            })}
+                ))}
+              </Animated.View>
+            ) : null}
           </View>
+
+          {Platform.OS !== 'web' ? (
+            <View style={[styles.row, { borderColor: p.line }]}>
+              <Ionicons name="notifications-outline" size={16} color={p.accent} />
+              <View style={styles.flex}>
+                <Text style={[styles.rowText, { color: p.ink }]}>저녁 8시에 살짝 알려 주기</Text>
+                <Text style={[styles.rowSub, { color: p.muted }]}>그날 이미 했으면 울리지 않아요</Text>
+              </View>
+              <Switch
+                value={j.journey.reminder}
+                onValueChange={async (on) => {
+                  const ok = await j.setReminder(on);
+                  if (!ok) notify('알림을 켤 수 없어요', '설정 앱에서 반갑꼬리 알림을 허용해 주세요.');
+                }}
+                trackColor={{ true: p.accent, false: p.line }}
+              />
+            </View>
+          ) : null}
 
           <Pressable
             onPress={() => setChoosing(true)}
-            style={({ pressed }) => [styles.pawRow, { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' }]}>
+            style={({ pressed }) => [styles.row, { borderColor: p.line, backgroundColor: pressed ? p.surface : 'transparent' }]}>
             <Ionicons name="paw" size={15} color={p.accent} />
-            <Text style={[styles.pawRowText, { color: p.ink }]}>
+            <Text style={[styles.rowText, styles.flex, { color: p.ink }]}>
               내 발바닥 · {settings.pawAnimal ? TIER_ANIMAL_LABEL[settings.pawAnimal] : '미선택'}
             </Text>
-            <Text style={[styles.pawRowAction, { color: p.accent }]}>바꾸기</Text>
+            <Text style={[styles.rowAction, { color: p.accent }]}>바꾸기</Text>
           </Pressable>
-
-          <View style={[styles.howCard, { borderColor: p.line, backgroundColor: p.card }]}>
-            <Text style={[styles.howTitle, { color: p.ink }]}>레벨은 이렇게 올라요</Text>
-            <Text style={[styles.howBody, { color: p.muted }]}>
-              위 여섯 가지 행동에 경험치가 붙고, 그게 모여 <Text style={{ fontWeight: '800', color: p.ink }}>집사 레벨</Text>이 올라가요.
-              레벨이 오를 때마다 발바닥 색이 진해지고(투명도 80%→0%), 다섯 칸을 다 채우면 다음 무지개 색으로 넘어가요.
-            </Text>
-            <Text style={[styles.howBody, { color: p.muted }]}>
-              퀘스트는 따로 받는 게 아니라 평소 하던 행동이 오늘 몇 번째인지 보여주는 거예요. 하루 상한을 채우면 그 행동의 경험치는 내일 다시 쌓여요.
-            </Text>
-            <Pressable onPress={() => router.push('/stamps')} style={styles.howLink}>
-              <Ionicons name="footsteps-outline" size={14} color={p.accent} />
-              <Text style={[styles.howLinkText, { color: p.accent }]}>경험치 규칙 전체 보기 (도장첩)</Text>
-            </Pressable>
-          </View>
-        </>
+        </View>
       )}
+
+      {/* 열 때마다 새로 띄운다 — 장면이 처음부터 다시 재생된다 */}
+      {opening ? (
+        <ChestOpening
+          visible
+          item={opening.item}
+          onClose={() => setOpening(null)}
+          onWear={(id) => {
+            j.toggleItem(firstPetIsCat ? 'cat' : 'dog', id);
+            setOpening(null);
+          }}
+        />
+      ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  summary: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: Radius.lg, paddingVertical: Spacing.lg },
-  summaryItem: { flex: 1, alignItems: 'center', gap: 3 },
-  summaryDivider: { width: 1, alignSelf: 'stretch', marginVertical: 4 },
-  summaryValue: { fontSize: Type.headline, fontWeight: '900', letterSpacing: -0.5, fontVariant: ['tabular-nums'] },
-  summaryUnit: { fontSize: Type.body, fontWeight: '800' },
-  summaryLabel: { fontSize: Type.caption, fontWeight: '700' },
-  list: { gap: Spacing.sm, marginTop: Spacing.lg },
+  flex: { flex: 1, minWidth: 0 },
+  stack: { gap: Spacing.md },
+  sectionHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6, paddingHorizontal: 2 },
+  sectionTitle: { fontSize: Type.sectionTitle - 2, fontWeight: '800', letterSpacing: -0.4 },
+  sectionCount: { fontSize: Type.footnote, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  trio: { gap: Spacing.sm },
+  quest: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1.5, borderRadius: 20, padding: 14 },
+  questIcon: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  questBody: { flex: 1, gap: 2 },
+  questLabel: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
+  strike: { textDecorationLine: 'line-through' },
+  questHint: { fontSize: Type.caption },
+  xpChip: { borderRadius: Radius.full, paddingHorizontal: 10, paddingVertical: 5 },
+  xpText: { fontSize: Type.caption, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  unlocked: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: Radius.lg, padding: 12 },
+  unlockedText: { flex: 1, fontSize: Type.footnote, fontWeight: '700' },
   nextBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -267,31 +346,25 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   nextBadgeText: { flex: 1, fontSize: Type.footnote, fontWeight: '700' },
-  quest: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg },
-  questIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  questBody: { flex: 1, gap: 5 },
-  questTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  questLabel: { flex: 1, fontSize: Type.bodyLg, fontWeight: '800' },
-  questXp: { fontSize: Type.caption, fontWeight: '800' },
-  questCount: { fontSize: Type.footnote, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  track: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: 3 },
-  questHint: { fontSize: Type.caption },
-  pawRow: {
+  bonus: { borderWidth: 1, borderRadius: Radius.lg, paddingHorizontal: Spacing.lg },
+  bonusHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 13 },
+  bonusTitle: { flex: 1, fontSize: Type.body, fontWeight: '800' },
+  bonusList: { gap: 8, paddingBottom: 14 },
+  bonusNote: { fontSize: Type.caption, lineHeight: 17 },
+  bonusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bonusLabel: { flex: 1, fontSize: Type.footnote, fontWeight: '700' },
+  bonusCount: { fontSize: Type.caption, fontVariant: ['tabular-nums'] },
+  bonusXp: { width: 44, textAlign: 'right', fontSize: Type.footnote, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     borderWidth: 1,
     borderRadius: Radius.lg,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: 13,
-    marginTop: Spacing.lg,
+    paddingVertical: 12,
   },
-  pawRowText: { flex: 1, fontSize: Type.body, fontWeight: '800' },
-  pawRowAction: { fontSize: Type.body, fontWeight: '800' },
-  howCard: { gap: 7, borderWidth: 1, borderRadius: Radius.lg, padding: Spacing.lg, marginTop: Spacing.lg },
-  howTitle: { fontSize: Type.bodyLg, fontWeight: '800' },
-  howBody: { fontSize: Type.footnote, lineHeight: 19 },
-  howLink: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingTop: 2 },
-  howLinkText: { fontSize: Type.footnote, fontWeight: '800' },
+  rowText: { fontSize: Type.body, fontWeight: '800' },
+  rowSub: { fontSize: Type.caption, marginTop: 1 },
+  rowAction: { fontSize: Type.body, fontWeight: '800' },
 });

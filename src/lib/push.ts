@@ -77,6 +77,20 @@ function loadNotifications(): NotificationsModule | null {
   return notifications;
 }
 
+/**
+ * 기기 안에서 예약하는 로컬 알림(퀘스트 저녁 알림)용. 푸시 토큰과 달리 시뮬레이터에서도 되고
+ * FCM이 없어도 된다 — 알림 예약 네이티브 모듈만 있으면 쓴다. 웹·없는 빌드는 null.
+ */
+export function loadLocalNotifications(): NotificationsModule | null {
+  if (Platform.OS === 'web') return null;
+  try {
+    if (requireOptionalNativeModule('ExpoNotificationScheduler') == null) return null;
+  } catch {
+    return null;
+  }
+  return loadNotifications();
+}
+
 /** 시뮬레이터·웹에서는 푸시 토큰이 발급되지 않는다. 부르기 전에 걸러 헛된 실패를 만들지 않는다. */
 export function isPushSupported(): boolean {
   return Platform.OS !== 'web' && Device.isDevice && hasPushNativeModules();
@@ -130,7 +144,11 @@ export async function getFcmToken(): Promise<string | null> {
 }
 
 /** 서버가 보내는 data payload. 탭했을 때 어디로 갈지는 이 값으로 정한다. */
-export type PushData = { facilityId?: string };
+/** facilityId: 서버 푸시(거부 경고) · url: 앱이 예약한 로컬 알림(퀘스트 저녁 알림)이 열 화면 */
+export type PushData = { facilityId?: string; url?: string };
+
+/** 이미 처리한 알림 탭(알림 식별자) — 앱이 사는 동안 */
+const handledTaps = new Set<string>();
 
 /**
  * 알림을 탭했을 때를 받는다. 앱이 떠 있을 때와 꺼져 있을 때가 경로가 달라 둘 다 다룬다.
@@ -138,18 +156,25 @@ export type PushData = { facilityId?: string };
  * 반환한 함수를 부르면 구독을 끊는다.
  */
 export function onNotificationTap(handler: (data: PushData) => void): () => void {
-  if (!isPushSupported()) return () => {};
-
-  const Notifications = loadNotifications();
+  // 서버 푸시가 안 되는 빌드(시뮬레이터·FCM 없음)에서도 로컬 알림(퀘스트 저녁 알림)은 온다
+  const Notifications = isPushSupported() ? loadNotifications() : loadLocalNotifications();
   if (!Notifications) return () => {};
 
-  const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+  /**
+   * 같은 알림은 한 번만 처리한다. "마지막 응답"은 로그인이 바뀔 때마다 다시 읽혀서, 알림으로 앱을
+   * 연 뒤 로그아웃·재로그인하면 같은 화면으로 또 끌려갔다.
+   */
+  const once = (response: { notification: { request: { identifier: string; content: { data?: unknown } } } }) => {
+    const id = `${response.notification.request.identifier}`;
+    if (handledTaps.has(id)) return;
+    handledTaps.add(id);
     handler((response.notification.request.content.data ?? {}) as PushData);
-  });
+  };
+  const sub = Notifications.addNotificationResponseReceivedListener(once);
 
   // 앱이 완전히 꺼진 상태에서 알림으로 열렸다면 위 리스너에는 안 걸린다. 마지막 응답을 한 번 본다.
   void Notifications.getLastNotificationResponseAsync().then((response) => {
-    if (response) handler((response.notification.request.content.data ?? {}) as PushData);
+    if (response) once(response);
   });
 
   return () => sub.remove();

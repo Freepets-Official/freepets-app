@@ -5,8 +5,8 @@ import { Text } from '@/components/text';
 import type { Pet } from '@/data/types';
 
 /** petId로 고정 배정되는 파스텔 아바타 배경 */
-const AVATAR_COLORS = ['#FDE1EC', '#E5EEFB', '#FDF0D9', '#E4F4EA', '#F0E7FB', '#FCE4DE'];
-const AVATAR_INK = ['#D8588A', '#4E7BC0', '#B07714', '#2F8A57', '#8A5FC0', '#D06A4E'];
+const AVATAR_COLORS = ['#FDE8DE', '#E5EEFB', '#FDF0D9', '#E4F4EA', '#F0E7FB', '#DBF4F0'];
+const AVATAR_INK = ['#BC5F38', '#4E7BC0', '#B07714', '#2F8A57', '#8A5FC0', '#2B8F84'];
 
 /** 원형 반려동물 아바타 — 사진이 있으면 사진, 없으면 이름 첫 글자 */
 export function PetAvatar({ pet, size = 48 }: { pet: Pet; size?: number }) {
