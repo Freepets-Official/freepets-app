@@ -625,6 +625,16 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   RESTAURANT: '음식점',
 };
 
+/** 카테고리 아이콘(Ionicons) — 탐색 칩·시설 카드가 같은 그림을 쓴다 */
+export const CATEGORY_ICON: Record<Category, string> = {
+  TOUR: 'camera',
+  STAY: 'bed',
+  CAFE: 'cafe',
+  LEISURE: 'bicycle',
+  SHOPPING: 'bag-handle',
+  RESTAURANT: 'restaurant',
+};
+
 export const BREED_SIZE_LABEL: Record<BreedSize, string> = {
   SMALL: '소형',
   MEDIUM: '중형',

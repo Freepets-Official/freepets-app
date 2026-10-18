@@ -8,14 +8,15 @@ import { PetAllowedBadge } from '@/components/badge';
 import { PressableScale } from '@/components/pressable-scale';
 import { DenialAlert } from '@/components/denial-alert';
 import { PawBadge } from '@/components/paw-badge';
-import { CardShadow, Radius, Spacing, Type } from '@/constants/theme';
+import { ClayShadow, Radius, Spacing, Type } from '@/constants/theme';
 import { formatDistance } from '@/lib/format';
-import { CATEGORY_LABEL, REQUIREMENT_LABEL, pawGradeOf, type Facility } from '@/data/types';
-import { usePalette } from '@/hooks/use-theme';
+import { CATEGORY_ICON, CATEGORY_LABEL, REQUIREMENT_LABEL, pawGradeOf, type Facility } from '@/data/types';
+import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
 
 export function FacilityCard({ facility }: { facility: Facility }) {
   const p = usePalette();
+  const clay = ClayShadow[useColorScheme()];
   const router = useRouter();
   const { reviewsOf } = useAppStore();
   const grade = pawGradeOf(reviewsOf(facility.facilityId));
@@ -29,11 +30,14 @@ export function FacilityCard({ facility }: { facility: Facility }) {
       onPress={() =>
         router.push({ pathname: '/facility/[id]', params: { id: String(facility.facilityId) } })
       }
-      style={[styles.card, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
+      style={[styles.card, { backgroundColor: p.card, boxShadow: clay.rest }]}>
       <View style={styles.topRow}>
+        <View style={[styles.catIcon, { backgroundColor: p.accentSoft }]}>
+          <Ionicons name={CATEGORY_ICON[facility.category] as never} size={13} color={p.accentDark} />
+        </View>
         <AnimatedText
           sharedTransitionTag={`fac-cat-${facility.facilityId}`}
-          style={[styles.category, { color: p.accent }]}>
+          style={[styles.category, { color: p.accentDark }]}>
           {CATEGORY_LABEL[facility.category]}
         </AnimatedText>
         <PetAllowedBadge allowed={facility.petAllowed} />
@@ -42,7 +46,8 @@ export function FacilityCard({ facility }: { facility: Facility }) {
       {/* 카드→상세 shared element — 이름이 그대로 이어지며 커진다(네이티브 전용) */}
       <AnimatedText
         sharedTransitionTag={`fac-name-${facility.facilityId}`}
-        style={[styles.name, { color: p.ink }]}>
+        style={[styles.name, { color: p.ink }]}
+        numberOfLines={2}>
         {facility.name}
       </AnimatedText>
       {grade.level !== null && (
@@ -61,7 +66,7 @@ export function FacilityCard({ facility }: { facility: Facility }) {
       <DenialAlert facilityId={facility.facilityId} compact />
 
 
-      <View style={[styles.bottomRow, { borderTopColor: p.line }]}>
+      <View style={[styles.bottomRow, { backgroundColor: p.surface }]}>
         {/*
           지역 목록(관광공사 실시간)은 좌표를 받지 않아 거리가 없다. 그 자리에 "거리 미상"을
           쓰면 뭔가 고장 난 것처럼 보이므로, 대신 행정구역을 보여준다 — 지역을 훑어보는
@@ -87,19 +92,20 @@ export function FacilityCard({ facility }: { facility: Facility }) {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Spacing.xl,
+    borderRadius: Radius.xl,
+    padding: Spacing.lg,
+    paddingTop: Spacing.lg,
     gap: 3,
   },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.sm,
-    marginBottom: 4,
+    gap: 6,
+    marginBottom: 6,
   },
+  catIcon: { width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   category: {
+    flex: 1,
     fontSize: Type.caption,
     fontWeight: '800',
     letterSpacing: 0.8,
@@ -115,8 +121,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.sm,
     marginTop: Spacing.md,
-    paddingTop: Spacing.md,
-    borderTopWidth: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 9,
+    borderRadius: Radius.md,
   },
   distance: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   distanceText: { fontSize: Type.footnote, fontWeight: '600', fontVariant: ['tabular-nums'] },

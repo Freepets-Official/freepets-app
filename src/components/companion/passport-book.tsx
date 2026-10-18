@@ -648,7 +648,7 @@ function RecordPage({ pet, index, w, h, shimmer }: { pet: Pet; index: number; w:
         <View style={styles.flex}>
           <Text style={[styles.fieldLabel, { fontSize: 6.3 * u }]}>보호자 레벨 Level</Text>
           <Text style={[styles.fieldValue, { fontSize: 9.6 * u }]} numberOfLines={2}>
-            {gamification ? tierName(gamification, settings.pawAnimal || gamification.tierAnimal).replace(/^.* 발바닥 /, '발바닥 ') : '기록 전'}
+            {gamification ? tierName(gamification, settings.pawAnimal || gamification.tierAnimal) : '기록 전'}
           </Text>
           {prog && !prog.maxed ? (
             <Text style={[styles.fieldLabel, { fontSize: 6.3 * u, marginTop: 1 }]}>다음까지 {prog.remain} XP</Text>

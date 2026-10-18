@@ -229,6 +229,10 @@ function RootNavigator() {
         options={{ title: '일정 추가', headerBackButtonDisplayMode: 'minimal' }}
       />
       <Stack.Screen
+        name="day-diary"
+        options={{ title: '하루 기록', headerBackButtonDisplayMode: 'minimal' }}
+      />
+      <Stack.Screen
         name="policy"
         options={{ title: '약관·정책', headerBackButtonDisplayMode: 'minimal' }}
       />

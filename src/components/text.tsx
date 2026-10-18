@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import { StyleSheet, Text as RNText, type TextProps, type TextStyle } from 'react-native';
+import { Platform, StyleSheet, Text as RNText, type TextProps, type TextStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { FONT_SCALE, type FontSizeMode } from '@/data/types';
@@ -54,8 +54,29 @@ function useScaledStyle(style: TextProps['style']): TextProps['style'] {
  * 설정에서 고른 글씨 크기를 여기 한 곳에서 적용한다. 화면마다 배율을 곱하게 두면
  * 새로 만든 화면에서 빠뜨리고, 그 화면만 크기가 안 바뀐다.
  */
-export function Text({ style, ...rest }: TextProps) {
-  return <RNText style={useScaledStyle(style)} {...rest} />;
+export function Text({ style, children, lineBreakStrategyIOS = 'hangul-word', ...rest }: TextProps) {
+  return (
+    <RNText style={[KO_BREAK_WEB, useScaledStyle(style)]} lineBreakStrategyIOS={lineBreakStrategyIOS} {...rest}>
+      {keepKoreanWords(children)}
+    </RNText>
+  );
+}
+
+/**
+ * **한국어는 낱말 단위로 줄을 바꾼다.** 기본 줄바꿈은 글자 단위라 "없어요"가 "없어 / 요"처럼
+ * 끊겨 한 글자만 다음 줄로 떨어졌다(2026-10-18 홈 건강 타일).
+ * - iOS: `lineBreakStrategyIOS="hangul-word"`
+ * - 웹: CSS `word-break: keep-all`(너무 긴 낱말만 어쩔 수 없이 자른다)
+ * - 안드로이드: 줄바꿈 옵션이 없어 한글 음절 사이에 낱말 이음표(U+2060)를 넣어 낱말 안에서
+ *   끊기지 않게 한다. 띄어쓰기에서만 줄이 바뀐다.
+ */
+const KO_BREAK_WEB =
+  Platform.OS === 'web' ? ({ wordBreak: 'keep-all', overflowWrap: 'anywhere' } as unknown as TextStyle) : null;
+const HANGUL_PAIR = /([\uAC00-\uD7A3])(?=[\uAC00-\uD7A3])/g;
+function keepKoreanWords(children: ReactNode): ReactNode {
+  if (Platform.OS !== 'android') return children;
+  const fix = (c: ReactNode) => (typeof c === 'string' ? c.replace(HANGUL_PAIR, '$1\u2060') : c);
+  return Array.isArray(children) ? children.map(fix) : fix(children);
 }
 
 /**

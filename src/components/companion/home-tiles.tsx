@@ -232,7 +232,7 @@ export function HealthTile({ order, item }: { order: number; item: HealthItem | 
         />
         <Text style={[styles.big, { color: tint }]}>{item ? item.big : '여유'}</Text>
         <Text style={[styles.sub, { color: item?.urgent ? p.danger : p.muted }]} numberOfLines={2}>
-          {item ? item.sub : '30일 안에 챙길 접종·약이 없어요'}
+          {item ? item.sub : '한 달 안엔 챙길 게 없어요'}
         </Text>
     </Tile>
   );
