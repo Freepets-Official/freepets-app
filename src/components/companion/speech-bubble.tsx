@@ -215,15 +215,17 @@ function TypeText({
 
   const shown = done ? text.length : n;
   const typing = shown < text.length;
+  /**
+   * 아직 안 쓴 글자를 **투명하게 이어 붙인다.** 그러면 줄바꿈이 처음부터 완성된 문장 기준으로
+   * 정해져, 타자를 치는 동안 낱말이 줄 끝에 걸렸다가 다음 줄로 튀는 일이 없다(낱말 단위 줄바꿈).
+   * 높이도 처음부터 완성된 문장만큼 잡혀 말풍선이 출렁이지 않는다.
+   */
   return (
     <View style={styles.textBox}>
-      {/* 자리 잡기용 — 완성된 문장 높이만큼 미리 차지한다 */}
-      <Text style={[styles.text, styles.ghost]} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        {text}
-      </Text>
-      <Text style={[styles.text, styles.typed, { color }]}>
+      <Text style={[styles.text, { color }]}>
         {text.slice(0, shown)}
         {typing ? <Text style={{ color: caret }}>▍</Text> : null}
+        {typing ? <Text style={styles.ghost}>{text.slice(shown)}</Text> : null}
       </Text>
     </View>
   );
@@ -244,8 +246,8 @@ const styles = StyleSheet.create({
   tagText: { fontSize: Type.micro, fontWeight: '800' },
   textBox: { marginTop: 7 },
   text: { fontSize: 16.5, lineHeight: 24, fontWeight: '700', letterSpacing: -0.3 },
-  ghost: { opacity: 0 },
-  typed: { position: 'absolute', top: 0, left: 0, right: 0 },
+  // 투명 글자 — 색만 지운다(opacity는 중첩 Text에서 안 먹는 플랫폼이 있다)
+  ghost: { color: 'transparent' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: Radius.full },
   chipText: { fontSize: Type.caption, fontWeight: '800', fontVariant: ['tabular-nums'] },
