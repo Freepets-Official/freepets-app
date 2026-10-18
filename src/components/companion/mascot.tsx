@@ -17,7 +17,7 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
-import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 
 import { AccessoryAt } from '@/components/companion/accessories';
 import { PawBurst } from '@/components/paw-burst';
@@ -110,6 +110,26 @@ function Layer({
   );
 }
 
+/**
+ * 2.5D 털 명암 — 위·왼쪽에서 빛이 오고 아래로 갈수록 따뜻한 그늘. 손그림 선은 그대로 두고 면만
+ * 둥글게 보이게 한다. 같은 id를 층마다 다시 정의한다(층이 각자 Svg라 서로의 Defs를 못 본다).
+ */
+function FurDefs({ light, shade }: { light: string; shade: string }) {
+  return (
+    <Defs>
+      <RadialGradient id="furHead" cx="40%" cy="28%" r="78%">
+        <Stop offset="0" stopColor={light} />
+        <Stop offset="0.58" stopColor={light} />
+        <Stop offset="1" stopColor={shade} />
+      </RadialGradient>
+      <LinearGradient id="furBody" x1="0" y1="0" x2="0" y2="1">
+        <Stop offset="0.15" stopColor={light} />
+        <Stop offset="1" stopColor={shade} />
+      </LinearGradient>
+    </Defs>
+  );
+}
+
 /** 떨리는 윤곽 한 벌 — frame이 자기 차례일 때만 보인다 */
 function BoilCopy({ frame, index, children }: { frame: SharedValue<number>; index: number; children: ReactNode }) {
   const style = useAnimatedStyle(() => ({ opacity: Math.floor(frame.value) % 3 === index ? 1 : 0 }));
@@ -170,6 +190,9 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
 
   const ink = cc.ink;
   const fill = cc.fill;
+  const head = 'url(#furHead)';
+  const body = 'url(#furBody)';
+  const defs = <FurDefs light={cc.fill} shade={cc.shade} />;
   const line = { stroke: ink, strokeWidth: 3.1, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
   /* 표정 — 말하는 쪽의 기분에서 정해지고, 쓰다듬기·하품이 잠깐 덮어쓴다 */
@@ -193,6 +216,12 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
   const catHop = useSharedValue(0);
   const catWiggle = useSharedValue(0);
   const catCurl = useSharedValue(0);
+  // 2.5D 동작 — 제자리 한 바퀴(3D 회전) · 털기 · 기지개 · 그루밍
+  const dogSpin = useSharedValue(0);
+  const catSpin = useSharedValue(0);
+  const dogShake = useSharedValue(0);
+  const catStretch = useSharedValue(0);
+  const catNod = useSharedValue(0);
   const dogHead = useSharedValue(0);
   const catHead = useSharedValue(0);
   const dogEar = useSharedValue(0);
@@ -256,6 +285,31 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
     return () => clearTimeout(t);
   }, [moving, blink]);
 
+  /** 여러 가지 몸동작. 혼자 놀 때와 눌렀을 때 골고루 쓴다 */
+  const SPIN = Easing.bezier(0.45, 0, 0.2, 1);
+  const moves = {
+    // 제자리에서 한 바퀴 — 납작한 그림이 3D로 돌아 입체감이 가장 크게 느껴지는 동작
+    dogSpin: () => dogSpin.set(withSequence(withTiming(360, { duration: 760, easing: SPIN }), withTiming(0, { duration: 0 }))),
+    catSpin: () => catSpin.set(withSequence(withTiming(-360, { duration: 820, easing: SPIN }), withTiming(0, { duration: 0 }))),
+    // 물에서 나온 강아지처럼 부르르
+    dogShake: () =>
+      dogShake.set(
+        withSequence(
+          ...[9, -9, 8, -8, 6, -6, 3].map((d) => withTiming(d, { duration: 60 })),
+          withTiming(0, { duration: 90 }),
+        ),
+      ),
+    // 깡충깡충 두 번
+    dogDoubleHop: () => {
+      dogHop.set(0);
+      dogHop.set(withSequence(withTiming(1, { duration: 460, easing: Easing.linear }), withTiming(0, { duration: 0 }), withTiming(1, { duration: 460, easing: Easing.linear })));
+    },
+    // 고양이 기지개 — 옆으로 길어지고 낮아졌다 돌아온다
+    catStretch: () => catStretch.set(withSequence(withTiming(1, { duration: 650, easing: EASE_OUT }), withDelay(450, withTiming(0, { duration: 500, easing: EASE_OUT })))),
+    // 고양이 그루밍 — 고개를 숙였다 들었다 세 번
+    catGroom: () => catNod.set(withRepeat(withSequence(withTiming(1, { duration: 200 }), withTiming(0, { duration: 220 })), 3)),
+  };
+
   // 혼자 노는 동작 — 몇 초마다 하나
   const faceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flashFace = (o: { dog?: DogFace; cat?: CatFace }, ms: number) => {
@@ -304,6 +358,10 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
       () => {
         dogHead.set(withSequence(withTiming(5, { duration: 380 }), withDelay(500, withTiming(0, { duration: 380 }))));
       },
+      () => moves.dogSpin(),
+      () => moves.dogShake(),
+      () => moves.catStretch(),
+      () => moves.catGroom(),
     ];
     // 고양이 하품은 졸고 있을 때만 — 말하는 중에 하품하면 이상하다
     if (catSleeping) actions.push(() => flashFace({ cat: 'yawn' }, 1300));
@@ -315,17 +373,33 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
     };
     loop();
     return () => clearTimeout(t);
+    // moves는 공유 값만 건드린다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moving, catSleeping, dogHead, dogEar, nose, gx, catHead, catCurl, touching]);
 
   /* 스타일 */
-  const breatheDog = useAnimatedStyle(() => ({ transform: [{ scaleX: 1 + breathe.value * 0.012 }, { scaleY: 1 + breathe.value * 0.022 }] }));
-  const breatheCat = useAnimatedStyle(() => ({ transform: [{ scaleX: 1 + (1 - breathe.value) * 0.012 }, { scaleY: 1 + (1 - breathe.value) * 0.022 }] }));
-  const dogHopStyle = useHopStyle(dogHop);
-  const catHopStyle = useHopStyle(catHop, catWiggle);
+  // 패럴랙스 — 기울기(시선 값)에 따라 몸은 조금, 머리는 더 많이 움직여 앞뒤 깊이가 생긴다
+  const kk = width / VB_W;
+  const breatheDog = useAnimatedStyle(() => ({
+    transform: [{ translateX: gx.value * kk * 0.4 }, { scaleX: 1 + breathe.value * 0.012 }, { scaleY: 1 + breathe.value * 0.022 }],
+  }));
+  const breatheCat = useAnimatedStyle(() => ({
+    transform: [{ translateX: gx.value * kk * 0.4 }, { scaleX: 1 + (1 - breathe.value) * 0.012 }, { scaleY: 1 + (1 - breathe.value) * 0.022 }],
+  }));
+  const dogHopStyle = useHopStyle(dogHop, undefined, { spin: dogSpin, shake: dogShake });
+  const catHopStyle = useHopStyle(catHop, catWiggle, { spin: catSpin, stretch: catStretch });
   const dogTailStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${dogTail.value}deg` }] }));
   const catTailStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${catTail.value + catCurl.value * 22}deg` }] }));
-  const dogHeadStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${dogHead.value}deg` }] }));
-  const catHeadStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${catHead.value}deg` }] }));
+  const dogHeadStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: gx.value * kk * 1.3 }, { translateY: gy.value * kk * 0.7 }, { rotate: `${dogHead.value}deg` }],
+  }));
+  const catHeadStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: gx.value * kk * 1.3 },
+      { translateY: gy.value * kk * 0.7 + catNod.value * 4 * kk },
+      { rotate: `${catHead.value - catNod.value * 7}deg` },
+    ],
+  }));
   const dogEarStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${dogEar.value}deg` }] }));
   const noseStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: nose.value }, { scaleY: 2 - nose.value }] }));
   const eyesStyle = useAnimatedStyle(() => ({ transform: [{ scaleY: blink.value }] }));
@@ -349,16 +423,28 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
     haptic.light();
     speak('멍!', 'dog');
     if (reduce) return;
-    dogHop.set(0);
-    dogHop.set(withTiming(1, { duration: 500, easing: Easing.linear }));
-    setBurst({ kind: 'paw', who: 'dog', key: Date.now() });
+    // 누를 때마다 다른 반응 — 깡충(발자국) · 한 바퀴 · 부르르 · 두 번 깡충
+    const pick = Math.floor(Math.random() * 4);
+    if (pick === 0) {
+      dogHop.set(0);
+      dogHop.set(withTiming(1, { duration: 500, easing: Easing.linear }));
+      setBurst({ kind: 'paw', who: 'dog', key: Date.now() });
+    } else if (pick === 1) moves.dogSpin();
+    else if (pick === 2) moves.dogShake();
+    else moves.dogDoubleHop();
   };
   const tapCat = () => {
     haptic.light();
     speak('…냥', 'cat');
     if (reduce) return;
-    catWiggle.set(withSequence(withTiming(1, { duration: 500, easing: EASE_OUT }), withTiming(0, { duration: 0 })));
-    catHead.set(withSequence(withTiming(-6, { duration: 200 }), withDelay(600, withTiming(0, { duration: 300 }))));
+    // 고양이는 시큰둥 — 고개 돌리기 · 기지개 · 그루밍 · 가끔 한 바퀴
+    const pick = Math.floor(Math.random() * 4);
+    if (pick === 0) {
+      catWiggle.set(withSequence(withTiming(1, { duration: 500, easing: EASE_OUT }), withTiming(0, { duration: 0 })));
+      catHead.set(withSequence(withTiming(-6, { duration: 200 }), withDelay(600, withTiming(0, { duration: 300 }))));
+    } else if (pick === 1) moves.catStretch();
+    else if (pick === 2) moves.catGroom();
+    else moves.catSpin();
   };
   const love = (who: Speaker) => {
     haptic.medium();
@@ -413,6 +499,8 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
 
       <Layer>
         <Ellipse cx={136} cy={163} rx={104} ry={6} fill={cc.shadow} />
+        <Ellipse cx={90} cy={159} rx={30} ry={3.4} fill={cc.shadow} />
+        <Ellipse cx={186} cy={159} rx={28} ry={3.4} fill={cc.shadow} />
       </Layer>
 
       {/* 발자국·하트는 그림 뒤에서 튀어나온다 — 앞에 그리면 얼굴에 얼룩처럼 묻는다 */}
@@ -432,7 +520,8 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
             frame={frame}
             render={(j) => (
               <>
-                <Path d={j(D.dogBody)} fill={fill} {...line} />
+                {defs}
+                <Path d={j(D.dogBody)} fill={body} {...line} />
                 <Path d={D.dogToes} fill="none" {...line} strokeWidth={2} />
               </>
             )}
@@ -451,15 +540,19 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
               frame={frame}
               render={(j) => (
                 <>
-                  <Path d={j(D.dogEarR)} fill={fill} {...line} />
-                  <Path d={j(D.dogHead)} fill={fill} {...line} />
+                  {defs}
+                  <Path d={j(D.dogEarR)} fill={head} {...line} />
+                  <Path d={j(D.dogHead)} fill={head} {...line} />
                 </>
               )}
             />
             <Layer pivot={[62, 56]} style={dogEarStyle}>
-              <Path d={D.dogEarL} fill={fill} {...line} />
+              {defs}
+              <Path d={D.dogEarL} fill={head} {...line} />
             </Layer>
             <Layer>
+              {/* 정수리 반사광 — 빛이 왼쪽 위에서 온다 */}
+              <Path d="M57 62 C62 47 77 40 93 40" fill="none" stroke="#FFFFFF" strokeWidth={3} strokeLinecap="round" opacity={0.85} />
               <Ellipse cx={69} cy={92} rx={7} ry={4} fill={cc.blush} />
               <Ellipse cx={119} cy={86} rx={5.5} ry={3.4} fill={cc.blush} />
               {showBrow ? <Path d={D.dogBrow} fill="none" {...line} strokeWidth={2.6} /> : null}
@@ -503,7 +596,8 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
             frame={frame}
             render={(j) => (
               <>
-                <Path d={j(D.catBody)} fill={fill} {...line} />
+                {defs}
+                <Path d={j(D.catBody)} fill={body} {...line} />
                 <Path d={D.catToes} fill="none" {...line} strokeWidth={2} />
               </>
             )}
@@ -514,8 +608,17 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
             </Layer>
           ) : null}
           <Animated.View style={[StyleSheet.absoluteFill, { transformOrigin: origin(184, 113) }, catHeadStyle]}>
-            <Boiled frame={frame} render={(j) => <Path d={j(D.catHead)} fill={fill} {...line} />} />
+            <Boiled
+              frame={frame}
+              render={(j) => (
+                <>
+                  {defs}
+                  <Path d={j(D.catHead)} fill={head} {...line} />
+                </>
+              )}
+            />
             <Layer>
+              <Path d="M157 70 L158 52" fill="none" stroke="#FFFFFF" strokeWidth={2.6} strokeLinecap="round" opacity={0.85} />
               <Path d={D.catStripes} fill="none" {...line} strokeWidth={2.6} />
               <Ellipse cx={163} cy={96} rx={6} ry={3.6} fill={cc.blush} />
               <Ellipse cx={206} cy={96} rx={6} ry={3.6} fill={cc.blush} />
@@ -598,8 +701,15 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
  * 깡충 — 0→1 한 번에 찌그러짐 → 뜀 → 착지 → 원위치를 그린다. 소식 하나에 한 번이지
  * 제자리 반복이 아니다(가만히 통통 튀는 건 산만하다). `wiggle`은 고양이가 몸을 트는 양.
  */
-function useHopStyle(h: SharedValue<number>, wiggle?: SharedValue<number>) {
+function useHopStyle(
+  h: SharedValue<number>,
+  wiggle?: SharedValue<number>,
+  extra?: { spin?: SharedValue<number>; shake?: SharedValue<number>; stretch?: SharedValue<number> },
+) {
   return useAnimatedStyle(() => {
+    const spin = extra?.spin ? extra.spin.value : 0;
+    const shake = extra?.shake ? extra.shake.value : 0;
+    const st = extra?.stretch ? extra.stretch.value : 0;
     const t = h.value;
     const y = t < 0.18 ? 0 : t < 0.48 ? -16 * ((t - 0.18) / 0.3) : t < 0.78 ? -16 * (1 - (t - 0.48) / 0.3) : 0;
     const sx =
@@ -613,10 +723,13 @@ function useHopStyle(h: SharedValue<number>, wiggle?: SharedValue<number>) {
     const done = t === 0 || t === 1;
     return {
       transform: [
+        // 원근 — 한 바퀴 돌 때 앞뒤 깊이가 보이게
+        { perspective: 600 },
         { translateY: done ? 0 : y },
-        { scaleX: done ? 1 : sx },
-        { scaleY: done ? 1 : 2 - sx },
-        { rotate: `${wiggle ? Math.sin(wiggle.value * Math.PI * 2) * 4 : 0}deg` },
+        { rotateY: `${spin}deg` },
+        { rotate: `${(wiggle ? Math.sin(wiggle.value * Math.PI * 2) * 4 : 0) + shake}deg` },
+        { scaleX: (done ? 1 : sx) * (1 + st * 0.12) },
+        { scaleY: (done ? 1 : 2 - sx) * (1 - st * 0.14) },
       ],
     };
   });

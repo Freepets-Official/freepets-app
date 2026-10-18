@@ -126,10 +126,32 @@ export const ANCHORS: Record<'dog' | 'cat', Record<ItemSlot, { x: number; y: num
   },
 };
 
+/**
+ * 소품이 몸에 드리우는 그림자(2.5D). 모자 챙 아래·목도리 밑에 옅은 그늘을 깔아 "붙어 있는"
+ * 스티커가 아니라 "쓰고 있는" 것처럼 보이게 한다. 안경은 얼굴에 바로 닿아 그림자가 없다.
+ */
+const SHADOW: Partial<Record<ItemId, string>> = {
+  ribbon: 'M-12 4 C-4 8 6 8 12 4',
+  flower: 'M-8 2 C-2 5 4 5 8 2',
+  star: 'M-7 3 C-2 5 3 5 7 3',
+  beret: 'M-20 3 C-6 9 12 8 22 1',
+  crown: 'M-14 4 C-4 8 6 8 14 4',
+  bandana: 'M-22 -1 Q0 9 22 -1',
+  bowtie: 'M-12 6 Q0 10 12 6',
+  bell: 'M-22 0 Q0 10 22 0',
+  knit: 'M-24 2 C-10 12 10 12 24 2',
+};
+
 /** 마스코트 안에서 쓰는 소품 묶음 — 기준점으로 옮겨 그린다 */
 export function AccessoryAt({ who, slot, id }: { who: 'dog' | 'cat'; slot: ItemSlot; id: ItemId }) {
   const a = ANCHORS[who][slot];
-  return <G transform={`translate(${a.x} ${a.y}) rotate(${a.r}) scale(${a.s ?? 1})`}>{accessoryShape(id)}</G>;
+  const sh = SHADOW[id];
+  return (
+    <G transform={`translate(${a.x} ${a.y}) rotate(${a.r}) scale(${a.s ?? 1})`}>
+      {sh ? <Path d={sh} transform="translate(0 5)" fill="none" stroke="rgba(90,55,35,0.22)" strokeWidth={6} strokeLinecap="round" /> : null}
+      {accessoryShape(id)}
+    </G>
+  );
 }
 
 /** 소품 하나만 그린 아이콘(꾸미기 목록·상자 결과) */

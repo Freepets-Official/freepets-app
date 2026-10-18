@@ -154,6 +154,8 @@ export const LevelUpFonts = { ko: 'Jua-Regular', latin: 'Fredoka-Bold' } as cons
 export const CompanionColors = {
   light: {
     fill: '#FFFFFF',
+    // 털 아래쪽 그늘(2.5D 명암) — 위는 fill, 아래로 갈수록 이 색
+    shade: '#EADBCF',
     ink: '#2D2622',
     shadow: 'rgba(45,38,34,0.07)',
     blush: '#FFC9B0',
@@ -165,6 +167,7 @@ export const CompanionColors = {
   },
   dark: {
     fill: '#EADCC8',
+    shade: '#CDB698',
     ink: '#3A2D24',
     shadow: 'rgba(0,0,0,0.35)',
     blush: '#F1AE93',
