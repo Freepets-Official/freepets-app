@@ -2,18 +2,21 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import Animated, { FadeIn, FadeInDown, useAnimatedStyle, useReducedMotion, withSpring } from 'react-native-reanimated';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { Text } from '@/components/text';
 import { Chip } from '@/components/chip';
+import { TiltPressable } from '@/components/motion/tilt-pressable';
 import { FacilityCard } from '@/components/facility-card';
 import { LoadState } from '@/components/load-state';
 import { RankingView } from '@/components/ranking-view';
 import { RegionChips, sigunguHasDistricts, useRegions } from '@/components/region-chips';
 import { Screen } from '@/components/screen';
 import { SectionTitle } from '@/components/section-title';
-import { Radius, Spacing, Type } from '@/constants/theme';
-import { CATEGORY_LABEL, type Category, type Facility } from '@/data/types';
-import { usePalette } from '@/hooks/use-theme';
+import { ClayShadow, Radius, Spacing, Type } from '@/constants/theme';
+import { CATEGORY_ICON, CATEGORY_LABEL, type Category, type Facility } from '@/data/types';
+import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { facilitiesApi } from '@/lib/api';
 import { getCurrentLocation, type Coords } from '@/lib/location';
 import { useAppStore } from '@/store/app-store';
@@ -81,6 +84,10 @@ const HEADER: Record<Mode, { eyebrow: string; title: string; subtitle: string }>
 
 export default function ExploreScreen() {
   const p = usePalette();
+  const clay = ClayShadow[useColorScheme()];
+  const reduce = useReducedMotion();
+  const [segW, setSegW] = useState(0);
+  const [searchFocus, setSearchFocus] = useState(false);
   const router = useRouter();
   const { settings, updateSettings, registerFacilities, setLastCoords } = useAppStore();
   const [mode, setMode] = useState<Mode>('nearby');
@@ -293,23 +300,23 @@ export default function ExploreScreen() {
   // 정보라, 감추는 것보다 보여주는 쪽이 값어치가 있다(전국 5건뿐이라 목록을 어지럽히지도 않는다).
   const facilities = items;
 
+  const modeIndex = MODES.findIndex((t) => t.key === mode);
   return (
     <Screen {...HEADER[mode]}>
-      {/* 내 주변 ↔ 발자국 랭킹 전환 */}
-      <View style={[styles.segment, { backgroundColor: p.surface, borderColor: p.line }]}>
-        {(
-          [
-            { key: 'nearby', icon: 'location', label: '내 주변' },
-            { key: 'all', icon: 'earth', label: '전체' },
-            { key: 'ranking', icon: 'trophy', label: '발자국 랭킹' },
-          ] as const
-        ).map((tab) => {
+      {/* 내 주변 ↔ 전체 ↔ 발자국 랭킹 — 흰 알약이 고른 칸으로 미끄러져 간다 */}
+      <View
+        style={[styles.segment, { backgroundColor: p.surface, borderColor: p.line }]}
+        onLayout={(e) => setSegW(e.nativeEvent.layout.width)}>
+        {segW > 0 ? <SegmentPill index={modeIndex} width={(segW - 2 - 6 - 6) / 3} /> : null}
+        {MODES.map((tab) => {
           const active = mode === tab.key;
           return (
             <Pressable
               key={tab.key}
               onPress={() => setMode(tab.key)}
-              style={[styles.segmentItem, active && { backgroundColor: p.card }]}>
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              style={styles.segmentItem}>
               <Ionicons
                 name={active ? tab.icon : (`${tab.icon}-outline` as const)}
                 size={16}
@@ -327,18 +334,34 @@ export default function ExploreScreen() {
         <RankingView coords={coords} />
       ) : (
         <>
-          <View style={[styles.search, { backgroundColor: p.surface, borderColor: p.line }]}>
-            <Ionicons name="search" size={18} color={p.muted} />
+          <View
+            style={[
+              styles.search,
+              {
+                backgroundColor: p.card,
+                borderColor: searchFocus ? p.accent : p.line,
+                boxShadow: searchFocus ? `0 0 0 4px ${p.accentSoft}` : clay.rest,
+              },
+            ]}>
+            <Ionicons name="search" size={18} color={searchFocus ? p.accent : p.muted} />
             <TextInput
               ref={searchRef}
               value={keyword}
               onChangeText={setKeyword}
+              onFocus={() => setSearchFocus(true)}
+              onBlur={() => setSearchFocus(false)}
+              returnKeyType="search"
+              accessibilityLabel="시설 검색"
               placeholder="시설명이나 지역으로 검색"
               placeholderTextColor={p.muted}
               style={[styles.searchInput, { color: p.ink }]}
             />
             {keyword.length > 0 && (
-              <Ionicons name="close-circle" size={17} color={p.muted} onPress={() => setKeyword('')} />
+              <Animated.View entering={reduce ? undefined : FadeIn.duration(140)}>
+                <Pressable onPress={() => setKeyword('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="검색어 지우기">
+                  <Ionicons name="close-circle" size={18} color={p.muted} />
+                </Pressable>
+              </Animated.View>
             )}
           </View>
 
@@ -356,6 +379,7 @@ export default function ExploreScreen() {
             {CATEGORIES.map((c) => (
               <Chip
                 key={c}
+                icon={CATEGORY_ICON[c]}
                 label={CATEGORY_LABEL[c]}
                 selected={category === c}
                 onPress={() => setCategory(category === c ? null : c)}
@@ -386,23 +410,29 @@ export default function ExploreScreen() {
           )}
 
           {/* 여행 코스 판별 진입점 — 낱개 시설이 아니라 하루 동선 전체를 검증한다 */}
-          <Pressable
+          <TiltPressable
             onPress={() => router.push('/course')}
-            style={({ pressed }) => [
-              styles.courseCta,
-              { borderColor: p.accent, backgroundColor: pressed ? p.accentSoft : p.card },
-            ]}>
-            <View style={[styles.courseIcon, { backgroundColor: p.accentSoft }]}>
-              <Ionicons name="map" size={20} color={p.accent} />
-            </View>
+            accessibilityRole="button"
+            accessibilityLabel="여행 코스 판별"
+            maxTilt={4}
+            style={(pressed) => [styles.courseCta, { backgroundColor: p.accentSoft, boxShadow: pressed ? clay.pressed : clay.rest }]}>
+            {/* 점선 동선 위의 핀 세 개 — 낱개가 아니라 "하루 코스"를 본다는 그림 */}
+            <Svg width={92} height={56} viewBox="0 0 92 56" style={styles.courseArt}>
+              <Path d="M10 44 C26 44 22 14 44 18 C64 22 60 44 82 12" fill="none" stroke={p.accent} strokeWidth={2.5} strokeDasharray="1 6" strokeLinecap="round" />
+              <Circle cx={10} cy={44} r={6} fill={p.card} stroke={p.accent} strokeWidth={2.5} />
+              <Circle cx={44} cy={18} r={6} fill={p.card} stroke={p.accent} strokeWidth={2.5} />
+              <Circle cx={82} cy={12} r={7} fill={p.accent} />
+              <Path d="M79 12 l2.2 2.2 l4 -4.4" fill="none" stroke={p.onAccent} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
             <View style={styles.courseText}>
+              <Text style={[styles.courseEyebrow, { color: p.accentDark }]}>하루 동선 한 번에</Text>
               <Text style={[styles.courseTitle, { color: p.ink }]}>여행 코스 판별</Text>
-              <Text style={[styles.courseBody, { color: p.muted }]}>
-                여러 곳을 코스로 묶어 하루 동선을 한 번에 확인해요
-              </Text>
+              <Text style={[styles.courseBody, { color: p.muted }]}>여러 곳을 묶어 한 번에 확인해요</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={p.accent} />
-          </Pressable>
+            <View style={[styles.courseGo, { backgroundColor: p.accent }]}>
+              <Ionicons name="arrow-forward" size={18} color={p.onAccent} />
+            </View>
+          </TiltPressable>
 
           <SectionTitle
             title={mode === 'all' ? '전체 시설' : '내 주변 시설'}
@@ -432,8 +462,11 @@ export default function ExploreScreen() {
             <LoadState kind="loading" message={mode === 'all' ? '시설을 찾고 있어요…' : '내 주변 시설을 찾고 있어요…'} />
           ) : (
             <View style={styles.list}>
-              {facilities.map((f) => (
-                <FacilityCard key={f.facilityId} facility={f} />
+              {facilities.map((f, i) => (
+                // 목록이 한 장씩 차례로 떠오른다. 더 보기로 붙는 카드도 첫 몇 장만 늦춰 길게 기다리지 않게
+                <Animated.View key={f.facilityId} entering={reduce ? undefined : FadeInDown.delay(Math.min(i % PAGE_SIZE, 8) * 45).duration(280)}>
+                  <FacilityCard facility={f} />
+                </Animated.View>
               ))}
 
               {facilities.length > 0 && hasMore && (
@@ -486,7 +519,26 @@ export default function ExploreScreen() {
   );
 }
 
+const MODES = [
+  { key: 'nearby', icon: 'location', label: '내 주변' },
+  { key: 'all', icon: 'earth', label: '전체' },
+  { key: 'ranking', icon: 'trophy', label: '발자국 랭킹' },
+] as const;
+
+/** 탭 아래 미끄러지는 흰 알약 — 칸을 바꾸면 스프링으로 따라간다 */
+function SegmentPill({ index, width }: { index: number; width: number }) {
+  const p = usePalette();
+  const clay = ClayShadow[useColorScheme()];
+  const reduce = useReducedMotion();
+  const x = index * (width + 3);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateX: reduce ? x : withSpring(x, { damping: 18, stiffness: 220, mass: 0.7 }) }],
+  }));
+  return <Animated.View pointerEvents="none" style={[styles.segmentPill, { width, backgroundColor: p.card, boxShadow: clay.rest }, style]} />;
+}
+
 const styles = StyleSheet.create({
+  segmentPill: { position: 'absolute', top: 3, bottom: 3, left: 3, borderRadius: Radius.full },
   segment: {
     flexDirection: 'row',
     borderRadius: Radius.full,
@@ -509,7 +561,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.sm,
     borderRadius: Radius.full,
-    borderWidth: 1,
+    borderWidth: 1.5,
     paddingHorizontal: Spacing.lg,
     paddingVertical: 12,
   },
@@ -520,18 +572,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    borderWidth: 1.5,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.xl,
     padding: Spacing.lg,
+    overflow: 'hidden',
   },
-  courseIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  courseArt: { marginLeft: -4 },
   courseText: { flex: 1, gap: 2 },
+  courseEyebrow: { fontSize: Type.caption, fontWeight: '800' },
+  courseGo: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   courseTitle: { fontSize: Type.callout, fontWeight: '800', letterSpacing: -0.3 },
   courseBody: { fontSize: Type.footnote, lineHeight: 17 },
   more: { alignItems: 'center', borderWidth: 1, borderRadius: Radius.full, paddingVertical: 12 },
