@@ -228,6 +228,8 @@ function RootNavigator() {
         name="calendar-event"
         options={{ title: '일정 추가', headerBackButtonDisplayMode: 'minimal' }}
       />
+      {/* 계절 리캡은 스토리처럼 화면 전체를 쓴다 — 머리글 없이, 아래에서 올라오는 몰입 화면 */}
+      <Stack.Screen name="recap" options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'fade' }} />
       <Stack.Screen
         name="day-diary"
         options={{ title: '하루 기록', headerBackButtonDisplayMode: 'minimal' }}
