@@ -443,6 +443,7 @@ function EventRow({
   onDelete: () => void;
 }) {
   const p = usePalette();
+  const router = useRouter();
   const meta = CAL_EVENT_META[e.type];
   const sub = [petName, e.time ?? '종일', e.repeat !== 'NONE' ? CAL_REPEAT_LABEL[e.repeat] : null]
     .filter(Boolean)
@@ -469,6 +470,19 @@ function EventRow({
         </View>
         <Text style={[styles.rowSub, { color: p.muted }]}>{sub}</Text>
         {e.notes ? <Text style={[styles.rowNotes, { color: p.muted }]}>{e.notes}</Text> : null}
+        {/* 여행은 떠나기 전 챙길 것(접종·준비물·서류)을 한 화면에서 */}
+        {e.type === 'TRAVEL' && (
+          <Pressable
+            onPress={(ev) => {
+              ev.stopPropagation();
+              router.push({ pathname: '/trip-kit', params: { eventId: String(e.eventId) } });
+            }}
+            accessibilityRole="button"
+            style={[styles.takenBtn, { backgroundColor: p.accentSoft, borderColor: p.accent }]}>
+            <Ionicons name="shield-checkmark" size={14} color={p.accentDark} />
+            <Text style={[styles.takenText, { color: p.accentDark }]}>여행 안심 키트</Text>
+          </Pressable>
+        )}
         {e.type === 'MED' && (
           <Pressable
             onPress={(ev) => {
