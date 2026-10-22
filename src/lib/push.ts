@@ -145,7 +145,7 @@ export async function getFcmToken(): Promise<string | null> {
 
 /** 서버가 보내는 data payload. 탭했을 때 어디로 갈지는 이 값으로 정한다. */
 /** facilityId: 서버 푸시(거부 경고) · url: 앱이 예약한 로컬 알림(퀘스트 저녁 알림)이 열 화면 */
-export type PushData = { facilityId?: string; url?: string };
+export type PushData = { facilityId?: string; url?: string; eventId?: string };
 
 /** 이미 처리한 알림 탭(알림 식별자) — 앱이 사는 동안 */
 const handledTaps = new Set<string>();

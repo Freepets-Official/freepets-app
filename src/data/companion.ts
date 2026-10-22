@@ -275,11 +275,17 @@ function upcomingNews(input: CompanionInput, today: string): CompanionMessage[] 
           tag: ongoing ? '여행 중' : dday === 0 ? '오늘 출발' : `여행 D-${dday}`,
           text: ongoing
             ? `${e.title} 여행 중이구나! 들어가기 전에 출입 판별부터 해 줄게.`
-            : `${whenWord(dday)} ${e.title}! 들를 곳을 미리 판별해 둘까?`,
-          actions: [
-            { kind: 'route', label: '판별하러 가기', href: '/(tabs)/explore' },
-            { kind: 'route', label: '여행 코스', href: '/course' },
-          ],
+            : `${whenWord(dday)} ${e.title}! 접종이랑 준비물부터 같이 챙겨 볼까?`,
+          // 떠나기 전엔 안심 키트(접종·준비물)가 먼저, 여행 중엔 판별이 먼저
+          actions: ongoing
+            ? [
+                { kind: 'route', label: '판별하러 가기', href: '/(tabs)/explore' },
+                { kind: 'route', label: '안심 키트', href: { pathname: '/trip-kit', params: { eventId: String(e.eventId) } } },
+              ]
+            : [
+                { kind: 'route', label: '안심 키트', href: { pathname: '/trip-kit', params: { eventId: String(e.eventId) } } },
+                { kind: 'route', label: '여행 코스', href: '/course' },
+              ],
         });
       }
     }

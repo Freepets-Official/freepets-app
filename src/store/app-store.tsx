@@ -5,6 +5,7 @@ import { clearOwnerFacilitiesCache } from '@/hooks/use-owner-facilities';
 import { clearPetStatsCache } from '@/hooks/use-pet-stats';
 import { clearPushToken, loadPushToken, savePushToken } from '@/lib/push-token-store';
 import { cancelQuestReminders } from '@/lib/quest-reminder';
+import { cancelTripReminders } from '@/lib/trip-reminder';
 import { logAuth, tokenTimes } from '@/lib/auth-log';
 import { clearSession, loadSession, saveSession, type LoginProvider } from '@/lib/token-store';
 import { clearStamps, loadStamps, saveStamps } from '@/lib/stamp-store';
@@ -2277,6 +2278,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     clearOwnerFacilitiesCache();
     // 퀘스트 저녁 알림은 기기 전체에 예약된다 — 두면 다음 사람이 이전 계정의 "N일 연속" 알림을 받는다
     void cancelQuestReminders();
+    void cancelTripReminders();
     setMyUserId(null);
     setPets([]);
     setChecks([]);

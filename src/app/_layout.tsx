@@ -154,6 +154,13 @@ function usePushDeepLink() {
         if (session.activeProfile !== 'owner') router.push('/quests');
         return;
       }
+      // 여행 전날 알림 — 그 여행의 안심 키트를 연다(id가 깨졌으면 가장 가까운 여행)
+      if (data.url === '/trip-kit') {
+        if (session.activeProfile === 'owner') return;
+        const eid = Number(data.eventId);
+        router.push(Number.isInteger(eid) && eid > 0 ? { pathname: '/trip-kit', params: { eventId: String(eid) } } : '/trip-kit');
+        return;
+      }
       const id = Number(data.facilityId);
       // 서버가 문자열로 보내므로 숫자로 바꾼다. 값이 깨졌으면 아무 데도 보내지 않는다.
       if (Number.isFinite(id) && id > 0) {
@@ -230,6 +237,10 @@ function RootNavigator() {
       />
       {/* 계절 리캡은 스토리처럼 화면 전체를 쓴다 — 머리글 없이, 아래에서 올라오는 몰입 화면 */}
       <Stack.Screen name="recap" options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'fade' }} />
+      <Stack.Screen
+        name="trip-kit"
+        options={{ title: '여행 안심 키트', headerBackButtonDisplayMode: 'minimal' }}
+      />
       <Stack.Screen
         name="day-diary"
         options={{ title: '하루 기록', headerBackButtonDisplayMode: 'minimal' }}
