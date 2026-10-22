@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
@@ -27,7 +28,16 @@ import { Text } from '@/components/text';
 import { LevelUpFonts, Type } from '@/constants/theme';
 import { footprintsOf } from '@/data/footprints';
 import { levelProgress, tierName } from '@/data/level';
-import { BREED_SIZE_LABEL, PET_GENDER_LABEL, PET_KIND_LABEL, petAgeYears, type Pet } from '@/data/types';
+import {
+  BREED_SIZE_LABEL,
+  PET_GENDER_LABEL,
+  PET_KIND_LABEL,
+  nextVaccinationOf,
+  petAgeYears,
+  vaccinationDday,
+  type Pet,
+  type PetCheck,
+} from '@/data/types';
 import { usePetStats } from '@/hooks/use-pet-stats';
 import { usePalette } from '@/hooks/use-theme';
 import { haptic } from '@/lib/haptics';
@@ -81,6 +91,8 @@ export function PassportBook({
   viewportH: number;
 }) {
   const p = usePalette();
+  const router = useRouter();
+  const { checks, facilityById } = useAppStore();
   const reduce = useReducedMotion();
   const [width, setWidth] = useState(0);
   const pageW = width / 2;
@@ -235,6 +247,23 @@ export function PassportBook({
       if (!success && d === 2) rubber.set(withSpring(0));
     });
 
+  /* ───── 출입증 — 지금 보이는 아이의 가장 최근 '들어갈 수 있는' 판별 ───── */
+  const pass = n ? passFor(checks, pets[curIdx].petId) : null;
+  const openPass = useCallback(() => {
+    if (!pass) return;
+    haptic.light();
+    router.push({ pathname: '/passport/[id]', params: { id: String(pass.facilityId) } });
+  }, [pass, router]);
+  // 펼친 여권을 톡 누르면 바로 출입증 — 문 앞에서 홈을 열자마자 꺼낼 수 있게.
+  // 넘기기(pan)가 먼저 판단하고, 손가락이 거의 안 움직였을 때만 탭으로 본다
+  const tap = Gesture.Tap()
+    .enabled(opened && !!pass)
+    .maxDistance(8)
+    .onEnd((_, ok) => {
+      if (ok) scheduleOnRN(openPass);
+    });
+  const gesture = Gesture.Exclusive(pan, tap);
+
   /* ───── 표지 — 화면에 들어오면 한 번 열린다 ───── */
   const bookRef = useAnimatedRef<Animated.View>();
   const onOpened = () => {
@@ -302,7 +331,7 @@ export function PassportBook({
         ) : null}
       </View>
 
-      <GestureDetector gesture={pan}>
+      <GestureDetector gesture={gesture}>
         <View
           style={[styles.stage, { height: pageH + BLEED + 34 }]}
           // 표지 테두리가 화면 가장자리에 닿지 않게 그만큼 좁힌다
@@ -399,10 +428,84 @@ export function PassportBook({
         </View>
       </GestureDetector>
 
+      <PassButton
+        pet={pet}
+        check={pass}
+        facilityName={pass ? facilityById(pass.facilityId)?.name : undefined}
+        onPress={openPass}
+      />
       {n > 1 && opened ? (
         <Text style={[styles.hint, { color: p.muted }]}>여권을 좌우로 밀면 다른 아이로 넘어가요</Text>
       ) : null}
     </View>
+  );
+}
+
+/**
+ * 이 아이가 함께 들어간 가장 최근 판별 중 '불가'가 아닌 것.
+ * 이력은 최신순이고, 서버 요약엔 verdicts가 비어 있어 petIds로 찾는다.
+ * 그룹 전체가 불가면 출입증 화면도 열 이유가 없다(시설 상세와 같은 기준).
+ */
+function passFor(checks: PetCheck[], petId: number): PetCheck | null {
+  return checks.find((c) => c.overall !== 'DENIED' && c.petIds.includes(petId)) ?? null;
+}
+
+/** 판별 시각을 '오늘·어제·n일 전·날짜'로 — 문 앞에서 이게 지금 그 시설 것인지 바로 알아보게 */
+function whenLabel(iso: string): string {
+  const day = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const at = new Date(iso);
+  const diff = Math.round((day(new Date()) - day(at)) / 86400000);
+  if (diff <= 0) return '오늘';
+  if (diff === 1) return '어제';
+  if (diff < 7) return `${diff}일 전`;
+  return `${at.getMonth() + 1}.${at.getDate()}`;
+}
+
+/**
+ * 여권 아래 출입증 단추. 여권이 장식이 아니라 **문 앞에서 꺼내는 물건**이 되게 하는 연결부.
+ * 판별 기록이 없으면 어떻게 하면 생기는지만 조용히 알려준다.
+ */
+function PassButton({
+  pet,
+  check,
+  facilityName,
+  onPress,
+}: {
+  pet: Pet;
+  check: PetCheck | null;
+  facilityName: string | undefined;
+  onPress: () => void;
+}) {
+  const p = usePalette();
+  if (!check) {
+    return (
+      <Text style={[styles.passEmpty, { color: p.muted }]}>
+        출입 판별을 하면 여기서 바로 출입증을 꺼내요
+      </Text>
+    );
+  }
+  const tone = check.overall === 'ALLOWED' ? p.success : p.warn;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${pet.name} 출입증 열기, ${facilityName ?? '최근 판별한 시설'}`}
+      style={({ pressed }) => [
+        styles.passBtn,
+        { backgroundColor: p.card, borderColor: p.line, transform: [{ scale: pressed ? 0.98 : 1 }] },
+      ]}>
+      <View style={[styles.passIcon, { backgroundColor: p.accentSoft }]}>
+        <Ionicons name="qr-code" size={18} color={p.accent} />
+      </View>
+      <View style={styles.flex}>
+        <Text style={[styles.passTitle, { color: p.ink }]}>출입증 꺼내기</Text>
+        <Text style={[styles.passMeta, { color: p.muted }]} numberOfLines={1}>
+          {facilityName ?? '최근 판별한 시설'} · {whenLabel(check.createdAt)}
+        </Text>
+      </View>
+      <View style={[styles.passDot, { backgroundColor: tone }]} />
+      <Ionicons name="chevron-forward" size={16} color={p.muted} />
+    </Pressable>
   );
 }
 
@@ -611,6 +714,7 @@ function DataPage({ pet, w, h }: { pet: Pet; w: number; h: number }) {
         <Field label="발급 Issued" value={issued} u={u} half />
         <Field label="번호 No." value={serial} u={u} half />
       </View>
+      <VaccineStamp pet={pet} u={u} />
       <View style={styles.mrzBox}>
         <Text style={[styles.mrz, { fontSize: 6.4 * u }]} numberOfLines={1}>
           {mrz1}
@@ -650,6 +754,48 @@ function PageCurve({ side }: { side: 'left' | 'right' }) {
         pointerEvents="none"
       />
     </>
+  );
+}
+
+/** 도장 잉크색 — 종이처럼 두 테마에서 같다 */
+const INK_OK = '#2F7D5B';
+const INK_SOON = '#C2691E';
+const INK_LATE = '#C2412D';
+const INK_NONE = '#A2937A';
+
+/**
+ * 신원 면의 접종 도장. 시설 입장 조건에서 가장 자주 묻는 게 접종이라 여권에서 바로 보이게 한다.
+ * 예정일은 사용자가 정한 값, 없으면 개·고양이는 마지막 접종 + 1년(`nextVaccinationOf`).
+ * 한 달 안이면 주황, 지나면 빨강 — 문 앞에서 막히기 전에 알아채도록.
+ */
+function VaccineStamp({ pet, u }: { pet: Pet; u: number }) {
+  const next = nextVaccinationOf(pet);
+  const dday = vaccinationDday(pet);
+  const done = pet.vaccinated || !!pet.vaccinationDate;
+  const s =
+    dday !== null && dday < 0
+      ? { ink: INK_LATE, title: '접종 기한 지남', sub: `${-dday}일 지났어요` }
+      : dday !== null && dday <= 30
+        ? { ink: INK_SOON, title: '접종 곧 만료', sub: dday === 0 ? '오늘까지' : `D-${dday}` }
+        : next
+          ? { ink: INK_OK, title: '접종 유효', sub: `~${next.replace(/-/g, '.')}` }
+          : done
+            ? { ink: INK_OK, title: '접종 완료', sub: pet.vaccinationDate ? pet.vaccinationDate.replace(/-/g, '.') : '날짜 미입력' }
+            : { ink: INK_NONE, title: '접종 기록 없음', sub: '아이 정보에서 입력' };
+  return (
+    <View
+      accessible
+      accessibilityLabel={`${s.title}, ${s.sub}`}
+      style={[styles.stampOuter, { borderColor: s.ink, right: 9 * u, bottom: 31 * u, padding: 1.6 * u, borderRadius: 6 * u }]}>
+      <View style={[styles.stampInner, { borderColor: s.ink, paddingHorizontal: 5 * u, paddingVertical: 2.4 * u, borderRadius: 4 * u }]}>
+        <Text style={[styles.stampTitle, { color: s.ink, fontSize: 7.6 * u }]} numberOfLines={1}>
+          {s.title}
+        </Text>
+        <Text style={[styles.stampSub, { color: s.ink, fontSize: 6.4 * u }]} numberOfLines={1}>
+          {s.sub}
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -835,7 +981,27 @@ const styles = StyleSheet.create({
   nav: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   navBtn: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   count: { fontSize: Type.footnote, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  hint: { fontSize: Type.caption, textAlign: 'center', marginTop: 4 },
+  hint: { fontSize: Type.caption, textAlign: 'center', marginTop: 8 },
+  passBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  passIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  passTitle: { fontSize: Type.footnote + 1, fontWeight: '800', letterSpacing: -0.2 },
+  passMeta: { fontSize: Type.caption, marginTop: 1 },
+  passDot: { width: 8, height: 8, borderRadius: 4 },
+  passEmpty: { fontSize: Type.caption, textAlign: 'center', marginTop: 6, paddingHorizontal: 12 },
+  // 비스듬히 찍힌 잉크 도장 — 두 줄 테두리, 살짝 바랜 농도
+  stampOuter: { position: 'absolute', borderWidth: 1.4, opacity: 0.86, transform: [{ rotate: '-7deg' }] },
+  stampInner: { borderWidth: 0.8, alignItems: 'center' },
+  stampTitle: { fontWeight: '900', letterSpacing: 0.4 },
+  stampSub: { fontWeight: '700', fontVariant: ['tabular-nums'], marginTop: 0.5 },
   stage: { marginTop: 10, alignItems: 'center', justifyContent: 'flex-start' },
   slot: { position: 'absolute', top: 0 },
   shade: { backgroundColor: '#1E140D' },
