@@ -3157,3 +3157,21 @@ export const ownerApi = {
   setBenefitEnabled: (facilityId: number, benefitId: number, isEnabled: boolean) =>
     request<OwnerBenefit>('PATCH', `/api/v1/owner/facilities/${facilityId}/benefits/${benefitId}/enabled`, { body: { isEnabled }, auth: true }),
 };
+
+// ─────────────────────────── 구독 권한 · 사전 신청 (제안 API) ───────────────────────────
+// freepets-docs api-specs/monetization-foundation.md 2번. 서버가 아직 없을 수 있어 호출한 쪽이
+// 실패를 FREE로 받아들인다.
+
+export type EntitlementResult = {
+  plan: 'FREE' | 'PASS';
+  expiresAt: string | null;
+  features: Record<string, { enabled: boolean; monthlyLimit?: number; usedThisMonth?: number }>;
+};
+
+export const subscriptionApi = {
+  entitlements: () => request<EntitlementResult>('GET', '/api/v1/me/entitlements', { auth: true }),
+  /** 출시 전 사전 신청. `interests`는 가장 기대하는 기능 — 무엇부터 만들지 정하는 데 쓴다 */
+  joinWaitlist: (product: 'PASS' | 'OWNER_PLUS', interests: string[]) =>
+    request<unknown>('POST', '/api/v1/me/waitlist', { body: { product, interests }, auth: true }),
+};
+
