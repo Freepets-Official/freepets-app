@@ -40,7 +40,7 @@ export default function OwnerDashboard() {
   const activeId = selectedId != null && owned.some((f) => f.facilityId === selectedId) ? selectedId : (owned[0]?.facilityId ?? null);
   const multi = owned.length > 1;
   const activeName = owned.find((f) => f.facilityId === activeId)?.name;
-  const go = (path: '/owner/promotion' | '/owner/benefits' | '/owner/stats' | '/owner/conditions' | '/owner/denials') =>
+  const go = (path: '/owner/insights' | '/owner/promotion' | '/owner/benefits' | '/owner/stats' | '/owner/conditions' | '/owner/denials') =>
     activeId != null && router.push({ pathname: path, params: { facilityId: String(activeId) } });
 
   const pending = myClaims.filter((c) => c.status !== 'APPROVED');
@@ -195,6 +195,7 @@ export default function OwnerDashboard() {
                 {multi && activeName ? `매장 관리 · ${activeName}` : '매장 관리'}
               </Text>
               <View style={[styles.menuCard, CardShadow, { backgroundColor: p.card, borderColor: p.line }]}>
+                <MenuRow icon="analytics-outline" label="반려 손님 리포트" sub="이번 주 판별 · 매장 완성도 · 손님이 망설인 이유" onPress={() => go('/owner/insights')} />
                 <MenuRow icon="clipboard-outline" label="출입 조건 관리" sub="동반 가능·체중·필수 조건을 직접 수정 (재심사 없음)" onPress={() => go('/owner/conditions')} />
                 <MenuRow icon="image-outline" label="매장 소개·홍보" sub="소개글·편의시설 태그" onPress={() => go('/owner/promotion')} />
                 <MenuRow icon="pricetag-outline" label="방문 혜택 안내" sub="출입증 제시 시 혜택 등" onPress={() => go('/owner/benefits')} />
