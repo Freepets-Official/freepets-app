@@ -9,6 +9,7 @@ import { TiltPressable } from '@/components/motion/tilt-pressable';
 import { PawChooser } from '@/components/paw-chooser';
 import { ChestCard, ChestOpening } from '@/components/quest/chest';
 import { StreakCard } from '@/components/quest/streak-card';
+import { PassTeaser } from '@/components/pass-teaser';
 import { RecapShelf } from '@/components/quest/recap-shelf';
 import { Wardrobe } from '@/components/quest/wardrobe';
 import { Screen } from '@/components/screen';
@@ -241,6 +242,8 @@ export default function QuestsScreen() {
           <Wardrobe journey={j.journey} onToggle={j.toggleItem} active={focused} initialWho={firstPetIsCat ? 'cat' : 'dog'} />
 
           <NextBadgeLine />
+
+          <PassTeaser />
 
           <View style={[styles.bonus, { borderColor: p.line, backgroundColor: p.card }]}>
             <Pressable

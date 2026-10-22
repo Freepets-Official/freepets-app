@@ -234,6 +234,7 @@ function RootNavigator() {
         name="day-diary"
         options={{ title: '하루 기록', headerBackButtonDisplayMode: 'minimal' }}
       />
+      <Stack.Screen name="pass" options={{ title: '꼬리패스', headerBackButtonDisplayMode: 'minimal' }} />
       <Stack.Screen
         name="policy"
         options={{ title: '약관·정책', headerBackButtonDisplayMode: 'minimal' }}

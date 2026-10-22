@@ -16,6 +16,7 @@ import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { ApiError, accountApi } from '@/lib/api';
 import { MAX_LEVEL } from '@/data/level';
 import { clearAuthLog, readAuthLog, type AuthLogEntry } from '@/lib/auth-log';
+import { usePass } from '@/hooks/use-pass';
 import { APP_VERSION, BUILD_COMMIT, BUILD_ID, BUILD_PROFILE, DEBUG_TOOLS } from '@/lib/config';
 import type { LoginProvider } from '@/lib/token-store';
 import { notify } from '@/lib/notify';
@@ -79,6 +80,7 @@ export default function SettingsScreen() {
   const { settings, updateSettings, businessRegs, session, account, availableProfiles, switchProfile, logout, gamification, setLevelUpNotification, showLevelUp } =
     useAppStore();
   // 로그인한 계정에만 물어본다 — 게스트는 운영자일 수 없고, 토큰 없이 부르면 401만 쌓인다
+  const pass = usePass();
   const isAdmin = useIsAdmin(session.authed);
   const regCount = Object.keys(businessRegs).length;
   const hasOwnerProfile = SHOW_BUSINESS && availableProfiles.includes('owner');
@@ -144,6 +146,18 @@ export default function SettingsScreen() {
       eyebrow="반갑꼬리"
       title="설정"
       subtitle="계정·알림·화면을 원하는 대로 맞춰요.">
+      {/* 멤버십 — 출시 전에는 소개·사전 신청 */}
+      <Group title="멤버십">
+        <Row
+          icon="ribbon-outline"
+          label="꼬리패스"
+          sub={pass.waitlist ? '사전 신청 완료 · 출시되면 알려 드려요' : '출시 예정 · 헛걸음 보상 · AI 여행 플래너'}
+          onPress={() => router.push('/pass')}
+          chevron
+          last
+        />
+      </Group>
+
       {/* 계정 */}
       <Group title="계정">
         {hasOwnerProfile && (
