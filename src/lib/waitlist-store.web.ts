@@ -9,11 +9,13 @@ export interface WaitlistRecord {
   joinedAt: string;
   synced: boolean;
 }
-const keyOf = (account: string) => `freepets.waitlist.${account.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 80)}`;
+// 상품마다 따로 — 사용자 꼬리패스와 사장님 플러스를 같은 계정에서 각각 신청할 수 있다. PASS는 예전 키를 그대로 쓴다
+const keyOf = (account: string, product: WaitlistRecord['product'] = 'PASS') =>
+  `freepets.waitlist.${product === 'PASS' ? '' : 'owner.'}${account.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 80)}`;
 
-export async function loadWaitlist(account: string): Promise<WaitlistRecord | null> {
+export async function loadWaitlist(account: string, product: WaitlistRecord['product'] = 'PASS'): Promise<WaitlistRecord | null> {
   try {
-    const raw = window.localStorage.getItem(keyOf(account));
+    const raw = window.localStorage.getItem(keyOf(account, product));
     return raw ? (JSON.parse(raw) as WaitlistRecord) : null;
   } catch {
     return null;
@@ -22,7 +24,7 @@ export async function loadWaitlist(account: string): Promise<WaitlistRecord | nu
 
 export async function saveWaitlist(account: string, rec: WaitlistRecord): Promise<void> {
   try {
-    window.localStorage.setItem(keyOf(account), JSON.stringify(rec));
+    window.localStorage.setItem(keyOf(account, rec.product), JSON.stringify(rec));
   } catch {
     // 못 남겨도 이번 세션 화면에는 반영된다
   }
