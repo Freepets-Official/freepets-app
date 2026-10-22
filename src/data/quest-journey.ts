@@ -1,4 +1,5 @@
 import type { DailyQuest, QuestSource } from '@/lib/api';
+import type { Season } from '@/data/seasons';
 
 /**
  * 오늘의 퀘스트 2.0 — "지치지 않게, 매일 조금씩".
@@ -69,41 +70,132 @@ export const activeToday = (quests: DailyQuest[]) => quests.some((q) => q.comple
 
 /* ───────── 꾸미기 소품 ───────── */
 
-export type ItemSlot = 'head' | 'neck' | 'face';
+export type ItemSlot = 'head' | 'neck' | 'face' | 'back';
+export const SLOTS: ItemSlot[] = ['head', 'face', 'neck', 'back'];
 export type ItemId =
-  | 'ribbon'
-  | 'bandana'
-  | 'flower'
-  | 'bowtie'
-  | 'star'
-  | 'bell'
-  | 'beret'
-  | 'knit'
-  | 'glasses'
-  | 'crown';
+  | 'ribbon' | 'flower' | 'star' | 'bell'
+  | 'bandana' | 'cap' | 'pouch' | 'nametag'
+  | 'straw' | 'sunglasses' | 'backpack' | 'camera'
+  | 'bowtie' | 'partyhat' | 'heartglasses' | 'cape' | 'crown'
+  | 'beret' | 'knit' | 'glasses'
+  | 'flowercrown' | 'lei' | 'butterfly'
+  | 'watermelon' | 'tube' | 'goggles'
+  | 'acorn' | 'maplescarf' | 'acornbag'
+  | 'santa' | 'muffler' | 'luckybag';
+
+/** 희귀도 — 상자에서 나올 확률과 꾸미기 칸 테두리 색이 다르다 */
+export type Rarity = 'common' | 'rare' | 'legendary';
+export const RARITY_LABEL: Record<Rarity, string> = { common: '기본', rare: '특별', legendary: '전설' };
+
+/** 테마 세트 — 다 모으면 "세트 완성". 계절 세트는 그 계절에만 상자에서 나온다 */
+export type ItemSet = 'basic' | 'walk' | 'travel' | 'party' | 'classic' | Season;
+export const SET_LABEL: Record<ItemSet, string> = {
+  basic: '기본',
+  walk: '산책',
+  travel: '여행',
+  party: '파티',
+  classic: '멋쟁이',
+  SPRING: '봄',
+  SUMMER: '여름',
+  AUTUMN: '가을',
+  WINTER: '겨울',
+};
+export const SET_ORDER: ItemSet[] = ['basic', 'walk', 'travel', 'party', 'classic', 'SPRING', 'SUMMER', 'AUTUMN', 'WINTER'];
+
+/**
+ * 얻는 길이 여러 갈래여야 사람마다 다른 이유로 다시 온다.
+ * - 'chest': 간식 상자(희귀도 가중) · 'season': 그 계절 동안 상자에서만
+ * - 숫자: 연속 기록 N일 · { stamps }: 여권 도장 N개
+ */
+export type Unlock = 'chest' | 'season' | number | { stamps: number };
 
 export interface ItemDef {
   id: ItemId;
   name: string;
   slot: ItemSlot;
-  /** 'chest' = 간식 상자, 숫자 = 그만큼 연속했을 때 */
-  unlock: 'chest' | number;
+  rarity: Rarity;
+  set: ItemSet;
+  unlock: Unlock;
 }
 
-/** 상자 아이템은 이 순서로 나온다 — 무작위보다 "다음엔 뭐가 나올까"를 기대하게 하되 중복이 없다 */
 export const ITEMS: ItemDef[] = [
-  { id: 'ribbon', name: '리본', slot: 'head', unlock: 'chest' },
-  { id: 'bandana', name: '반다나', slot: 'neck', unlock: 'chest' },
-  { id: 'flower', name: '꽃 핀', slot: 'head', unlock: 'chest' },
-  { id: 'bowtie', name: '나비넥타이', slot: 'neck', unlock: 'chest' },
-  { id: 'star', name: '별 머리핀', slot: 'head', unlock: 'chest' },
-  { id: 'bell', name: '방울 목걸이', slot: 'neck', unlock: 'chest' },
-  { id: 'beret', name: '베레모', slot: 'head', unlock: 3 },
-  { id: 'knit', name: '털목도리', slot: 'neck', unlock: 7 },
-  { id: 'glasses', name: '동그란 안경', slot: 'face', unlock: 14 },
-  { id: 'crown', name: '작은 왕관', slot: 'head', unlock: 30 },
+  // 기본 — 처음 며칠 상자에서 금방 모인다
+  { id: 'ribbon', name: '리본', slot: 'head', rarity: 'common', set: 'basic', unlock: 'chest' },
+  { id: 'flower', name: '꽃 핀', slot: 'head', rarity: 'common', set: 'basic', unlock: 'chest' },
+  { id: 'star', name: '별 머리핀', slot: 'head', rarity: 'common', set: 'basic', unlock: 'chest' },
+  { id: 'bell', name: '방울 목걸이', slot: 'neck', rarity: 'common', set: 'basic', unlock: 'chest' },
+  // 산책
+  { id: 'bandana', name: '반다나', slot: 'neck', rarity: 'common', set: 'walk', unlock: 'chest' },
+  { id: 'cap', name: '야구 모자', slot: 'head', rarity: 'common', set: 'walk', unlock: 'chest' },
+  { id: 'pouch', name: '산책 파우치', slot: 'back', rarity: 'common', set: 'walk', unlock: 'chest' },
+  { id: 'nametag', name: '뼈다귀 이름표', slot: 'neck', rarity: 'rare', set: 'walk', unlock: 'chest' },
+  // 여행 — 도장을 모으면 열린다(여권과 이어지게)
+  { id: 'straw', name: '밀짚모자', slot: 'head', rarity: 'rare', set: 'travel', unlock: 'chest' },
+  { id: 'sunglasses', name: '선글라스', slot: 'face', rarity: 'common', set: 'travel', unlock: 'chest' },
+  { id: 'backpack', name: '여행 배낭', slot: 'back', rarity: 'rare', set: 'travel', unlock: { stamps: 3 } },
+  { id: 'camera', name: '여행 카메라', slot: 'neck', rarity: 'legendary', set: 'travel', unlock: { stamps: 10 } },
+  // 파티
+  { id: 'bowtie', name: '나비넥타이', slot: 'neck', rarity: 'common', set: 'party', unlock: 'chest' },
+  { id: 'partyhat', name: '고깔모자', slot: 'head', rarity: 'rare', set: 'party', unlock: 'chest' },
+  { id: 'heartglasses', name: '하트 안경', slot: 'face', rarity: 'rare', set: 'party', unlock: 'chest' },
+  { id: 'cape', name: '빨간 망토', slot: 'back', rarity: 'legendary', set: 'party', unlock: 21 },
+  { id: 'crown', name: '작은 왕관', slot: 'head', rarity: 'legendary', set: 'party', unlock: 30 },
+  // 멋쟁이 — 연속 기록 고비
+  { id: 'beret', name: '베레모', slot: 'head', rarity: 'rare', set: 'classic', unlock: 3 },
+  { id: 'knit', name: '털목도리', slot: 'neck', rarity: 'rare', set: 'classic', unlock: 7 },
+  { id: 'glasses', name: '동그란 안경', slot: 'face', rarity: 'rare', set: 'classic', unlock: 14 },
+  // 계절 한정 — 그 계절 동안 상자에서만
+  { id: 'flowercrown', name: '꽃 화관', slot: 'head', rarity: 'rare', set: 'SPRING', unlock: 'season' },
+  { id: 'lei', name: '꽃 목걸이', slot: 'neck', rarity: 'rare', set: 'SPRING', unlock: 'season' },
+  { id: 'butterfly', name: '나비 날개', slot: 'back', rarity: 'legendary', set: 'SPRING', unlock: 'season' },
+  { id: 'watermelon', name: '수박 모자', slot: 'head', rarity: 'rare', set: 'SUMMER', unlock: 'season' },
+  { id: 'tube', name: '튜브', slot: 'neck', rarity: 'rare', set: 'SUMMER', unlock: 'season' },
+  { id: 'goggles', name: '물안경', slot: 'face', rarity: 'legendary', set: 'SUMMER', unlock: 'season' },
+  { id: 'acorn', name: '도토리 모자', slot: 'head', rarity: 'rare', set: 'AUTUMN', unlock: 'season' },
+  { id: 'maplescarf', name: '단풍 머플러', slot: 'neck', rarity: 'rare', set: 'AUTUMN', unlock: 'season' },
+  { id: 'acornbag', name: '도토리 가방', slot: 'back', rarity: 'legendary', set: 'AUTUMN', unlock: 'season' },
+  { id: 'santa', name: '산타 모자', slot: 'head', rarity: 'rare', set: 'WINTER', unlock: 'season' },
+  { id: 'muffler', name: '줄무늬 머플러', slot: 'neck', rarity: 'rare', set: 'WINTER', unlock: 'season' },
+  { id: 'luckybag', name: '복주머니', slot: 'back', rarity: 'legendary', set: 'WINTER', unlock: 'season' },
 ];
 export const itemById = (id: ItemId) => ITEMS.find((i) => i.id === id)!;
+
+/** 얻는 길을 한 줄로 — 잠긴 칸에 쓴다 */
+export function unlockText(u: Unlock, set: ItemSet): string {
+  if (u === 'chest') return '간식 상자';
+  if (u === 'season') return `${SET_LABEL[set]} 한정 상자`;
+  if (typeof u === 'number') return `${u}일 연속`;
+  return `도장 ${u.stamps}개`;
+}
+
+/** 상자에서 희귀도별로 뽑힐 무게 */
+const RARITY_WEIGHT: Record<Rarity, number> = { common: 70, rare: 25, legendary: 5 };
+
+/** 날짜·상자 수로 정해지는 난수(0~1) — 같은 날 다시 계산해도 같은 결과(새로고침으로 다시 뽑기 방지) */
+function seeded(key: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 100000) / 100000;
+}
+
+/**
+ * 오늘 상자에서 나올 소품. 지금 계절 한정 소품이 남아 있으면 40%는 그중에서,
+ * 나머지는 희귀도 가중으로 상자 소품 중에서. 다 모았으면 null(간식만).
+ */
+export function pickChestItem(owned: ItemId[], season: Season | null, key: string): ItemId | null {
+  const seasonal = ITEMS.filter((i) => i.unlock === 'season' && i.set === season && !owned.includes(i.id));
+  const regular = ITEMS.filter((i) => i.unlock === 'chest' && !owned.includes(i.id));
+  const r = seeded(key);
+  const pool = seasonal.length && (r < 0.4 || !regular.length) ? seasonal : regular;
+  if (!pool.length) return null;
+  const total = pool.reduce((s, i) => s + RARITY_WEIGHT[i.rarity], 0);
+  let x = seeded(`${key}:pick`) * total;
+  for (const i of pool) {
+    x -= RARITY_WEIGHT[i.rarity];
+    if (x < 0) return i.id;
+  }
+  return pool[pool.length - 1].id;
+}
 
 export type Outfit = Partial<Record<ItemSlot, ItemId>>;
 
@@ -241,23 +333,43 @@ export const chestReady = (state: JourneyState, today: string, trio: TrioItem[])
   trio.length > 0 && trio.every((t) => t.done) && state.chestDay !== today;
 
 /** 상자를 연다 — 아직 없는 상자 아이템을 순서대로 하나. 다 모았으면 아이템 없이 연 기록만 */
-export function openChest(state: JourneyState, today: string): { state: JourneyState; item: ItemId | null } {
+export function openChest(state: JourneyState, today: string, season: Season | null = null): { state: JourneyState; item: ItemId | null } {
   if (state.chestDay === today) return { state, item: null };
-  const next = ITEMS.find((i) => i.unlock === 'chest' && !state.owned.includes(i.id));
+  const next = pickChestItem(state.owned, season, `${today}:${state.chests}`);
   return {
     state: {
       ...state,
       chestDay: today,
-      chestItem: next?.id ?? null,
+      chestItem: next,
       chests: state.chests + 1,
-      owned: next ? [...state.owned, next.id] : state.owned,
-      fresh: next ? [...state.fresh, next.id] : state.fresh,
+      owned: next ? [...state.owned, next] : state.owned,
+      fresh: next ? [...state.fresh, next] : state.fresh,
     },
-    item: next?.id ?? null,
+    item: next,
   };
 }
 
-/** 입히기·벗기기 — 같은 자리(머리·목·얼굴)는 하나만 */
+/** 여권 도장 수로 열리는 소품 — 도장을 찍을 때마다(그리고 여정을 읽을 때) 확인한다 */
+export function unlockByStamps(state: JourneyState, stamps: number): { state: JourneyState; events: JourneyEvent[] } {
+  const add = ITEMS.filter((i) => typeof i.unlock === 'object' && stamps >= i.unlock.stamps && !state.owned.includes(i.id));
+  if (!add.length) return { state, events: [] };
+  return {
+    state: { ...state, owned: [...state.owned, ...add.map((i) => i.id)], fresh: [...state.fresh, ...add.map((i) => i.id)] },
+    events: add.map((i) => ({ kind: 'item-unlocked' as const, item: i.id })),
+  };
+}
+
+/** 세트 진행 — 꾸미기 화면의 "3/4" */
+export function setProgress(owned: ItemId[]): Record<ItemSet, { have: number; total: number }> {
+  const out = {} as Record<ItemSet, { have: number; total: number }>;
+  for (const s of SET_ORDER) {
+    const items = ITEMS.filter((i) => i.set === s);
+    out[s] = { have: items.filter((i) => owned.includes(i.id)).length, total: items.length };
+  }
+  return out;
+}
+
+/** 입히기·벗기기 — 같은 자리(머리·얼굴·목·등)는 하나만 */
 export function toggleItem(state: JourneyState, who: 'dog' | 'cat', id: ItemId): JourneyState {
   if (!state.owned.includes(id)) return state;
   const slot = itemById(id).slot;
@@ -277,8 +389,8 @@ export function parseJourney(raw: unknown): JourneyState {
     if (!o || typeof o !== 'object') return {};
     const out: Outfit = {};
     for (const [slot, id] of Object.entries(o as Record<string, unknown>)) {
-      if ((slot === 'head' || slot === 'neck' || slot === 'face') && typeof id === 'string' && ids.has(id as ItemId)) {
-        out[slot] = id as ItemId;
+      if ((SLOTS as string[]).includes(slot) && typeof id === 'string' && ids.has(id as ItemId)) {
+        out[slot as ItemSlot] = id as ItemId;
       }
     }
     return out;

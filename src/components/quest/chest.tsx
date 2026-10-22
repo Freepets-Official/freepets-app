@@ -13,6 +13,7 @@ import Animated, {
   withSequence,
   withSpring,
   withTiming,
+  ZoomIn,
 } from 'react-native-reanimated';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -23,7 +24,7 @@ import { PawBurst } from '@/components/paw-burst';
 import { Text } from '@/components/text';
 import { ClayShadow, Radius, Type } from '@/constants/theme';
 import { eulReul } from '@/data/companion';
-import { itemById, type ItemId } from '@/data/quest-journey';
+import { itemById, RARITY_LABEL, SET_LABEL, type ItemId } from '@/data/quest-journey';
 import { useColorScheme, usePalette } from '@/hooks/use-theme';
 import { haptic } from '@/lib/haptics';
 
@@ -218,7 +219,8 @@ export function ChestOpening({
     transform: [{ translateY: -70 * prize.value }, { scale: 0.3 + prize.value * 0.9 }],
   }));
 
-  const name = item ? itemById(item).name : null;
+  const def = item ? itemById(item) : null;
+  const name = def?.name ?? null;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.scrim}>
@@ -251,6 +253,17 @@ export function ChestOpening({
           </View>
           {revealed ? (
             <Animated.View entering={reduce ? undefined : FadeIn.duration(220)} style={styles.result}>
+              {/* 특별·전설은 꼬리표를 단다 — 뽑았을 때의 기쁨을 크게 */}
+              {def && def.rarity !== 'common' ? (
+                <Animated.View
+                  entering={reduce ? undefined : ZoomIn.delay(120).springify().damping(10)}
+                  style={[styles.rarityTag, { backgroundColor: def.rarity === 'legendary' ? '#E0A93B' : '#4C8DF5' }]}>
+                  <Ionicons name={def.rarity === 'legendary' ? 'star' : 'sparkles'} size={12} color="#FFFFFF" />
+                  <Text style={styles.rarityText}>
+                    {RARITY_LABEL[def.rarity]} · {SET_LABEL[def.set]} 세트
+                  </Text>
+                </Animated.View>
+              ) : null}
               <Text style={[styles.resultTitle, { color: p.ink }]}>
                 {name ? `새 소품 「${name}」!` : '모든 소품을 다 모았어요!'}
               </Text>
@@ -305,4 +318,6 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 8, marginTop: 12, alignSelf: 'stretch' },
   btn: { flex: 1, height: 48, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
   btnText: { fontSize: Type.callout, fontWeight: '800' },
+  rarityTag: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'center', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 6 },
+  rarityText: { color: '#FFFFFF', fontSize: 11.5, fontWeight: '900' },
 });

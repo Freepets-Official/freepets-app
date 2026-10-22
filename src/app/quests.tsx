@@ -10,6 +10,7 @@ import { PawChooser } from '@/components/paw-chooser';
 import { ChestCard, ChestOpening } from '@/components/quest/chest';
 import { StreakCard } from '@/components/quest/streak-card';
 import { PassTeaser } from '@/components/pass-teaser';
+import { RecapShelf } from '@/components/quest/recap-shelf';
 import { Wardrobe } from '@/components/quest/wardrobe';
 import { Screen } from '@/components/screen';
 import { Text } from '@/components/text';
@@ -231,10 +232,12 @@ export default function QuestsScreen() {
             <Animated.View entering={FadeInDown.duration(260)} style={[styles.unlocked, { backgroundColor: p.accentSoft }]}>
               <Ionicons name="gift" size={16} color={p.accentDark} />
               <Text style={[styles.unlockedText, { color: p.ink }]}>
-                연속 기록 선물 — 「{unlocked.map((id) => itemById(id).name).join('」 「')}」이 열렸어요!
+                새 소품 선물 — 「{unlocked.map((id) => itemById(id).name).join('」 「')}」이 열렸어요!
               </Text>
             </Animated.View>
           ) : null}
+
+          <RecapShelf />
 
           <Wardrobe journey={j.journey} onToggle={j.toggleItem} active={focused} initialWho={firstPetIsCat ? 'cat' : 'dog'} />
 

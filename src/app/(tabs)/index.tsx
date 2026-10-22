@@ -58,6 +58,8 @@ import { FACILITIES } from '@/data/mock';
 import { uniqueRegionCount } from '@/data/stamps';
 import { ymd, type Pet } from '@/data/types';
 import { useQuestJourney } from '@/hooks/use-quest-journey';
+import { useRecaps } from '@/hooks/use-season-recap';
+import { SEASON_LABEL } from '@/data/seasons';
 import { usePalette } from '@/hooks/use-theme';
 import { useWalkWeather } from '@/hooks/use-walk-weather';
 import { haptic } from '@/lib/haptics';
@@ -134,6 +136,11 @@ export default function HomeScreen() {
   // 뱃지 기준과 같은 값(서로 다른 시군구 수)을 쓴다 — 홈과 도장첩이 다른 숫자를 보이면 안 된다
   const stampCount = useMemo(() => uniqueRegionCount(stamps), [stamps]);
   const journey = useQuestJourney(session.authed);
+  const recaps = useRecaps();
+  const recapNudge = useMemo(
+    () => (recaps.fresh ? { id: recaps.fresh.id, season: SEASON_LABEL[recaps.fresh.span.season] } : undefined),
+    [recaps.fresh],
+  );
   const questLeft = journey.trio.length - journey.trioDone;
   const weather = useWalkWeather(session.authed);
   const alerts = useMemo(() => plannedDenialAlerts(), [plannedDenialAlerts]);
@@ -174,10 +181,10 @@ export default function HomeScreen() {
   const built = useMemo(
     () =>
       buildCompanionQueue(
-        { now, pets, denials, vaccinations: vax, eventsOn, isMedTaken, weather: weather.state, quest: questNudge },
+        { now, pets, denials, vaccinations: vax, eventsOn, isMedTaken, weather: weather.state, quest: questNudge, recap: recapNudge },
         focusId,
       ),
-    [now, pets, denials, vax, eventsOn, isMedTaken, weather.state, focusId, questNudge],
+    [now, pets, denials, vax, eventsOn, isMedTaken, weather.state, focusId, questNudge, recapNudge],
   );
   // 내용이 같으면 같은 배열을 쓴다 — 1분마다 다시 짜도 자동 넘김 타이머가 처음부터 다시 돌지 않게
   const builtKey = built.map((m) => `${m.id}:${m.text}`).join('|');
