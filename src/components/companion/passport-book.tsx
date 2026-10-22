@@ -20,7 +20,7 @@ import Animated, {
   type DerivedValue,
   type SharedValue,
 } from 'react-native-reanimated';
-import Svg, { Circle, Ellipse, Path, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Defs, Ellipse, LinearGradient as SvgGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { Text } from '@/components/text';
@@ -51,9 +51,14 @@ const PAPER_DEEP = '#EADFC6';
 const INK = '#2E2823';
 const SUB = '#8A7B62';
 const LINE = 'rgba(120,101,66,0.32)';
+const PAPER_EDGE = '#D9CAAA';
 const GOLD = '#E6C47F';
 const LEATHER = ['#8E4632', '#6A2F21', '#57261B'] as const;
 const PERSPECTIVE = 1600;
+/** 단단한 표지가 종이보다 삐져나온 폭 — 이 테두리와 종이 단면이 보여야 '책'으로 읽힌다 */
+const BLEED = 6;
+/** 표지와 종이 사이에 겹겹이 보이는 종이 단면 수 */
+const EDGES = [3, 2, 1] as const;
 
 /** 끌기 시작했지만 아직 방향을 모름 */
 const PENDING = 3;
@@ -266,7 +271,7 @@ export function PassportBook({
       { perspective: PERSPECTIVE },
       // 닫혀 있을 땐 표지(오른쪽 면)가 가운데 오게 반 쪽 밀어 둔다
       { translateX: -(pageW / 2) * (1 - cover.value) },
-      { rotateX: '6deg' },
+      { rotateX: '9deg' },
       { rotateY: `${rubber.value}deg` },
     ],
   }));
@@ -299,8 +304,9 @@ export function PassportBook({
 
       <GestureDetector gesture={pan}>
         <View
-          style={[styles.stage, { height: pageH + 14 }]}
-          onLayout={(e) => setWidth(Math.min(e.nativeEvent.layout.width, 560))}
+          style={[styles.stage, { height: pageH + BLEED + 34 }]}
+          // 표지 테두리가 화면 가장자리에 닿지 않게 그만큼 좁힌다
+          onLayout={(e) => setWidth(Math.min(e.nativeEvent.layout.width - BLEED * 2, 560))}
           accessible
           accessibilityRole="adjustable"
           accessibilityLabel={`${pet.name} 여권, ${n}마리 중 ${curIdx + 1}번째`}
@@ -312,6 +318,29 @@ export function PassportBook({
           accessibilityActions={n > 1 ? [{ name: 'increment' }, { name: 'decrement' }] : undefined}>
           {width > 0 ? (
             <Animated.View ref={bookRef} style={[{ width, height: pageH }, bookStyle]}>
+              {/* 뒤에서부터: 가죽 표지 → 종이 단면 → 책갈피 끈 → 펼친 면. 닫혀 있을 땐 왼쪽 표지가 없다 */}
+              <Animated.View pointerEvents="none" style={[styles.board, styles.boardLeft, { left: -BLEED, width: pageW + BLEED, height: pageH + BLEED * 2 }, leftStatic]}>
+                <LinearGradient colors={LEATHER} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              </Animated.View>
+              <View pointerEvents="none" style={[styles.board, styles.boardRight, { left: pageW, width: pageW + BLEED, height: pageH + BLEED * 2 }]}>
+                <LinearGradient colors={LEATHER} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+              </View>
+              {EDGES.map((k) => (
+                <Animated.View
+                  key={`l${k}`}
+                  pointerEvents="none"
+                  style={[styles.slot, styles.pageLeft, styles.edge, { left: -k * 1.4, width: pageW + k * 1.4, height: pageH + k * 1.1, backgroundColor: k % 2 ? PAPER_DEEP : PAPER_EDGE }, leftStatic]}
+                />
+              ))}
+              {EDGES.map((k) => (
+                <View
+                  key={`r${k}`}
+                  pointerEvents="none"
+                  style={[styles.slot, styles.pageRight, styles.edge, { left: pageW, width: pageW + k * 1.4, height: pageH + k * 1.1, backgroundColor: k % 2 ? PAPER_DEEP : PAPER_EDGE }]}
+                />
+              ))}
+              <Ribbon left={pageW + 14} top={pageH - 8} />
+
               <Animated.View style={[styles.slot, { left: 0, width: pageW, height: pageH }, leftStatic]}>
                 <DataPage pet={staticLeft} {...page} />
               </Animated.View>
@@ -342,17 +371,19 @@ export function PassportBook({
               ) : null}
 
               {!opened ? (
-                <Leaf side="right" angle={coverAngle} {...page} front={<Cover {...page} />} back={<DataPage pet={pet} {...page} />} />
+                <Leaf side="right" angle={coverAngle} {...page} cast={false} front={<Cover {...page} />} back={<DataPage pet={pet} {...page} />} />
               ) : null}
 
-              {/* 책 등(가운데 접힌 곳)의 그늘 */}
-              <Animated.View pointerEvents="none" style={[styles.spine, { left: pageW - 10, height: pageH }, leftStatic]}>
+              {/* 책 등(가운데 접힌 곳) — 종이가 안으로 말려 들어가 깊게 그늘지고, 한가운데 접힌 선이 선다 */}
+              <Animated.View pointerEvents="none" style={[styles.spine, { left: pageW - 16, height: pageH }, leftStatic]}>
                 <LinearGradient
-                  colors={['rgba(46,40,35,0)', 'rgba(46,40,35,0.22)', 'rgba(46,40,35,0)']}
+                  colors={['rgba(46,40,35,0)', 'rgba(46,40,35,0.16)', 'rgba(46,40,35,0.34)', 'rgba(46,40,35,0.16)', 'rgba(46,40,35,0)']}
+                  locations={[0, 0.36, 0.5, 0.64, 1]}
                   start={{ x: 0, y: 0.5 }}
                   end={{ x: 1, y: 0.5 }}
                   style={StyleSheet.absoluteFill}
                 />
+                <View style={styles.crease} />
               </Animated.View>
 
               {!opened ? (
@@ -387,6 +418,7 @@ function Leaf({
   h,
   front,
   back,
+  cast = true,
 }: {
   side: 'left' | 'right';
   angle: SharedValue<number> | DerivedValue<number>;
@@ -394,30 +426,90 @@ function Leaf({
   h: number;
   front: ReactNode;
   back: ReactNode;
+  /** 표지가 열릴 땐 끈다 — 아직 왼쪽 면이 없어 그림자가 허공에 뜬다 */
+  cast?: boolean;
 }) {
   const style = useAnimatedStyle(() => ({
     transform: [{ perspective: PERSPECTIVE }, { rotateY: `${angle.value}deg` }],
   }));
   const frontStyle = useAnimatedStyle(() => ({ opacity: Math.abs(angle.value) <= 90 ? 1 : 0 }));
   const backStyle = useAnimatedStyle(() => ({ opacity: Math.abs(angle.value) > 90 ? 1 : 0 }));
-  const shade = useAnimatedStyle(() => ({ opacity: Math.sin((Math.abs(angle.value) * Math.PI) / 180) * 0.3 }));
+  const shade = useAnimatedStyle(() => ({ opacity: Math.sin((Math.abs(angle.value) * Math.PI) / 180) * 0.18 }));
+  const bend = useAnimatedStyle(() => ({ opacity: Math.sin((Math.abs(angle.value) * Math.PI) / 180) }));
+  // 낱장이 들린 쪽 면에 그림자가 진다 — 떠날 때는 원래 면, 내려앉을 때는 건너편 면
+  const castNear = useAnimatedStyle(() => {
+    const a = Math.abs(angle.value);
+    return { opacity: Math.sin((a * Math.PI) / 180) * (a <= 90 ? 0.55 : 0.2) };
+  });
+  const castFar = useAnimatedStyle(() => {
+    const a = Math.abs(angle.value);
+    return { opacity: Math.sin((a * Math.PI) / 180) * (a > 90 ? 0.55 : 0.2) };
+  });
+  const toSpine = { start: { x: 1, y: 0.5 }, end: { x: 0, y: 0.5 } };
+  const fromSpine = { start: { x: 0, y: 0.5 }, end: { x: 1, y: 0.5 } };
+  // 낱장 앞면 기준으로 등 쪽 모서리가 어디인지 — 오른쪽 낱장은 왼쪽 모서리가 등이다
+  const faceDir = side === 'right' ? fromSpine : toSpine;
+  const backDir = side === 'right' ? toSpine : fromSpine;
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.slot,
-        { left: side === 'right' ? w : 0, width: w, height: h, zIndex: 5, transformOrigin: side === 'right' ? '0% 50%' : '100% 50%' },
-        style,
-      ]}>
-      <Animated.View style={[StyleSheet.absoluteFill, frontStyle]}>
-        {front}
-        <Animated.View style={[StyleSheet.absoluteFill, styles.shade, shade]} />
+    <>
+      {cast ? (
+        <>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.slot, { left: side === 'right' ? w : 0, width: w * 0.6, height: h, zIndex: 4 }, side === 'left' && { left: w * 0.4 }, castNear]}>
+            <LinearGradient colors={CAST} {...(side === 'right' ? fromSpine : toSpine)} style={StyleSheet.absoluteFill} />
+          </Animated.View>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.slot, { left: side === 'right' ? w * 0.4 : w, width: w * 0.6, height: h, zIndex: 4 }, castFar]}>
+            <LinearGradient colors={CAST} {...(side === 'right' ? toSpine : fromSpine)} style={StyleSheet.absoluteFill} />
+          </Animated.View>
+        </>
+      ) : null}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.slot,
+          { left: side === 'right' ? w : 0, width: w, height: h, zIndex: 5, transformOrigin: side === 'right' ? '0% 50%' : '100% 50%' },
+          style,
+        ]}>
+        <Animated.View style={[StyleSheet.absoluteFill, frontStyle]}>
+          {front}
+          <Animated.View style={[StyleSheet.absoluteFill, styles.shade, shade]} />
+          <Animated.View style={[StyleSheet.absoluteFill, bend]}>
+            <LinearGradient colors={BEND} locations={[0, 0.45, 1]} {...faceDir} style={StyleSheet.absoluteFill} />
+          </Animated.View>
+        </Animated.View>
+        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ rotateY: '180deg' }] }, backStyle]}>
+          {back}
+          <Animated.View style={[StyleSheet.absoluteFill, styles.shade, shade]} />
+          <Animated.View style={[StyleSheet.absoluteFill, bend]}>
+            <LinearGradient colors={BEND} locations={[0, 0.45, 1]} {...backDir} style={StyleSheet.absoluteFill} />
+          </Animated.View>
+        </Animated.View>
       </Animated.View>
-      <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ rotateY: '180deg' }] }, backStyle]}>
-        {back}
-        <Animated.View style={[StyleSheet.absoluteFill, styles.shade, shade]} />
-      </Animated.View>
-    </Animated.View>
+    </>
+  );
+}
+
+/** 넘어가는 종이가 휜 모양 — 등 쪽은 그늘, 가운데가 불룩해 빛을 받는다 */
+const BEND = ['rgba(30,20,13,0.28)', 'rgba(255,250,240,0.22)', 'rgba(30,20,13,0.06)'] as const;
+/** 들린 낱장이 아래 면에 드리우는 그림자 — 등 쪽이 가장 짙다 */
+const CAST = ['rgba(30,20,13,0.5)', 'rgba(30,20,13,0)'] as const;
+
+/** 책 등 아래로 늘어진 책갈피 끈 — 종이 밑에서 나와 바닥 쪽으로 살짝 휘어 떨어진다 */
+function Ribbon({ left, top }: { left: number; top: number }) {
+  return (
+    <Svg pointerEvents="none" width={14} height={40} viewBox="0 0 14 40" style={[styles.slot, { left, top, transform: [{ rotate: '5deg' }] }]}>
+      <Defs>
+        <SvgGradient id="ribbon" x1="0" y1="0" x2="1" y2="0">
+          <Stop offset="0" stopColor="#B9532F" />
+          <Stop offset="0.45" stopColor="#E9875E" />
+          <Stop offset="1" stopColor="#A9482A" />
+        </SvgGradient>
+      </Defs>
+      <Path d="M1 0H13V40L7 34L1 40Z" fill="url(#ribbon)" />
+    </Svg>
   );
 }
 
@@ -452,6 +544,15 @@ function Cover({ w, h }: { w: number; h: number }) {
         end={{ x: 0.12, y: 0.5 }}
         style={StyleSheet.absoluteFill}
       />
+      {/* 가죽 광택 — 왼쪽 위에서 빛이 들어와 대각선으로 번진다 */}
+      <LinearGradient
+        colors={['rgba(255,236,214,0.2)', 'rgba(255,236,214,0)', 'rgba(0,0,0,0.18)']}
+        locations={[0, 0.45, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={[StyleSheet.absoluteFill, styles.bevel]} />
       <View style={[styles.coverFrame, { borderColor: 'rgba(230,196,127,0.4)' }]} />
       <View style={styles.coverInner}>
         <Svg width={92 * u} height={50 * u} viewBox="0 0 180 100">
@@ -486,13 +587,7 @@ function DataPage({ pet, w, h }: { pet: Pet; w: number; h: number }) {
   return (
     <View style={[styles.page, styles.pageLeft, { width: w, height: h, padding: 11 * u }]}>
       <Guilloche />
-      <LinearGradient
-        colors={['rgba(58,51,42,0)', 'rgba(58,51,42,0.16)']}
-        start={{ x: 0.86, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
+      <PageCurve side="left" />
       <View style={styles.band}>
         <Text style={[styles.bandText, { fontSize: 6.5 * u }]}>여권 PASSPORT</Text>
         <Text style={[styles.bandText, { fontSize: 6.5 * u }]}>KOR</Text>
@@ -528,6 +623,36 @@ function DataPage({ pet, w, h }: { pet: Pet; w: number; h: number }) {
   );
 }
 
+/**
+ * 펼친 종이의 곡면 — 등 쪽은 말려 들어가 어둡고, 가운데쯤 불룩한 데서 빛을 받고,
+ * 바깥 모서리는 살짝 내려가 다시 어두워진다. 위에서 오는 빛도 한 겹.
+ */
+function PageCurve({ side }: { side: 'left' | 'right' }) {
+  const left = side === 'left';
+  return (
+    <>
+      <LinearGradient
+        colors={
+          left
+            ? ['rgba(58,51,42,0.1)', 'rgba(255,255,255,0.2)', 'rgba(255,255,255,0)', 'rgba(58,51,42,0.24)']
+            : ['rgba(58,51,42,0.24)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0.2)', 'rgba(58,51,42,0.1)']
+        }
+        locations={left ? [0, 0.25, 0.62, 1] : [0, 0.38, 0.75, 1]}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <LinearGradient
+        colors={['rgba(255,255,255,0.14)', 'rgba(255,255,255,0)', 'rgba(58,51,42,0.07)']}
+        locations={[0, 0.3, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+    </>
+  );
+}
+
 function Field({ label, value, u, big, half }: { label: string; value: string; u: number; big?: boolean; half?: boolean }) {
   return (
     <View style={[half && styles.half, { marginBottom: big ? 3 * u : 2 * u }]}>
@@ -554,6 +679,15 @@ function PetPhoto({ pet, size }: { pet: Pet; size: number }) {
           <DoodleHeadPaths kind={pet.kind === 'CAT' ? 'cat' : 'dog'} x={0} stroke={INK} fill="#FFFFFF" />
         </Svg>
       )}
+      {/* 사진 위 코팅 필름의 반사 */}
+      <LinearGradient
+        colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.38)', 'rgba(255,255,255,0)']}
+        locations={[0.3, 0.42, 0.56]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
     </View>
   );
 }
@@ -612,13 +746,7 @@ function RecordPage({ pet, index, w, h, shimmer }: { pet: Pet; index: number; w:
   const C = 2 * Math.PI * R;
   return (
     <View style={[styles.page, styles.pageRight, { width: w, height: h, padding: 11 * u }]}>
-      <LinearGradient
-        colors={['rgba(58,51,42,0.16)', 'rgba(58,51,42,0)']}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 0.14, y: 0.5 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
+      <PageCurve side="right" />
       <View style={styles.band}>
         <Text style={[styles.bandText, { fontSize: 6.5 * u }]}>여행 기록 TRAVEL</Text>
         <Text style={[styles.bandText, { fontSize: 6.5 * u }]}>{String(index * 2 + 2).padStart(2, '0')}</Text>
@@ -711,12 +839,37 @@ const styles = StyleSheet.create({
   stage: { marginTop: 10, alignItems: 'center', justifyContent: 'flex-start' },
   slot: { position: 'absolute', top: 0 },
   shade: { backgroundColor: '#1E140D' },
-  spine: { position: 'absolute', top: 0, width: 20 },
+  spine: { position: 'absolute', top: 0, width: 32, alignItems: 'center' },
+  crease: { width: 1, height: '100%', backgroundColor: 'rgba(46,40,35,0.28)' },
+  board: { position: 'absolute', top: -BLEED, overflow: 'hidden', borderBottomWidth: 3, borderBottomColor: '#3A1810' },
+  // 바닥에 떨어지는 그림자 — 책이 탁자 위에 놓여 있다는 신호
+  boardLeft: {
+    borderTopLeftRadius: 14,
+    borderBottomLeftRadius: 14,
+    boxShadow: '-6px 18px 24px -10px rgba(70,35,20,0.5), 0 3px 6px rgba(70,35,20,0.16)',
+  },
+  boardRight: {
+    borderTopRightRadius: 14,
+    borderBottomRightRadius: 14,
+    boxShadow: '6px 18px 24px -10px rgba(70,35,20,0.5), 0 3px 6px rgba(70,35,20,0.16)',
+  },
+  edge: { borderWidth: StyleSheet.hairlineWidth, borderColor: LINE },
   page: { backgroundColor: PAPER, overflow: 'hidden' },
   pageLeft: { borderTopLeftRadius: 12, borderBottomLeftRadius: 12, borderTopRightRadius: 2, borderBottomRightRadius: 2 },
   pageRight: { borderTopRightRadius: 12, borderBottomRightRadius: 12, borderTopLeftRadius: 2, borderBottomLeftRadius: 2 },
   cover: {
     overflow: 'hidden',
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+    borderTopLeftRadius: 3,
+    borderBottomLeftRadius: 3,
+  },
+  bevel: {
+    borderWidth: 1.5,
+    borderTopColor: 'rgba(255,225,190,0.22)',
+    borderLeftColor: 'rgba(255,225,190,0.12)',
+    borderRightColor: 'rgba(0,0,0,0.28)',
+    borderBottomColor: 'rgba(0,0,0,0.34)',
     borderTopRightRadius: 12,
     borderBottomRightRadius: 12,
     borderTopLeftRadius: 3,
@@ -740,7 +893,7 @@ const styles = StyleSheet.create({
   mrz: { fontFamily: MONO, color: '#5A5044', letterSpacing: 0.3 },
   dash: { borderTopWidth: 1, borderStyle: 'dashed', borderTopColor: LINE },
   score: { color: '#BC5F38', fontWeight: '800', marginTop: 1 },
-  holo: { position: 'absolute', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.8)' },
+  holo: { position: 'absolute', overflow: 'hidden', boxShadow: '0 2px 4px rgba(80,50,30,0.28)', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.8)' },
   holoSweep: { position: 'absolute', width: 14, backgroundColor: 'rgba(255,255,255,0.55)' },
   holoText: { color: 'rgba(70,40,60,0.72)', fontWeight: '900', textAlign: 'center' },
 });
