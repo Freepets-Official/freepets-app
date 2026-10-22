@@ -48,6 +48,11 @@ function detect(today: string) {
   });
 }
 
+/** 지금 계절(판정한 다음 계절까지 반영) — 상자에서 계절 한정 소품을 고를 때 */
+export function seasonNow() {
+  return spans[spans.length - 1].season;
+}
+
 export function useSeasonSpans() {
   const today = kstYmd();
   const s = useSyncExternalStore(subscribeSpans, () => spans, () => spans);

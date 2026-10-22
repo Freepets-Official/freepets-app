@@ -9,6 +9,7 @@ import {
   kstYmd,
   markActive,
   openChest,
+  unlockByStamps,
   parseJourney,
   pickTrio,
   toggleItem,
@@ -18,6 +19,7 @@ import {
   type JourneyState,
 } from '@/data/quest-journey';
 import { loadDailyQuests } from '@/hooks/use-daily-quests';
+import { seasonNow } from '@/hooks/use-season-recap';
 import type { DailyQuests } from '@/lib/api';
 import { loadJourney, saveJourney } from '@/lib/journey-store';
 import { askReminderPermission, cancelQuestReminders, planQuestReminders } from '@/lib/quest-reminder';
@@ -127,7 +129,7 @@ const update = (next: JourneyState) => {
 };
 
 export function useQuestJourney(enabled: boolean, opts?: { fresh?: boolean }) {
-  const { session, myUserId, gamification } = useAppStore();
+  const { session, myUserId, gamification, stamps } = useAppStore();
   /**
    * 계정을 가르는 키는 **서버 userId**다. 이메일은 애플 재로그인·이메일 동의를 안 한 카카오에서
    * 빈 문자열로 와서, 그걸 키로 쓰면 퀘스트가 영영 로딩이거나 그런 계정끼리 기록이 섞였다.
@@ -163,6 +165,19 @@ export function useQuestJourney(enabled: boolean, opts?: { fresh?: boolean }) {
     });
     return () => sub.remove();
   }, [on]);
+  // 여권 도장이 쌓이면 여행 세트 소품이 열린다(도장 3개 배낭 · 10개 카메라)
+  const stampCount = stamps.length;
+  useEffect(() => {
+    if (account === null) return;
+    void loading.then(() => {
+      if (!snap.account || loadedAccount !== account) return;
+      const r = unlockByStamps(snap.journey, stampCount);
+      if (r.state === snap.journey) return;
+      set({ journey: r.state, events: [...snap.events, ...r.events] });
+      persist(r.state);
+    });
+  }, [account, stampCount]);
+
   // 판별·리뷰 같은 행동 뒤 스토어가 경험치를 다시 받는다 — 그때 퀘스트도 다시 센다
   const seenGami = useRef(gamification);
   useEffect(() => {
@@ -180,7 +195,8 @@ export function useQuestJourney(enabled: boolean, opts?: { fresh?: boolean }) {
 
   const open = useCallback((): ItemId | null => {
     if (!snap.account) return null;
-    const r = openChest(snap.journey, kstYmd());
+    // 지금 계절의 한정 소품이 남아 있으면 상자에서 나올 수 있다
+    const r = openChest(snap.journey, kstYmd(), seasonNow());
     update(r.state);
     return r.item;
   }, []);

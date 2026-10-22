@@ -231,7 +231,7 @@ export default function QuestsScreen() {
             <Animated.View entering={FadeInDown.duration(260)} style={[styles.unlocked, { backgroundColor: p.accentSoft }]}>
               <Ionicons name="gift" size={16} color={p.accentDark} />
               <Text style={[styles.unlockedText, { color: p.ink }]}>
-                연속 기록 선물 — 「{unlocked.map((id) => itemById(id).name).join('」 「')}」이 열렸어요!
+                새 소품 선물 — 「{unlocked.map((id) => itemById(id).name).join('」 「')}」이 열렸어요!
               </Text>
             </Animated.View>
           ) : null}

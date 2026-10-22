@@ -526,6 +526,12 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
               </>
             )}
           />
+          {/* 등 소품(배낭·망토·날개) — 몸 위, 목 소품 아래 */}
+          {outfit?.dog.back ? (
+            <Layer>
+              <AccessoryAt who="dog" slot="back" id={outfit.dog.back} />
+            </Layer>
+          ) : null}
           {has('scarf') ? (
             <Layer>
               <Path d={D.dogScarf} fill={cc.scarf} {...line} />
@@ -602,6 +608,11 @@ export function CompanionMascot({ width, speaker, mood, props = [], cue, active,
               </>
             )}
           />
+          {outfit?.cat.back ? (
+            <Layer>
+              <AccessoryAt who="cat" slot="back" id={outfit.cat.back} />
+            </Layer>
+          ) : null}
           {outfit?.cat.neck ? (
             <Layer>
               <AccessoryAt who="cat" slot="neck" id={outfit.cat.neck} />
