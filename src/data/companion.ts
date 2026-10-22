@@ -32,6 +32,7 @@ export type NewsKind =
   | 'weather'
   | 'weather-off'
   | 'welcome'
+  | 'recap'
   | 'calm';
 
 export type CompanionAction =
@@ -94,6 +95,8 @@ export interface CompanionInput {
   weather: WeatherState;
   /** 퀘스트 여정 — 상자가 도착했거나, 저녁인데 오늘 아직이면 한 번 말한다 */
   quest?: { streak: number; doneToday: boolean; chestReady: boolean };
+  /** 새로 열린 계절 리캡 — 날씨 다음에 한 번 권한다 */
+  recap?: { id: string; season: string };
 }
 
 /* ───────── 한국어 조사 ───────── */
@@ -288,6 +291,20 @@ function upcomingNews(input: CompanionInput, today: string): CompanionMessage[] 
  * 퀘스트 — **조르지 않는다.** 상자가 왔을 때(기쁜 소식)와, 이어 온 기록이 있는데 저녁이 되도록
  * 오늘 아직일 때만 말한다. 기록이 없는 사람에게 매번 "퀘스트 하자"고 하면 홈이 잔소리가 된다.
  */
+function recapNews(r: { id: string; season: string }, scoped: Pet[]): CompanionMessage {
+  return {
+    id: `recap-${r.id}`,
+    kind: 'recap',
+    priority: 3,
+    petIds: [],
+    speaker: scoped.every((p) => p.kind === 'CAT') && scoped.length > 0 ? 'cat' : 'dog',
+    mood: 'happy',
+    tag: `${r.season} 리캡`,
+    text: `${r.season} 리캡이 열렸어! 이번 ${r.season}에 우리가 어디 다녀왔는지 같이 볼래?`,
+    actions: [{ kind: 'route', label: '리캡 보기', href: { pathname: '/recap', params: { id: r.id } } }],
+  };
+}
+
 function questNews(input: CompanionInput): CompanionMessage[] {
   const q = input.quest;
   if (!q) return [];
@@ -578,6 +595,11 @@ export function buildCompanionQueue(input: CompanionInput, focusPetId: number | 
   const queue = [...heads];
   const wx = weatherNews(input, scoped);
   if (wx) queue.splice(Math.min(1, queue.length), 0, wx);
+  // 계절 리캡은 급한 소식·날씨 다음 — 축하할 일이지만 급한 일을 밀어내면 안 된다
+  if (input.recap) {
+    const at = wx ? queue.indexOf(wx) + 1 : Math.min(1, queue.length);
+    queue.splice(at, 0, recapNews(input.recap, scoped));
+  }
 
   // 급한 게 없으면 날씨 다음에 "오늘은 괜찮아"를 먼저 말하고, 여유 있는 소식은 그 뒤에
   if (heads.length === 0)
