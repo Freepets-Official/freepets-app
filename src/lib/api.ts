@@ -286,6 +286,31 @@ function refreshOnce(epoch: number): Promise<RefreshOutcome> {
   return refreshInFlight.promise;
 }
 
+/**
+ * 끝난 세션의 뒤처리용 액세스 토큰을 받는다. 전역 토큰·기기 저장·세대를 **하나도 건드리지 않는다.**
+ *
+ * 로그아웃의 푸시 해제는 그 계정의 토큰을 명시해서 보내므로 401을 받아도 재발급 경로를 타지
+ * 않는다. 그렇다고 `refreshOnce`를 부르면 성공 시 `onTokensRefreshed`가 세션을 기기에 다시
+ * 저장해, 지우고 있는 세션이 되살아난다. 여기서 받은 토큰은 호출자가 한 번 쓰고 버린다.
+ */
+export async function issueCleanupToken(refresh: string): Promise<string | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { RefreshToken: refresh },
+      signal: ctrl.signal,
+    });
+    const json = (await res.json().catch(() => null)) as ApiEnvelope<{ accessToken: string }> | null;
+    return res.ok && json?.isSuccess ? (json.result?.accessToken ?? null) : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** 지금 요청에 쓸 토큰. 로그인 토큰이 없고 개발 모드면 10년 테스트 토큰으로 대체한다. */
 function currentToken(): string | null {
   if (authToken) return authToken;

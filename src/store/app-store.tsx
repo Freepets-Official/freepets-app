@@ -29,6 +29,7 @@ import {
   calendarApi,
   bumpSessionEpoch,
   getSessionEpoch,
+  issueCleanupToken,
   setAuthToken,
   setRefreshToken,
   setTokensRefreshedHandler,
@@ -2436,10 +2437,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   /**
    * 푸시 해제에 허용하는 시간.
    *
-   * 해제는 **세션을 정리하기 전에** 끝나야 한다. 인증이 필요한 요청이라 토큰을 먼저
-   * 지우면 401을 받아도 재발급할 수단이 없어 영영 실패하고, 로그아웃한 계정의 등록이
-   * 서버에 남는다. 그렇다고 무한정 기다리면 네트워크가 느릴 때 로그아웃이 멈춘 것처럼
-   * 보이므로 짧게 끊고 진행한다. 못 지운 토큰은 서버의 무효 토큰 정리가 걷어간다.
+   * 해제는 로그아웃 시점에 잡아 둔 토큰으로 끝까지 가므로 세션 정리를 기다리게 할 필요는
+   * 없지만, 보통은 금방 끝나니 잠깐 기다려 순서를 맞춘다. 무한정 기다리면 네트워크가 느릴 때
+   * 로그아웃이 멈춘 것처럼 보이므로 짧게 끊고 진행한다 — 해제는 큐에서 마저 돈다.
    */
   const PUSH_UNREGISTER_WAIT_MS = 3000;
 
@@ -2456,6 +2456,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // 등록이 아직 진행 중이면 큐가 그 등록을 먼저 끝내고 이 해제를 보낸다.
     // 이 계정의 토큰을 지금 잡아둔다 — finishLogout이 지운 뒤에 나가도 같은 토큰으로 간다.
     const withToken = accessTokenRef.current ?? undefined;
+    const withRefresh = refreshTokenRef.current;
     const unregister = enqueuePush(async () => {
       /**
        * 토큰은 **큐가 실행되는 시점**에 읽는다. 로그아웃을 부른 시점에 읽으면, 아직 시작도
@@ -2466,7 +2467,24 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       pushTokenRef.current = null;
       pushPendingRef.current = null;
       if (!token) return;
-      await pushApi.unregister(token, withToken);
+      try {
+        await pushApi.unregister(token, withToken);
+      } catch (e) {
+        /**
+         * 401이면(대개 마지막 요청 뒤 2시간이 지나 액세스 토큰이 만료된 것) 그냥 넘기면 안 된다.
+         * 서버에 이 기기 토큰이 남아 **로그아웃한 계정의 푸시가 기기에 계속 온다.** 세션을
+         * 되살리지 않는 일회용 토큰을 받아 한 번만 다시 보낸다.
+         */
+        if (!(e instanceof ApiError && e.status === 401) || !withRefresh) throw e;
+        logAuth(`로그아웃 푸시 해제 401 ${e.code ?? '코드 없음'} → 일회용 재발급`);
+        const cleanup = await issueCleanupToken(withRefresh);
+        if (!cleanup) {
+          logAuth('로그아웃 푸시 해제: 일회용 재발급 실패 → 서버에 기기 토큰이 남음');
+          throw e;
+        }
+        await pushApi.unregister(token, cleanup);
+        logAuth('로그아웃 푸시 해제: 일회용 토큰으로 성공');
+      }
       await clearPushToken();
     }).catch(() => {});
     void Promise.race([
@@ -2708,6 +2726,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         // 해제가 성공해야 참조를 버린다. 먼저 지우면 실패했을 때 다시 시도할 정보가 없다
         const ok = await pushApi
           .unregister(registered, withToken)
+          .catch((e) => {
+            /**
+             * 예약한 토큰이 만료됐으면 명시 토큰 요청이라 재발급을 안 탄다 — 알림을 껐는데 서버엔
+             * 남는다. 세션이 그대로면 현재 토큰으로 한 번 더 보내 **정상 재발급 경로**를 태운다.
+             * 로그아웃용 일회용 토큰과 달리 살아 있는 세션이라 새 토큰을 남겨야 한다.
+             */
+            if (e instanceof ApiError && e.status === 401 && sessionRev.current === rev) {
+              return pushApi.unregister(registered);
+            }
+            throw e;
+          })
           .then(() => true)
           .catch(() => false);
         if (ok) {
@@ -2722,8 +2751,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       // 토큰을 받는 사이 로그아웃했으면 그 계정 이름으로 등록하지 않는다
       if (sessionRev.current !== rev) return;
       pushPendingRef.current = token;
+      const platform = Platform.OS === 'ios' ? 'IOS' : 'ANDROID';
       try {
-        await pushApi.register(token, Platform.OS === 'ios' ? 'IOS' : 'ANDROID', withToken);
+        await pushApi.register(token, platform, withToken).catch((e) => {
+          // 해제(OFF)와 같은 이유 — 예약한 토큰이 만료됐으면 현재 토큰으로 다시 보내 재발급을 태운다.
+          // 알림 스위치는 기기에만 저장돼, 여기서 끝나면 다른 요청이 재발급할 때까지 알림이 안 온다
+          if (e instanceof ApiError && e.status === 401 && sessionRev.current === rev) {
+            return pushApi.register(token, platform);
+          }
+          throw e;
+        });
       } catch {
         // 등록 실패는 알림이 안 오는 것으로 끝난다. 로그인·사용을 막지 않는다
         pushPendingRef.current = null;
