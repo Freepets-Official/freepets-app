@@ -8,6 +8,7 @@ import { Text } from '@/components/text';
 import { ConfidenceBadge } from '@/components/confidence-badge';
 import { CardShadow, MaxContentWidth, Radius, Spacing, Type } from '@/constants/theme';
 import { CATEGORY_LABEL, sinceText } from '@/data/types';
+import { useInquiryCounts } from '@/hooks/use-inquiry-counts';
 import { useOwnerFacilities } from '@/hooks/use-owner-facilities';
 import { usePalette } from '@/hooks/use-theme';
 import { useAppStore } from '@/store/app-store';
@@ -34,6 +35,7 @@ export default function OwnerDashboard() {
   const { facilities, failed, refresh } = useOwnerFacilities();
 
   const owned = facilities ?? [];
+  const inquiryCounts = useInquiryCounts(owned.map((f) => f.facilityId));
   // 매장이 여러 곳이면 관리 대상 매장을 고를 수 있다
   const [selectedId, setSelectedId] = useState<number | null>(null);
   // 목록이 갱신돼 고른 매장이 빠졌으면(승인 해제 등) 첫 매장으로 — 남은 게 하나면 카드를 눌러 바꿀 수도 없다
@@ -182,6 +184,26 @@ export default function OwnerDashboard() {
                         </Text>
                       </View>
                       <Ionicons name="chevron-forward" size={16} color={p.danger} />
+                    </Pressable>
+                  )}
+
+                  {/* 조건 확인 요청 — 손님이 "조건이 불명확하다"고 남긴 건수. 조건을 채울 이유를 숫자로 보여 준다.
+                      서버가 기간 없이 누적만 해 조건을 고쳐도 줄지 않으므로 "최근"이나 "아직 안 채웠다"는 투로
+                      쓰지 않는다. 테두리는 매장 여러 곳일 때의 「관리 중」 강조색과 겹치지 않게 선 색으로 */}
+                  {(inquiryCounts[f.facilityId] ?? 0) > 0 && (
+                    <Pressable
+                      onPress={() => router.push({ pathname: '/owner/conditions', params: { facilityId: String(f.facilityId) } })}
+                      style={[styles.alert, { backgroundColor: p.accentSoft, borderColor: p.line }]}>
+                      <Ionicons name="help-circle" size={18} color={p.accent} />
+                      <View style={styles.alertText}>
+                        <Text style={[styles.alertTitle, { color: p.accent }]}>
+                          출입 조건 문의 {inquiryCounts[f.facilityId]}건
+                        </Text>
+                        <Text style={[styles.alertBody, { color: p.ink }]}>
+                          손님이 조건이 불명확하다고 남긴 요청이에요 — 조건을 확인해 보세요
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={p.accent} />
                     </Pressable>
                   )}
                 </View>
